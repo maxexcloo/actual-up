@@ -1,0 +1,13 @@
+[tools]
+helm = "4.2.3"
+node = "24.10.0"
+pnpm = "11.22.0"
+
+[tasks.check]
+run = "pnpm run check"
+
+[tasks.fmt]
+run = "pnpm run format"
+
+[tasks.setup]
+run = "pnpm install --frozen-lockfile"

@@ -1,0 +1,64 @@
+replicaCount: 1
+
+configuration: ""
+existingConfigMap: ""
+existingSecret: actual-up
+
+image:
+  pullPolicy: IfNotPresent
+  repository: ghcr.io/example/actual-up
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+  runAsNonRoot: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsGroup: 1000
+  runAsUser: 1000
+
+service:
+  port: 3000
+  type: ClusterIP
+
+ingress:
+  annotations: {}
+  className: ""
+  enabled: false
+  host: actual-up.example.com
+  tls: []
+
+networkPolicy:
+  enabled: false
+  ingressFrom: []
+
+serviceMonitor:
+  additionalLabels: {}
+  enabled: false
+  interval: 30s
+
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    cpu: 25m
+    memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+terminationGracePeriodSeconds: 60

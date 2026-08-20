@@ -1,0 +1,46 @@
+{
+  "name": "actual-up",
+  "version": "0.1.0",
+  "description": "Synchronise Up transactions into Actual Budget.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "actual-up": "dist/cli.js"
+  },
+  "exports": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run test && pnpm run build",
+    "dev": "tsx src/cli.ts serve",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "oxlint --deny-warnings src test",
+    "start": "node dist/cli.js serve",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@actual-app/api": "26.8.1",
+    "commander": "15.0.0",
+    "croner": "10.0.1",
+    "fastify": "5.12.1",
+    "pino": "10.3.1",
+    "prom-client": "15.1.3",
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "oxlint": "1.79.0",
+    "prettier": "3.9.6",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "packageManager": "pnpm@11.22.0"
+}

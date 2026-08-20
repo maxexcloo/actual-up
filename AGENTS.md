@@ -1,0 +1,21 @@
+# Project Guidance
+
+## Structure
+
+- `src/` contains the TypeScript daemon and CLI.
+- `test/` contains unit and in-memory integration tests.
+- `chart/actual-up/` contains the Kubernetes Helm chart.
+- `docs/` contains maintained operator documentation.
+
+## Conventions
+
+- Use Australian English for project-owned names and prose.
+- Keep Up and Actual API field names unchanged.
+- Treat Up IDs as immutable bank identities and prefix Actual import IDs with `up:`.
+- Never log transaction amounts, payees, messages, webhook bodies or credentials.
+- Serialise Actual API access; do not add replicas or parallel budget writers.
+- Keep the daemon configuration-driven. Do not add a database or UI without an explicit product decision.
+
+## Verification
+
+Run `mise run check` after code changes. Run `helm lint chart/actual-up --set existingConfigMap=test` and render the chart after template changes. Use `git diff --check` before handoff.
