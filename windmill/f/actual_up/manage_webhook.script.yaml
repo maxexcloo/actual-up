@@ -1,0 +1,35 @@
+summary: ""
+description: ""
+lock: "!inline f/actual_up/manage_webhook.script.lock"
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties:
+    connectionId:
+      type: string
+      description: ""
+      default: null
+      originalType: string
+    operation:
+      type: string
+      description: ""
+      default: list
+      enum:
+        - create
+        - delete
+        - list
+        - ping
+      originalType: enum
+    publicUrl:
+      type: string
+      description: ""
+      default: https://windmill.mbk.excloo.dev/api/r/actual-up/up
+      originalType: string
+    webhookId:
+      type: string
+      description: ""
+      default: null
+      originalType: string
+  required:
+    - connectionId

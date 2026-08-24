@@ -1,0 +1,8 @@
+schedule: "0 */15 * * * *"
+timezone: Australia/Sydney
+enabled: false
+script_path: f/actual_up/sync
+is_flow: false
+args:
+  dryRun: false
+  trigger: schedule

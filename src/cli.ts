@@ -2,9 +2,15 @@
 
 import { Command } from "commander";
 
-import { loadConfig } from "./config.js";
+import { ActualBudgetClient } from "./actual-client.js";
+import { createBridgeServer } from "./bridge.js";
+import { environmentValue, loadBridgeConfig, loadConfig } from "./config.js";
 import { JobRunner } from "./job-runner.js";
-import { assertActualCompatibility, createRuntime } from "./runtime.js";
+import {
+  assertActualCompatibility,
+  createLogger,
+  createRuntime,
+} from "./runtime.js";
 import { startService } from "./server.js";
 
 const program = new Command()
@@ -15,6 +21,32 @@ const program = new Command()
     "configuration file",
     process.env.ACTUAL_UP_CONFIG ?? "/config/config.yaml",
   );
+
+program
+  .command("bridge")
+  .description("serve the authenticated Actual operations used by Windmill")
+  .action(async () => {
+    const config = await loadBridgeConfig(
+      program.opts<{ config: string }>().config,
+    );
+    const actual = new ActualBudgetClient(config.actual);
+    const logger = createLogger();
+    const bridgeToken = environmentValue("ACTUAL_UP_BRIDGE_TOKEN");
+    await actual.open();
+    try {
+      assertActualCompatibility(await actual.getServerVersion());
+      const server = createBridgeServer(actual, bridgeToken, logger);
+      await server.listen({
+        host: config.server.host,
+        port: config.server.port,
+      });
+      logger.info({ port: config.server.port }, "Actual bridge started");
+      await waitForSignal();
+      await server.close();
+    } finally {
+      await actual.close();
+    }
+  });
 
 program
   .command("serve")

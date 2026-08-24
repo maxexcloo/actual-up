@@ -94,9 +94,21 @@ const configSchema = z.object({
   up: z.object({ connections: z.array(connectionSchema).min(1) }),
 });
 
+const bridgeConfigSchema = z.object({
+  actual: actualSchema,
+  server: z
+    .object({
+      host: z.string().default("0.0.0.0"),
+      port: z.number().int().min(1).max(65_535).default(3000),
+    })
+    .default({ host: "0.0.0.0", port: 3000 }),
+  version: z.literal(1),
+});
+
 export type AppConfig = z.infer<typeof configSchema>;
 export type AccountMapping = AppConfig["mappings"][number];
 export type UpConnectionConfig = AppConfig["up"]["connections"][number];
+export type BridgeConfig = z.infer<typeof bridgeConfigSchema>;
 
 export function environmentValue(name: string): string {
   const value = process.env[name];
@@ -113,6 +125,12 @@ export async function loadConfig(path: string): Promise<AppConfig> {
   const config = configSchema.parse(parsed);
   validateConfig(config);
   return config;
+}
+
+export async function loadBridgeConfig(path: string): Promise<BridgeConfig> {
+  const absolutePath = resolve(path);
+  const source = await readFile(absolutePath, "utf8");
+  return bridgeConfigSchema.parse(parse(source));
 }
 
 export function parseConfig(value: unknown): AppConfig {

@@ -24,4 +24,4 @@ RUN mkdir -p /data/actual-cache && chown -R node:node /data
 
 USER node
 EXPOSE 3000
-CMD ["node", "dist/cli.js", "serve"]
+CMD ["node", "dist/cli.js", "bridge"]

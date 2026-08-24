@@ -1,0 +1,30 @@
+version: 1
+
+actual:
+  cacheDirectory: ./.actual-cache
+  passwordEnv: ACTUAL_PASSWORD
+  serverUrl: http://127.0.0.1:5006
+  syncId: replace-with-actual-sync-id
+
+mappings: []
+
+notes:
+  includeCashback: true
+  includeForeignAmount: true
+  includeMessage: true
+  includePerformer: true
+  includeRoundUp: false
+
+schedule:
+  cron: "*/15 * * * *"
+  lookbackDays: 30
+  timezone: Australia/Sydney
+
+server:
+  host: 0.0.0.0
+  port: 3000
+
+up:
+  connections:
+    - id: max
+      tokenEnv: UP_TOKEN_MAX

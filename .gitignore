@@ -1,6 +1,8 @@
 .actual-cache/
 .env
+.env.windmill.local
 .pnpm-store/
+config.local.yaml
 coverage/
 dist/
 node_modules/

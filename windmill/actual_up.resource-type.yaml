@@ -1,0 +1,109 @@
+description: Actual Budget bridge and Up synchronisation configuration
+schema:
+  type: object
+  additionalProperties: false
+  required: [actual, up, mappings]
+  properties:
+    actual:
+      type: object
+      additionalProperties: false
+      required: [bridgeUrl, bridgeToken]
+      properties:
+        bridgeUrl:
+          type: string
+          format: uri
+        bridgeToken:
+          type: string
+    up:
+      type: object
+      additionalProperties: false
+      required: [connections]
+      properties:
+        connections:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, token]
+            properties:
+              id:
+                type: string
+                pattern: ^[a-z][a-z0-9-]*$
+              token:
+                type: string
+              webhook:
+                type: object
+                additionalProperties: false
+                required: [id, secret]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  secret:
+                    type: string
+    mappings:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required: [alias, upAccountId, actualAccountId, connections]
+        properties:
+          alias:
+            type: string
+            minLength: 1
+          upAccountId:
+            type: string
+            format: uuid
+          actualAccountId:
+            type: string
+            minLength: 1
+          connections:
+            type: array
+            minItems: 1
+            items:
+              type: string
+              minLength: 1
+    categoryMappings:
+      type: object
+      additionalProperties:
+        type: string
+    notes:
+      type: object
+      additionalProperties: false
+      properties:
+        includeCashback:
+          type: boolean
+          default: true
+        includeForeignAmount:
+          type: boolean
+          default: true
+        includeMessage:
+          type: boolean
+          default: true
+        includePerformer:
+          type: boolean
+          default: true
+        includeRoundUp:
+          type: boolean
+          default: false
+    schedule:
+      type: object
+      additionalProperties: false
+      properties:
+        lookbackDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+          default: 30
+        timezone:
+          type: string
+          default: Australia/Sydney
+    alerts:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri

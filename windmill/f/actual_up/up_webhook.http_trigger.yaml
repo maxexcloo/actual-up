@@ -1,0 +1,18 @@
+script_path: f/actual_up/webhook
+is_flow: false
+route_path: actual-up/up
+http_method: post
+request_type: async
+authentication_method: none
+is_static_website: false
+workspaced_route: false
+wrap_body: false
+raw_string: true
+summary: Receive signed Up webhook events
+description: Verifies the Up authenticity signature before synchronising the affected transaction.
+retry:
+  exponential:
+    attempts: 3
+    multiplier: 2
+    seconds: 2
+    random_factor: 20

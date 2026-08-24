@@ -16,6 +16,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "bridge": "tsx src/cli.ts bridge",
     "check": "pnpm run format:check && pnpm run lint && pnpm run test && pnpm run build",
     "dev": "tsx src/cli.ts serve",
     "format": "prettier --write .",

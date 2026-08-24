@@ -1,5 +1,5 @@
 import { Cron } from "croner";
-import Fastify from "fastify";
+import Fastify, { LogController } from "fastify";
 import type { Logger } from "pino";
 
 import { environmentValue, type AppConfig } from "./config.js";
@@ -22,7 +22,7 @@ export async function startService(
   let ready = true;
   const server = Fastify({
     bodyLimit: 1_048_576,
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
     loggerInstance: logger,
   });
 

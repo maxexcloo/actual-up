@@ -1,0 +1,9 @@
+summary: Actual bridge client
+description: Shared HTTP client for the authenticated Actual bridge.
+lock: "!inline f/actual_up/actual_client.script.lock"
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties: {}
+  required: []

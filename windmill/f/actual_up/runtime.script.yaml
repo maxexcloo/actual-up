@@ -1,0 +1,9 @@
+summary: Create the native Windmill runtime
+description: Loads the resource and connects native Up and Actual bridge clients.
+lock: "!inline f/actual_up/runtime.script.lock"
+kind: script
+schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  properties: {}
+  required: []

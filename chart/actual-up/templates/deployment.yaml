@@ -35,6 +35,8 @@ spec:
         - name: actual-up
           image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - bridge
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           env:

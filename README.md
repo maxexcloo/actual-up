@@ -1,45 +1,69 @@
 # actual-up
 
-`actual-up` synchronises one household's Up accounts into one Actual Budget file. It accepts signed Up webhooks for low latency and runs overlapping scheduled reconciliation so missed events, restarts and duplicate deliveries do not affect correctness.
+`actual-up` synchronises Up transactions into Actual Budget. Windmill owns the
+schedule, signed webhook endpoint, configuration, run history and operator App.
+A small authenticated bridge is the only persistent component because Actual's
+official API is a Node package operating on a local SQLite budget cache rather
+than an HTTP API.
 
 ## Features
 
 - Imports held transactions as uncleared and updates them when they settle.
-- Supports multiple personal access tokens and deduplicates shared 2Up accounts by Up account ID.
-- Uses Actual's import reconciliation and rules, then an optional Up-to-Actual category map.
+- Supports multiple Up connections and deduplicates shared 2Up accounts by
+  immutable Up account ID.
+- Uses Actual import reconciliation and rules, followed by an optional category
+  map.
 - Maps transfers between configured accounts to Actual transfer payees.
-- Mirrors cancelled holds and protects edited Actual transactions from destructive bank deletions.
-- Provides explicit backfill, discovery, validation and webhook-management commands.
-- Exposes Kubernetes probes, privacy-safe JSON logs, Prometheus metrics and generic alert webhooks.
+- Mirrors cancelled holds while protecting transactions edited in Actual.
+- Provides validation, discovery, dry-run, backfill and webhook-management
+  actions in Windmill.
+- Includes a Windmill operator App for status, safe results and manual actions.
+- Keeps schedules, Up requests, webhook verification and reconciliation in
+  native Windmill TypeScript jobs.
 
-The service never writes categories or tags back to Up. It has no UI, application database or AI integration.
+The bridge never receives Up credentials or webhook bodies. It exposes only the
+Actual operations required by the native jobs, requires a bearer token and
+serialises every Actual API call.
 
-## Configuration
+## Architecture
 
-Copy [`config.example.yaml`](config.example.yaml) and replace every example ID. Configuration contains references to environment variables, not secret values. At minimum, provide an Actual password or session token and one Up personal access token.
-
-```sh
-export ACTUAL_PASSWORD='...'
-export UP_TOKEN_ALEX='...'
-actual-up --config ./config.yaml validate
-actual-up --config ./config.yaml discover
+```text
+Up API/webhooks ──> Windmill native jobs ──> authenticated Actual bridge ──> Actual
+                         │
+                         ├── schedule and run history
+                         ├── secrets and configuration
+                         └── operator App
 ```
 
-Account mappings use immutable IDs. A shared account is declared once and may list both partners' connection IDs in fallback order.
+Windmill scripts are versioned under [`windmill/`](windmill/). The bridge and
+legacy standalone CLI live under [`src/`](src/).
 
-See [configuration](docs/configuration.md) for the complete model and [operations](docs/operations.md) for webhooks, backfills and monitoring.
+## Local bridge
 
-## Run
+Copy [`config.bridge.example.yaml`](config.bridge.example.yaml) to
+`config.local.yaml`, configure Actual authentication, then run:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm run build
-node dist/cli.js --config ./config.yaml serve
+export ACTUAL_UP_BRIDGE_TOKEN='generate-a-long-random-value'
+export ACTUAL_PASSWORD='your-actual-server-password'
+pnpm bridge --config ./config.local.yaml
 ```
 
-The default schedule runs every 15 minutes with a 30-day overlap. The service also reconciles once at startup.
+Check it without exposing the token in the URL:
 
-For Kubernetes, create a Secret containing the environment variables referenced by the configuration, then install the chart:
+```sh
+curl -H "Authorization: Bearer $ACTUAL_UP_BRIDGE_TOKEN" \
+  http://127.0.0.1:3000/v1/version
+```
+
+See [Windmill deployment](docs/windmill.md),
+[configuration](docs/configuration.md) and [operations](docs/operations.md).
+
+## Kubernetes bridge
+
+The Helm chart runs bridge mode with one replica and a `Recreate` strategy.
+Create a Secret containing `ACTUAL_UP_BRIDGE_TOKEN` and the Actual credential
+referenced by the configuration, then install:
 
 ```sh
 helm upgrade --install actual-up ./chart/actual-up \
@@ -47,7 +71,7 @@ helm upgrade --install actual-up ./chart/actual-up \
   --set-file configuration=./config.yaml
 ```
 
-The chart deliberately uses one replica and a `Recreate` strategy because the Actual API operates on a local budget cache. The cache is rebuildable and uses `emptyDir`; no PVC is required.
+The cache is rebuildable and uses `emptyDir`; no PVC is required.
 
 ## Development
 

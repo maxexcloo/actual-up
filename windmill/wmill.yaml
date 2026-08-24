@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/windmill-labs/windmill/main/cli/wmill.schema.json
+defaultTs: bun
+includes:
+  - "actual_up.resource-type.yaml"
+  - "f/actual_up/**"
+excludes: []
+skipVariables: true
+skipResources: true
+skipResourceTypes: false
+skipSecrets: true
+skipScripts: false
+skipFlows: false
+skipApps: false
+skipFolders: false
+includeSchedules: true
+includeTriggers: true
+lint: true
+locksRequired: true
+nonDottedPaths: true
+syncBehavior: v1
+workspaces:
+  production:
+    baseUrl: https://windmill.mbk.excloo.dev
+    workspaceId: Excloo
+    gitBranch: main

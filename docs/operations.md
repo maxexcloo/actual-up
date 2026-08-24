@@ -1,47 +1,52 @@
 # Operations
 
-## Initial Setup
+## Initial setup
 
-1. Mount configuration and secret environment variables.
-2. Run `actual-up validate`.
-3. Run `actual-up discover` and confirm every immutable mapping.
-4. Start the service and confirm its startup reconciliation succeeds.
-5. Create and store each webhook as described below.
+1. Deploy the bridge and confirm `/livez` and `/readyz` are healthy.
+2. Create Windmill secret variables for the bridge token, Up tokens and webhook
+   secrets.
+3. Create `f/actual_up/config` using the `actual_up` resource type.
+4. Run **Validate**, then **Discover**, from the operator App.
+5. Add immutable account and category mappings to the resource.
+6. Run a dry run and inspect only the safe counts before running a live sync.
+7. Enable `f/actual_up/sync` after the first successful live run.
 
 ## Webhooks
 
-Run the setup command once per connection:
+The `f/actual_up/manage_webhook` action lists, creates, pings and deletes Up
+webhooks. A create result contains a webhook ID and one-time `secretKey`; store
+both immediately in `f/actual_up/config` using a secret variable.
 
-```sh
-actual-up webhook create alex
-```
-
-The output contains a webhook ID and `secretKey`. Put them in the connection's configuration and referenced Kubernetes Secret, then restart the deployment. The secret cannot be retrieved again from Up.
-
-Use `webhook ping`, `webhook status` and `webhook delete` for lifecycle checks. Only `/webhooks/up` needs public ingress. Invalid signatures and webhook-ID mismatches return `401`; valid events return `200` after being queued.
+The anonymous HTTP route is `/api/r/actual-up/up`. Its preprocessor verifies the
+raw Up HMAC signature and webhook identity before passing only safe event IDs to
+the reconciliation job. Webhook bodies and signing secrets are never logged.
 
 ## Backfills
 
-Preview history before writing:
+Run `f/actual_up/sync` with `dryRun: true` and an RFC 3339 or `YYYY-MM-DD`
+`since` value. Repeat with `dryRun: false` after reviewing counts. Use the
+`accounts` argument to limit a run to selected mapping aliases.
 
-```sh
-actual-up sync --since 2025-01-01 --dry-run
-actual-up sync --since 2025-01-01
-```
+Repeating a range is safe because every Actual import ID is `up:<Up ID>`.
 
-Use `--account joint-spending` to limit a run. Repeating the same range is safe because Up IDs become Actual `imported_id` values.
+## Deletions and conflicts
 
-## Deletions & Conflicts
-
-Cancelled, unreconciled held transactions are removed automatically. A cleared transaction with a category, note, split or reconciliation marker is retained when Up deletes it, and a `delete-conflict` alert is emitted for manual review.
+Cancelled, unreconciled held transactions are removed automatically. A cleared
+transaction with a category, note, split or reconciliation marker is retained
+when Up deletes it; the run records a conflict for manual review.
 
 ## Monitoring
 
-Readiness becomes available after configuration, Actual and mapping validation. Monitor:
+Windmill provides run history, job logs and schedule state. The operator App
+stores the last report at `f/actual_up/status` and shows imported, updated,
+inspected, conflict and failure counts. Project logs contain only event names,
+connection IDs, configured aliases and status codes—not amounts, payees,
+messages, webhook bodies or credentials.
 
-- `actual_up_jobs_total{outcome,trigger}` for failures.
-- `actual_up_last_success_timestamp_seconds{trigger}` for stale synchronisation.
-- `actual_up_queue_depth` for a blocked worker.
-- `actual_up_transactions_total{account,action}` for import and conflict activity.
+The bridge exposes Prometheus metrics at `/metrics`, including operation totals,
+duration and current queue depth. Labels contain only fixed operation names and
+outcomes. Configure the chart's `serviceMonitor.enabled` value when Prometheus
+Operator is available.
 
-Metric labels use configured aliases and never financial transaction data. Scheduled reconciliation is the recovery mechanism if a valid webhook job is lost during a crash.
+Scheduled reconciliation is the recovery mechanism for missed or interrupted
+webhooks.
