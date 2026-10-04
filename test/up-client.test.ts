@@ -29,6 +29,20 @@ function page(id: string, next: string | null) {
 }
 
 describe("Up client", () => {
+  it("does not expose upstream response bodies in errors", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        new Response("private transaction details", { status: 400 }),
+      );
+    const client = new UpClient("token", pino({ level: "silent" }), fetcher);
+    await expect(client.ping()).rejects.toMatchObject({
+      message: "Up API returned 400",
+      status: 400,
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("follows opaque pagination links on the trusted origin", async () => {
     const fetcher = vi
       .fn()

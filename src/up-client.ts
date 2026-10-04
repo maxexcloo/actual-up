@@ -140,7 +140,7 @@ export class UpClient implements UpClientLike {
       if (response.status === 204) return undefined;
       if (response.ok) return response.json();
 
-      const detail = await response.text();
+      await response.body?.cancel();
       if ((response.status === 429 || response.status >= 500) && attempt < 4) {
         this.logger.warn(
           { attempt: attempt + 1, status: response.status },
@@ -150,7 +150,7 @@ export class UpClient implements UpClientLike {
         continue;
       }
       throw new UpApiError(
-        `Up API returned ${response.status}: ${detail.slice(0, 300)}`,
+        `Up API returned ${response.status}`,
         response.status,
       );
     }
