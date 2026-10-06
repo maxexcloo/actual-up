@@ -26,22 +26,22 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@actual-app/api": "26.8.1",
+    "@actual-app/api": "26.10.0",
     "commander": "15.0.0",
     "croner": "10.0.1",
-    "fastify": "5.12.1",
-    "pino": "10.3.1",
+    "fastify": "5.12.5",
+    "pino": "10.4.0",
     "prom-client": "15.1.3",
-    "yaml": "2.9.0",
-    "zod": "4.4.3"
+    "yaml": "2.9.1",
+    "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/node": "26.2.0",
-    "oxlint": "1.79.0",
-    "prettier": "3.9.6",
-    "tsx": "4.23.12",
+    "@types/node": "26.6.4",
+    "oxlint": "1.86.0",
+    "prettier": "3.9.9",
+    "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.3"
   },
-  "packageManager": "pnpm@12.9.0"
+  "packageManager": "pnpm@12.9.1"
 }
