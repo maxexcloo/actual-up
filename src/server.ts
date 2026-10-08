@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { Cron } from "croner";
 import Fastify, { LogController } from "fastify";
 import type { Logger } from "pino";
 import { z } from "zod";
@@ -10,6 +9,7 @@ import { environmentValue, type AppConfig } from "./config.js";
 import type { JobRunner } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
 import { assertActualCompatibility, type Runtime } from "./runtime.js";
+import { startSchedule } from "./schedule.js";
 import type { SyncEngine } from "./sync-engine.js";
 import { dashboard, status, statusVersion } from "./ui.js";
 import { parseWebhook, verifyWebhookSignature } from "./webhook.js";
@@ -34,30 +34,12 @@ export async function startService(
     logger,
     runtime,
   );
-  const cron = new Cron(
-    config.schedule.cron,
-    {
-      paused: !config.schedule.enabled,
-      protect: true,
-      timezone: config.schedule.timezone,
-    },
-    () => {
-      runner.enqueue("schedule", "schedule", async () => {
-        await runtime.actual.sync();
-        return engine.reconcile();
-      });
-    },
-  );
-  try {
-    await server.listen({ host: config.server.host, port: config.server.port });
-  } catch (error) {
-    cron.stop();
-    throw error;
-  }
+  await server.listen({ host: config.server.host, port: config.server.port });
+  const stopSchedule = startSchedule(config, engine, runner, runtime.actual);
   logger.info({ port: config.server.port }, "Service started");
   return {
     async close() {
-      cron.stop();
+      stopSchedule();
       await server.close();
       await runner.close();
     },
@@ -81,7 +63,7 @@ export async function createServer(
     "utf8",
   );
   const stylesheet = await readFile(
-    new URL("../assets/style.css", import.meta.url),
+    new URL("../dist/style.css", import.meta.url),
     "utf8",
   );
   const server = Fastify({
@@ -169,7 +151,7 @@ export async function createServer(
     reply.header("Referrer-Policy", "no-referrer");
     reply.header(
       "Content-Security-Policy",
-      "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     );
     const path = request.url.split("?")[0];
     if (
@@ -206,7 +188,9 @@ export async function createServer(
     async (request, reply) => {
       if (request.query.version === statusVersion(runner))
         return reply.code(204).send();
-      return reply.type("text/html").send(status(runner));
+      return reply
+        .type("text/html")
+        .send(status(runner, config.schedule.timezone));
     },
   );
   server.get("/assets/style.css", async (_request, reply) =>

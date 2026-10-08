@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { Cron } from "croner";
 import { parse } from "yaml";
 import { z } from "zod";
 
@@ -89,13 +90,15 @@ const configSchema = z.object({
     }),
   schedule: z
     .object({
-      enabled: z.boolean().default(false),
+      enabled: z.boolean().default(true),
+      backfillCron: z.string().min(1).default("0 3 * * *"),
       cron: z.string().min(1).default("*/15 * * * *"),
       lookbackDays: z.number().int().min(1).max(365).default(30),
       timezone: z.string().min(1).default("Australia/Sydney"),
     })
     .default({
-      enabled: false,
+      enabled: true,
+      backfillCron: "0 3 * * *",
       cron: "*/15 * * * *",
       lookbackDays: 30,
       timezone: "Australia/Sydney",
@@ -143,6 +146,7 @@ function validateConfig(config: AppConfig): void {
     throw new Error("Up connection IDs must be unique");
   }
 
+  const aliases = new Set<string>();
   const upAccountIds = new Set<string>();
   const actualAccountIds = new Set<string>();
   for (const mapping of config.mappings) {
@@ -156,6 +160,9 @@ function validateConfig(config: AppConfig): void {
         `Actual account ${mapping.actualAccountId} is mapped more than once`,
       );
     }
+    if (aliases.has(mapping.alias))
+      throw new Error("Mapping aliases must be unique");
+    aliases.add(mapping.alias);
     upAccountIds.add(mapping.upAccountId);
     actualAccountIds.add(mapping.actualAccountId);
 
@@ -166,6 +173,14 @@ function validateConfig(config: AppConfig): void {
         );
       }
     }
+  }
+
+  for (const pattern of [config.schedule.cron, config.schedule.backfillCron]) {
+    const cron = new Cron(pattern, {
+      paused: true,
+      timezone: config.schedule.timezone,
+    });
+    cron.stop();
   }
 
   try {

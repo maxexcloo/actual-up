@@ -1,5 +1,5 @@
 import pino from "pino";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Alert, AlertSink } from "../src/alerts.js";
 import { parseConfig, type AppConfig } from "../src/config.js";
@@ -120,7 +120,7 @@ class MemoryActual implements ActualClient {
   }
   async updateTransaction(id: string, fields: Partial<ActualTransaction>) {
     Object.assign(
-      this.transactions.find((value) => value.id === id),
+      this.transactions.find((value) => value.id === id)!,
       fields,
     );
   }
@@ -152,9 +152,11 @@ class StubUp implements UpClientLike {
       },
     ];
   }
-  async listTransactions() {
+  async listTransactions(accountId: string) {
     if (this.fails) throw new Error("unavailable");
-    return this.transactions;
+    return this.transactions.filter(
+      (value) => value.relationships.account.data.id === accountId,
+    );
   }
   async getTransaction() {
     return this.transactions[0]!;
@@ -210,6 +212,53 @@ describe("sync engine", () => {
     expect((await value.reconcile()).updated).toBe(1);
     expect(actual.transactions).toHaveLength(1);
     expect(actual.transactions[0]?.imported_id).toContain("22222222");
+  });
+
+  it("validates shared accounts when one partner's key is unavailable", async () => {
+    for (const firstFails of [true, false]) {
+      const { value } = engine(
+        new MemoryActual(),
+        new StubUp([], firstFails),
+        new StubUp([], !firstFails),
+      );
+      await expect(value.validate()).resolves.toHaveProperty("actualVersion");
+    }
+  });
+
+  it("imports personal and shared accounts once across multiple API keys", async () => {
+    const actual = new MemoryActual();
+    const personalId = "33333333-3333-4333-8333-333333333333";
+    const personal = transaction();
+    personal.id = "44444444-4444-4444-8444-444444444444";
+    personal.relationships.account.data.id = personalId;
+    const first = new StubUp([transaction(), personal]);
+    const second = new StubUp([transaction()]);
+    const sharedFetch = vi.spyOn(second, "listTransactions");
+    const app = config();
+    app.mappings.push({
+      alias: "personal",
+      upAccountId: personalId,
+      actualAccountId: "actual-personal",
+      connections: ["first"],
+    });
+    const value = new SyncEngine(
+      app,
+      actual,
+      new Map([
+        ["first", first],
+        ["second", second],
+      ]),
+      new MemoryAlerts(),
+      new Metrics(),
+      pino({ enabled: false }),
+    );
+    expect((await value.reconcile({ since: "1970-01-01" })).imported).toBe(2);
+    await value.reconcile({ since: "1970-01-01" });
+    expect(actual.transactions).toHaveLength(2);
+    expect(new Set(actual.transactions.map(({ account }) => account))).toEqual(
+      new Set(["actual-spending", "actual-personal"]),
+    );
+    expect(sharedFetch).not.toHaveBeenCalled();
   });
 
   it("settles pending transactions without replacing Actual edits", async () => {

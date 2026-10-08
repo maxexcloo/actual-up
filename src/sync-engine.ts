@@ -53,18 +53,13 @@ export class SyncEngine {
           `Mapping ${mapping.alias} references missing Actual account ${mapping.actualAccountId}`,
         );
       }
-      let accessible = false;
-      for (const connection of mapping.connections) {
-        const accountsForToken = await this.client(connection).listAccounts();
-        accessible ||= accountsForToken.some(
+      await this.withConnectionFallback(mapping, async (client) => {
+        const accessible = (await client.listAccounts()).some(
           ({ id }) => id === mapping.upAccountId,
         );
-      }
-      if (!accessible) {
-        throw new Error(
-          `No configured token can access Up account ${mapping.upAccountId}`,
-        );
-      }
+        if (!accessible)
+          throw new Error("Connection cannot access the mapped Up account");
+      });
     }
 
     for (const actualCategoryId of Object.values(

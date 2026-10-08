@@ -24,7 +24,8 @@ describe("configuration", () => {
   it("applies safe defaults", () => {
     const config = parseConfig(base);
     expect(config.schedule).toEqual({
-      enabled: false,
+      enabled: true,
+      backfillCron: "0 3 * * *",
       cron: "*/15 * * * *",
       lookbackDays: 30,
       timezone: "Australia/Sydney",

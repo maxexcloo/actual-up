@@ -7,12 +7,13 @@
    tag and digest in kubelab.
 2. Let kubelab provision the `Actual Up` 1Password item. Supply its Actual session
    token, budget sync ID and Up token; the app password is generated separately.
-3. Unsuspend the prepared Helm release after verifying those fields. Leave
-   polling disabled and mappings empty during setup.
+3. Unsuspend the prepared Helm release after verifying those fields. Mappings
+   start empty, so no accounts are imported until they are configured.
 4. Open the private HTTPS app with the login from 1Password. Check connections
    and discover account IDs. Update mappings in kubelab's YAML and reconcile.
-5. Preview changes, inspect the result, then run an explicit import. Enable
-   `schedule.enabled` in YAML once it behaves as expected.
+5. The restarted app automatically backfills mapped accounts, syncs recent
+   changes every 15 minutes and backfills nightly. Set `schedule.enabled: false`
+   before adding mappings if you want to preview changes first.
 
 Configuration changes roll the pod through a generated ConfigMap name. Secret
 rotation requires a rollout after External Secrets refreshes, because credentials
@@ -30,14 +31,15 @@ An account failure makes the run fail even if other accounts succeeded.
 
 History and queued jobs reset on restart. The Actual cache uses `emptyDir` and is
 re-downloaded on startup. Import identities make reconciliation repeatable.
-Use a dated dry run and then backfill after an extended outage. Do not run a
+Startup and nightly full-history backfills recover gaps after an extended outage
+or interrupted run. Manual backfill remains available. Do not run a
 standalone CLI writer alongside the service, or deploy a second instance for the
 same budget. Graceful shutdown stops scheduling, closes HTTP and drains the queue;
 Kubernetes can still terminate work at the configured grace-period limit.
 
 Metrics are exposed at `/metrics`. `actual_up_jobs_total` records outcomes and
 `actual_up_last_success_timestamp_seconds` records successful operations by
-trigger. Monitor the `schedule` trigger for unattended imports; a successful
+trigger. Monitor `schedule` and `automatic-backfill` for unattended imports; a successful
 validation or dry run does not prove a scheduled import succeeded.
 
 ## Windmill migration

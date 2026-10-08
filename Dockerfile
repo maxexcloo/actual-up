@@ -6,6 +6,7 @@ RUN npm install --global pnpm@12.9.1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
+COPY assets ./assets
 COPY src ./src
 COPY tsconfig.build.json tsconfig.json ./
 RUN pnpm run build && pnpm prune --prod
@@ -16,7 +17,6 @@ ENV ACTUAL_UP_CONFIG=/config/config.yaml
 ENV NODE_ENV=production
 
 WORKDIR /app
-COPY --chown=node:node assets ./assets
 COPY --from=build --chown=node:node /workspace/dist ./dist
 COPY --from=build --chown=node:node /workspace/node_modules ./node_modules
 COPY --from=build --chown=node:node /workspace/package.json ./package.json

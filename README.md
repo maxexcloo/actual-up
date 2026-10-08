@@ -11,9 +11,10 @@ operation queue. No separate application database or workflow platform.
   amounts, payees or messages in logs or run results.
 - Import held transactions as uncleared, update settlements and safely handle
   cancelled holds while preserving edits made in Actual.
-- Deduplicate shared 2Up accounts by immutable Up ID; use `up:` import identities.
+- Support multiple API keys, personal accounts and shared 2Up accounts. Map each
+  bank account once, with partner keys in fallback order; use `up:` import identities.
 - Apply Actual reconciliation and rules, optional category mappings and transfers.
-- Serve a responsive htmx interface from the same process, with password
+- Serve a responsive daisyUI + htmx interface from the same process, with password
   authentication and same-origin checks for actions.
 
 ## Run locally
@@ -35,8 +36,10 @@ mise exec -- pnpm dev --config ./config.local.yaml
 ```
 
 Open `http://localhost:3000` and use the app credentials. Discover accounts,
-add their IDs to `mappings`, restart and preview the first import. Polling starts
-only when `schedule.enabled: true`; its default cadence is every 15 minutes.
+add their IDs to `mappings` and restart. Automatic sync is enabled by default:
+a full-history backfill runs on startup and nightly at 03:00, with recent changes
+synchronised every 15 minutes. Set `schedule.enabled: false` to pause automation
+while using discovery or dry runs.
 
 ## Deploy
 

@@ -114,7 +114,7 @@ describe("operator app", () => {
       headers: { authorization: auth },
     });
     expect(page.statusCode).toBe(200);
-    expect(page.body).toContain("Automatic sync is off");
+    expect(page.body).toContain("Automatic sync is on");
     expect(page.headers["cache-control"]).toBe("no-store");
     expect(page.body).not.toContain(password);
   });
@@ -128,7 +128,7 @@ describe("operator app", () => {
     await runner.drain();
     const response = await server.inject({ url, headers });
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain("schedule");
+    expect(response.body).toContain("Scheduled sync");
     expect(response.body).toContain("imported");
   });
 

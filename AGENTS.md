@@ -3,7 +3,7 @@
 ## Structure
 
 - `src/` contains the TypeScript service, server-rendered htmx UI and CLI.
-- `assets/` contains the locally served stylesheet.
+- `assets/` contains the Tailwind/daisyUI source stylesheet, compiled into `dist/`.
 - `test/` contains unit and in-memory integration tests.
 - `chart/actual-up/` contains the Kubernetes Helm chart.
 - `docs/` contains maintained operator documentation.

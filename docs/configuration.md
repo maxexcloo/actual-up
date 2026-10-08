@@ -36,7 +36,15 @@ Each `up.connections` entry has a unique stable local `id` and a `tokenEnv`.
 Each mapping has `alias`, `upAccountId`, `actualAccountId` and `connections` in
 fallback order. Aliases are non-sensitive labels used in logs. Map each Up and
 Actual account only once. For shared accounts, put both partners' connections on
-one mapping. Use discovery to find IDs; it omits account balances.
+one mapping. Personal and savings accounts can share one token or use separate
+tokens; each mapping selects the connections allowed to read it. Validation and
+imports both try the next partner key if a connection is unavailable. Use
+discovery to find IDs; it omits account balances.
+
+`config.example.yaml` shows two API keys and one joint mapping. Store each key in
+a separate 1Password field (for example `up-token-alex` and `up-token-sam`) and
+map those fields into their respective environment variables through External
+Secrets. Never create a second mapping for the same shared bank account.
 
 `categoryMappings` maps Up category IDs to Actual category IDs. Actual rules run
 first; a mapping applies only if a transaction remains uncategorised. The `notes`
@@ -44,16 +52,23 @@ flags control create-only enrichment. Existing notes are never overwritten.
 
 ## Schedule and webhooks
 
-`schedule.enabled` defaults to `false`. When enabled, `schedule.cron` defaults to
-`*/15 * * * *` in `Australia/Sydney`; `lookbackDays` defaults to 30. Restart after
-changing configuration. An immediate import is always an explicit UI action.
+`schedule.enabled` defaults to `true`. The service backfills all available bank
+history on startup, then runs a recent sync every 15 minutes (`schedule.cron`)
+and a full-history backfill nightly at 03:00 (`schedule.backfillCron`). Both use
+`schedule.timezone`, defaulting to `Australia/Sydney`. `lookbackDays` defaults
+to 30 for recent syncs. Nightly backfills repair older gaps and interrupted
+imports without a separate cursor database; import IDs prevent duplicates.
+
+Restart after configuration changes. Newly mapped accounts are backfilled on
+that restart. Set `schedule.enabled: false` to disable both automatic schedules
+and the startup backfill while retaining manual actions.
 
 Polling needs no public endpoint. Optional webhooks use
 `/webhooks/up/:connectionId` with `webhook.id` and `webhook.secretEnv` on the
 connection. Raw request signatures are checked before queueing. If needed, route
 only that path publicly; retain private access for the UI. Webhook delivery and
 in-memory jobs are not durable, so keep periodic reconciliation enabled. Review
-runs after a restart and backfill if an outage exceeded the lookback period.
+runs after an outage; startup and nightly backfills recover older history.
 
 ## Kubelab and 1Password
 
