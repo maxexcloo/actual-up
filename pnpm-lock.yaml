@@ -178,6 +178,9 @@ importers:
       fastify:
         specifier: 5.12.5
         version: 5.12.5
+      htmx.org:
+        specifier: 2.0.11
+        version: 2.0.11
       pino:
         specifier: 10.4.0
         version: 10.4.0
@@ -933,6 +936,9 @@ packages:
     resolution: {integrity: sha512-4E71E0rpOaQuJR2A3xDZ+GM1HyWYv1clR58tC8emQNeQe3RH7MAzSbat+V0wG78LQBo6m6bzSG/L4pBuCsgnUQ==}
     engines: {node: '>=0.4.7'}
     hasBin: true
+
+  htmx.org@2.0.11:
+    resolution: {integrity: sha512-Thx/WtpeOQqSrqBCw/A1cwGJGg4UrVa3+sW0GmrM3p4gJgO89ecH4qtbnyzDDWFvBTqjnIMCgELTNt636dtamA==}
 
   hyperformula@3.4.0:
     resolution: {integrity: sha512-w1N11JWfdHedHpNoSgYBd3Mz7e1yr1BEQ+g4GFJbLv+qlYVXyC4I8xy1mSwj13FhcoDBGNU5yxPCdXB6vwaYaA==}
@@ -1849,6 +1855,8 @@ snapshots:
       wordwrap: 1.0.0
     optionalDependencies:
       uglify-js: 3.19.3
+
+  htmx.org@2.0.11: {}
 
   hyperformula@3.4.0:
     dependencies:

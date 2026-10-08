@@ -1,83 +1,78 @@
-# actual-up
+# Actual Up
 
-`actual-up` synchronises Up transactions into Actual Budget. Windmill owns the
-schedule, signed webhook endpoint, configuration, run history and operator App.
-A small authenticated bridge is the only persistent component because Actual's
-official API is a Node package operating on a local SQLite budget cache rather
-than an HTTP API.
+A small private web app that synchronises Up transactions into Actual Budget.
+One Node service owns the UI, polling, optional signed webhooks and a serial
+operation queue. No separate application database or workflow platform.
 
 ## Features
 
-- Imports held transactions as uncleared and updates them when they settle.
-- Supports multiple Up connections and deduplicates shared 2Up accounts by
-  immutable Up account ID.
-- Uses Actual import reconciliation and rules, followed by an optional category
-  map.
-- Maps transfers between configured accounts to Actual transfer payees.
-- Mirrors cancelled holds while protecting transactions edited in Actual.
-- Provides validation, discovery, dry-run, backfill and webhook-management
-  actions in Windmill.
-- Includes a Windmill operator App for status, safe results and manual actions.
-- Keeps schedules, Up requests, webhook verification and reconciliation in
-  native Windmill TypeScript jobs.
+- Preview imports, run a sync, backfill from a date and discover account IDs.
+- Check connections and inspect the last 20 runs without exposing transaction
+  amounts, payees or messages in logs or run results.
+- Import held transactions as uncleared, update settlements and safely handle
+  cancelled holds while preserving edits made in Actual.
+- Deduplicate shared 2Up accounts by immutable Up ID; use `up:` import identities.
+- Apply Actual reconciliation and rules, optional category mappings and transfers.
+- Serve a responsive htmx interface from the same process, with password
+  authentication and same-origin checks for actions.
 
-The bridge never receives Up credentials or webhook bodies. It exposes only the
-Actual operations required by the native jobs, requires a bearer token and
-serialises every Actual API call.
+## Run locally
 
-## Architecture
-
-```text
-Up API/webhooks ──> Windmill native jobs ──> authenticated Actual bridge ──> Actual
-                         │
-                         ├── schedule and run history
-                         ├── secrets and configuration
-                         └── operator App
-```
-
-Windmill scripts are versioned under [`windmill/`](windmill/). The bridge and
-legacy standalone CLI live under [`src/`](src/).
-
-## Local bridge
-
-Copy [`config.bridge.example.yaml`](config.bridge.example.yaml) to
-`config.local.yaml`, configure Actual authentication, then run:
+Requires Node.js 22 or later. Install the pinned tools and dependencies:
 
 ```sh
-export ACTUAL_UP_BRIDGE_TOKEN='generate-a-long-random-value'
-export ACTUAL_PASSWORD='your-actual-server-password'
-pnpm bridge --config ./config.local.yaml
+mise run setup
+cp config.local.example.yaml config.local.yaml
 ```
 
-Check it without exposing the token in the URL:
+Set `ACTUAL_UP_USERNAME`, `ACTUAL_UP_PASSWORD` (at least 16 characters),
+`ACTUAL_PASSWORD` and `UP_TOKEN_MAX` in your environment or inject them with
+1Password CLI. Set the Actual server URL and budget sync ID in the configuration.
+Then run:
 
 ```sh
-curl -H "Authorization: Bearer $ACTUAL_UP_BRIDGE_TOKEN" \
-  http://127.0.0.1:3000/v1/version
+mise exec -- pnpm dev --config ./config.local.yaml
 ```
 
-See [Windmill deployment](docs/windmill.md),
-[configuration](docs/configuration.md) and [operations](docs/operations.md).
+Open `http://localhost:3000` and use the app credentials. Discover accounts,
+add their IDs to `mappings`, restart and preview the first import. Polling starts
+only when `schedule.enabled: true`; its default cadence is every 15 minutes.
 
-## Kubernetes bridge
+## Deploy
 
-The Helm chart runs bridge mode with one replica and a `Recreate` strategy.
-Create a Secret containing `ACTUAL_UP_BRIDGE_TOKEN` and the Actual credential
-referenced by the configuration, then install:
+The image runs `serve`, listens on port 3000 and needs writable `/data` and `/tmp`
+directories. Use one replica with `Recreate`; the Actual cache is rebuildable.
+Expose the app through private HTTPS. HTTP Basic authentication relies on TLS
+outside localhost. Secrets are supplied through environment variables.
+
+The GitHub Container workflow tests, builds and scans the image before publishing
+to `ghcr.io/maxexcloo/actual-up`. Pushes to `main` publish `latest` and
+`sha-<full-commit>`. Version tags such as `v0.1.0` publish `0.1.0` and `0.1`;
+the Git tag must match `package.json`. Pull requests build and scan without
+publishing. Images include OCI labels, provenance and an SBOM. Kubelab owns
+its deployment using `bjw-s/app-template`, private routing and External Secrets.
+Its `Actual Up` 1Password item holds the app login and upstream credentials.
+Pin the published image tag and digest in kubelab before enabling the release.
+Publishing uses the repository’s `GITHUB_TOKEN`; no registry password is needed.
+
+The included Helm chart is available for installations outside kubelab:
 
 ```sh
 helm upgrade --install actual-up ./chart/actual-up \
   --set existingSecret=actual-up \
+  --set image.repository=ghcr.io/your-owner/actual-up \
+  --set image.tag=sha-your-published-commit \
   --set-file configuration=./config.yaml
 ```
 
-The cache is rebuildable and uses `emptyDir`; no PVC is required.
+See [configuration](docs/configuration.md) and [operations](docs/operations.md).
 
 ## Development
 
 ```sh
-mise run setup
 mise run check
+helm lint chart/actual-up --set existingConfigMap=test
+helm template test chart/actual-up --set existingConfigMap=test
 ```
 
-Requires Node.js 22 or later. The repository is licensed under AGPL-3.0-only.
+The repository is licensed under AGPL-3.0-only.

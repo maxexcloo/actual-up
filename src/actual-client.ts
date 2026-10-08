@@ -36,11 +36,14 @@ export class ActualBudgetClient implements ActualClient {
         sessionToken: environmentValue(this.config.sessionTokenEnv!),
       });
     }
-    await api.downloadBudget(this.config.syncId, {
-      password: this.config.encryptionPasswordEnv
-        ? environmentValue(this.config.encryptionPasswordEnv)
-        : undefined,
-    });
+    await api.downloadBudget(
+      this.config.syncId ?? environmentValue(this.config.syncIdEnv!),
+      {
+        password: this.config.encryptionPasswordEnv
+          ? environmentValue(this.config.encryptionPasswordEnv)
+          : undefined,
+      },
+    );
     this.opened = true;
   }
 

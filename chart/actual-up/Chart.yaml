@@ -1,6 +1,6 @@
 apiVersion: v2
 name: actual-up
-description: Authenticated Actual Budget bridge for native Windmill synchronisation.
+description: Up to Actual Budget synchronisation with a private operator app.
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

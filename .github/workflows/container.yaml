@@ -1,0 +1,134 @@
+name: Container
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  cancel-in-progress: true
+  group: container-${{ github.ref }}
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up tools
+        uses: jdx/mise-action@v5
+        with:
+          version: 2026.10.3
+      - name: Install dependencies
+        run: mise run setup
+      - name: Run checks
+        run: mise run check
+      - name: Validate release version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mise exec -- node --input-type=module <<'NODE'
+            import assert from "node:assert/strict";
+            import { readFileSync } from "node:fs";
+            const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+            assert.equal(process.env.RELEASE_TAG, `v${version}`, "Tag must match package.json");
+          NODE
+      - name: Lint chart
+        run: mise exec -- helm lint chart/actual-up --set existingConfigMap=test
+      - name: Render chart
+        run: mise exec -- helm template test chart/actual-up --set existingConfigMap=test
+
+  image:
+    name: Image
+    needs: check
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - id: metadata
+        name: Extract metadata
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: latest=false
+          labels: |
+            org.opencontainers.image.licenses=AGPL-3.0-only
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - name: Build image for verification
+        uses: docker/build-push-action@v7
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max,ignore-error=true
+          context: .
+          labels: ${{ steps.metadata.outputs.labels }}
+          load: true
+          platforms: linux/amd64
+          tags: actual-up:test
+      - name: Smoke-test runtime
+        run: |
+          docker run --rm --read-only --cap-drop=ALL \
+            --security-opt=no-new-privileges actual-up:test node dist/cli.js --help
+      - name: Scan image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          exit-code: "1"
+          image-ref: actual-up:test
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: docker/login-action@v4
+        with:
+          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+      - id: publish
+        name: Publish verified image
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          labels: ${{ steps.metadata.outputs.labels }}
+          platforms: linux/amd64
+          provenance: mode=max
+          push: true
+          sbom: true
+          tags: ${{ steps.metadata.outputs.tags }}
+      - name: Summarise image
+        if: steps.publish.outcome == 'success'
+        env:
+          IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+          IMAGE_TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          {
+            echo 'Published image tags:'
+            echo '```text'
+            echo "$IMAGE_TAGS"
+            echo '```'
+            echo "Digest: \`$IMAGE_DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"

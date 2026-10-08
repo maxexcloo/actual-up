@@ -21,8 +21,13 @@ const actualSchema = z
     passwordEnv: environmentName.optional(),
     serverUrl: httpUrl,
     sessionTokenEnv: environmentName.optional(),
-    syncId: z.string().min(1),
+    syncId: z.string().min(1).optional(),
+    syncIdEnv: environmentName.optional(),
   })
+  .refine(
+    ({ syncId, syncIdEnv }) => Boolean(syncId) !== Boolean(syncIdEnv),
+    "set exactly one of syncId or syncIdEnv",
+  )
   .refine(
     ({ passwordEnv, sessionTokenEnv }) =>
       Boolean(passwordEnv) !== Boolean(sessionTokenEnv),
@@ -49,6 +54,15 @@ const mappingSchema = z.object({
 
 const configSchema = z.object({
   version: z.literal(1),
+  auth: z
+    .object({
+      usernameEnv: environmentName.default("ACTUAL_UP_USERNAME"),
+      passwordEnv: environmentName.default("ACTUAL_UP_PASSWORD"),
+    })
+    .default({
+      usernameEnv: "ACTUAL_UP_USERNAME",
+      passwordEnv: "ACTUAL_UP_PASSWORD",
+    }),
   actual: actualSchema,
   alerts: z
     .object({
@@ -75,11 +89,13 @@ const configSchema = z.object({
     }),
   schedule: z
     .object({
+      enabled: z.boolean().default(false),
       cron: z.string().min(1).default("*/15 * * * *"),
       lookbackDays: z.number().int().min(1).max(365).default(30),
       timezone: z.string().min(1).default("Australia/Sydney"),
     })
     .default({
+      enabled: false,
       cron: "*/15 * * * *",
       lookbackDays: 30,
       timezone: "Australia/Sydney",
@@ -94,21 +110,9 @@ const configSchema = z.object({
   up: z.object({ connections: z.array(connectionSchema).min(1) }),
 });
 
-const bridgeConfigSchema = z.object({
-  actual: actualSchema,
-  server: z
-    .object({
-      host: z.string().default("0.0.0.0"),
-      port: z.number().int().min(1).max(65_535).default(3000),
-    })
-    .default({ host: "0.0.0.0", port: 3000 }),
-  version: z.literal(1),
-});
-
 export type AppConfig = z.infer<typeof configSchema>;
 export type AccountMapping = AppConfig["mappings"][number];
 export type UpConnectionConfig = AppConfig["up"]["connections"][number];
-export type BridgeConfig = z.infer<typeof bridgeConfigSchema>;
 
 export function environmentValue(name: string): string {
   const value = process.env[name];
@@ -125,12 +129,6 @@ export async function loadConfig(path: string): Promise<AppConfig> {
   const config = configSchema.parse(parsed);
   validateConfig(config);
   return config;
-}
-
-export async function loadBridgeConfig(path: string): Promise<BridgeConfig> {
-  const absolutePath = resolve(path);
-  const source = await readFile(absolutePath, "utf8");
-  return bridgeConfigSchema.parse(parse(source));
 }
 
 export function parseConfig(value: unknown): AppConfig {

@@ -6,7 +6,7 @@ existingSecret: actual-up
 
 image:
   pullPolicy: IfNotPresent
-  repository: ghcr.io/example/actual-up
+  repository: ghcr.io/maxexcloo/actual-up
   tag: ""
 
 imagePullSecrets: []

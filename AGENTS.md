@@ -2,7 +2,8 @@
 
 ## Structure
 
-- `src/` contains the TypeScript daemon and CLI.
+- `src/` contains the TypeScript service, server-rendered htmx UI and CLI.
+- `assets/` contains the locally served stylesheet.
 - `test/` contains unit and in-memory integration tests.
 - `chart/actual-up/` contains the Kubernetes Helm chart.
 - `docs/` contains maintained operator documentation.
@@ -14,7 +15,8 @@
 - Treat Up IDs as immutable bank identities and prefix Actual import IDs with `up:`.
 - Never log transaction amounts, payees, messages, webhook bodies or credentials.
 - Serialise Actual API access; do not add replicas or parallel budget writers.
-- Keep the daemon configuration-driven. Do not add a database or UI without an explicit product decision.
+- Keep the service configuration-driven with one operation queue and no application database.
+- Serve UI assets locally; keep credentials on the server and require authentication and same-origin checks for actions.
 
 ## Verification
 

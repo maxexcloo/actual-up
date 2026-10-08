@@ -2,14 +2,9 @@ version: 1
 
 actual:
   cacheDirectory: /data/actual-cache
-  encryptionPasswordEnv: ACTUAL_ENCRYPTION_PASSWORD
   passwordEnv: ACTUAL_PASSWORD
   serverUrl: https://actual.example.com
   syncId: 00000000-0000-4000-8000-000000000000
-
-alerts:
-  cooldownMinutes: 60
-  urlEnv: ALERT_WEBHOOK_URL
 
 categoryMappings:
   restaurants-and-cafes: 00000000-0000-4000-8000-000000000003
@@ -30,6 +25,7 @@ notes:
   includeRoundUp: false
 
 schedule:
+  enabled: false
   cron: "*/15 * * * *"
   lookbackDays: 30
   timezone: Australia/Sydney
@@ -43,11 +39,5 @@ up:
   connections:
     - id: alex
       tokenEnv: UP_TOKEN_ALEX
-      webhook:
-        id: 00000000-0000-4000-8000-000000000004
-        secretEnv: UP_WEBHOOK_SECRET_ALEX
     - id: sam
       tokenEnv: UP_TOKEN_SAM
-      webhook:
-        id: 00000000-0000-4000-8000-000000000005
-        secretEnv: UP_WEBHOOK_SECRET_SAM

@@ -24,12 +24,29 @@ describe("configuration", () => {
   it("applies safe defaults", () => {
     const config = parseConfig(base);
     expect(config.schedule).toEqual({
+      enabled: false,
       cron: "*/15 * * * *",
       lookbackDays: 30,
       timezone: "Australia/Sydney",
     });
     expect(config.server.port).toBe(3000);
     expect(config.notes.includePerformer).toBe(true);
+  });
+
+  it("accepts a budget ID from the environment and rejects ambiguous IDs", () => {
+    const { syncId: _syncId, ...actual } = base.actual;
+    expect(
+      parseConfig({
+        ...base,
+        actual: { ...actual, syncIdEnv: "ACTUAL_SYNC_ID" },
+      }).actual.syncIdEnv,
+    ).toBe("ACTUAL_SYNC_ID");
+    expect(() =>
+      parseConfig({
+        ...base,
+        actual: { ...base.actual, syncIdEnv: "ACTUAL_SYNC_ID" },
+      }),
+    ).toThrow();
   });
 
   it("rejects duplicate bank-account mappings", () => {

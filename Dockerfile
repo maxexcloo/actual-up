@@ -16,6 +16,7 @@ ENV ACTUAL_UP_CONFIG=/config/config.yaml
 ENV NODE_ENV=production
 
 WORKDIR /app
+COPY --chown=node:node assets ./assets
 COPY --from=build --chown=node:node /workspace/dist ./dist
 COPY --from=build --chown=node:node /workspace/node_modules ./node_modules
 COPY --from=build --chown=node:node /workspace/package.json ./package.json
@@ -24,4 +25,4 @@ RUN mkdir -p /data/actual-cache && chown -R node:node /data
 
 USER node
 EXPOSE 3000
-CMD ["node", "dist/cli.js", "bridge"]
+CMD ["node", "dist/cli.js", "serve"]

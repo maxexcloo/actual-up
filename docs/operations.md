@@ -1,52 +1,64 @@
 # Operations
 
-## Initial setup
+## First run
 
-1. Deploy the bridge and confirm `/livez` and `/readyz` are healthy.
-2. Create Windmill secret variables for the bridge token, Up tokens and webhook
-   secrets.
-3. Create `f/actual_up/config` using the `actual_up` resource type.
-4. Run **Validate**, then **Discover**, from the operator App.
-5. Add immutable account and category mappings to the resource.
-6. Run a dry run and inspect only the safe counts before running a live sync.
-7. Enable `f/actual_up/sync` after the first successful live run.
+1. Push `main` to publish a commit-tagged image, or tag the matching package
+   version (for example `v0.1.0`) to publish a versioned image. Pin the resulting
+   tag and digest in kubelab.
+2. Let kubelab provision the `Actual Up` 1Password item. Supply its Actual session
+   token, budget sync ID and Up token; the app password is generated separately.
+3. Unsuspend the prepared Helm release after verifying those fields. Leave
+   polling disabled and mappings empty during setup.
+4. Open the private HTTPS app with the login from 1Password. Check connections
+   and discover account IDs. Update mappings in kubelab's YAML and reconcile.
+5. Preview changes, inspect the result, then run an explicit import. Enable
+   `schedule.enabled` in YAML once it behaves as expected.
 
-## Webhooks
+Configuration changes roll the pod through a generated ConfigMap name. Secret
+rotation requires a rollout after External Secrets refreshes, because credentials
+are supplied through environment variables. Keep app login and Actual credentials
+separate. Health checks confirm the process is serving; use connection checks and
+run results to diagnose upstream failures.
 
-The `f/actual_up/manage_webhook` action lists, creates, pings and deletes Up
-webhooks. A create result contains a webhook ID and one-time `secretKey`; store
-both immediately in `f/actual_up/config` using a secret variable.
+## Runs and recovery
 
-The anonymous HTTP route is `/api/r/actual-up/up`. Its preprocessor verifies the
-raw Up HMAC signature and webhook identity before passing only safe event IDs to
-the reconciliation job. Webhook bodies and signing secrets are never logged.
+The queue serialises whole operations, including discovery and validation. Only
+one manual action can be queued at a time; duplicate scheduled runs coalesce.
+It holds at most 32 operations and retains the latest 20 completed results in
+memory. Exceptions are reported without their potentially sensitive contents.
+An account failure makes the run fail even if other accounts succeeded.
 
-## Backfills
+History and queued jobs reset on restart. The Actual cache uses `emptyDir` and is
+re-downloaded on startup. Import identities make reconciliation repeatable.
+Use a dated dry run and then backfill after an extended outage. Do not run a
+standalone CLI writer alongside the service, or deploy a second instance for the
+same budget. Graceful shutdown stops scheduling, closes HTTP and drains the queue;
+Kubernetes can still terminate work at the configured grace-period limit.
 
-Run `f/actual_up/sync` with `dryRun: true` and an RFC 3339 or `YYYY-MM-DD`
-`since` value. Repeat with `dryRun: false` after reviewing counts. Use the
-`accounts` argument to limit a run to selected mapping aliases.
+Metrics are exposed at `/metrics`. `actual_up_jobs_total` records outcomes and
+`actual_up_last_success_timestamp_seconds` records successful operations by
+trigger. Monitor the `schedule` trigger for unattended imports; a successful
+validation or dry run does not prove a scheduled import succeeded.
 
-Repeating a range is safe because every Actual import ID is `up:<Up ID>`.
+## Windmill migration
 
-## Deletions and conflicts
+The duplicate Windmill scripts and bridge have been removed from this repository.
+This does not delete deployed Windmill resources. Before enabling this app's
+writer, disable any existing Windmill schedule and webhook trigger and stop its
+bridge. Validate, preview, import and observe a scheduled run before deleting the
+old deployment. Leave Windmill available for other workloads.
 
-Cancelled, unreconciled held transactions are removed automatically. A cleared
-transaction with a category, note, split or reconciliation marker is retained
-when Up deletes it; the run records a conflict for manual review.
+## CLI
 
-## Monitoring
+The CLI remains for maintenance while the service is stopped:
 
-Windmill provides run history, job logs and schedule state. The operator App
-stores the last report at `f/actual_up/status` and shows imported, updated,
-inspected, conflict and failure counts. Project logs contain only event names,
-connection IDs, configured aliases and status codes—not amounts, payees,
-messages, webhook bodies or credentials.
+```sh
+node dist/cli.js --config config.yaml validate
+node dist/cli.js --config config.yaml discover
+node dist/cli.js --config config.yaml sync --dry-run --since 2026-01-01
+node dist/cli.js --config config.yaml sync --since 2026-01-01
+```
 
-The bridge exposes Prometheus metrics at `/metrics`, including operation totals,
-duration and current queue depth. Labels contain only fixed operation names and
-outcomes. Configure the chart's `serviceMonitor.enabled` value when Prometheus
-Operator is available.
-
-Scheduled reconciliation is the recovery mechanism for missed or interrupted
-webhooks.
+Optional webhook management is available through `webhook create`, `delete`,
+`ping` and `status`. Creation prints a one-time secret for secure storage; do not
+capture that output in CI or shared logs.

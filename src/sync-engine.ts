@@ -41,11 +41,9 @@ export class SyncEngine {
   ) {}
 
   async validate(): Promise<{ actualVersion: string }> {
-    const [accounts, categories, actualVersion] = await Promise.all([
-      this.actual.getAccounts(),
-      this.actual.getCategories(),
-      this.actual.getServerVersion(),
-    ]);
+    const accounts = await this.actual.getAccounts();
+    const categories = await this.actual.getCategories();
+    const actualVersion = await this.actual.getServerVersion();
     const accountIds = new Set(accounts.map(({ id }) => id));
     const categoryIds = new Set(categories.map(({ id }) => id));
 
@@ -101,12 +99,9 @@ export class SyncEngine {
           report,
           options.dryRun,
         );
-      } catch (error) {
+      } catch {
         report.failed += 1;
-        this.logger.error(
-          { account: mapping.alias, err: error },
-          "Account sync failed",
-        );
+        this.logger.error({ account: mapping.alias }, "Account sync failed");
         await this.alerts.send({
           account: mapping.alias,
           detail: "Account sync failed; see service logs",
@@ -253,7 +248,7 @@ export class SyncEngine {
       converted,
     );
     if (result.errors.length > 0) {
-      throw new Error(result.errors.map(({ message }) => message).join("; "));
+      throw new Error("Actual transaction import failed");
     }
     const action = result.added.length > 0 ? "imported" : "updated";
     this.metrics.transactions.inc({ account: mapping.alias, action });

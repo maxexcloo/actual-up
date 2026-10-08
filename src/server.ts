@@ -1,11 +1,17 @@
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { Cron } from "croner";
 import Fastify, { LogController } from "fastify";
 import type { Logger } from "pino";
+import { z } from "zod";
 
+import { authorised } from "./auth.js";
 import { environmentValue, type AppConfig } from "./config.js";
 import type { JobRunner } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
+import { assertActualCompatibility, type Runtime } from "./runtime.js";
 import type { SyncEngine } from "./sync-engine.js";
+import { dashboard, status, statusVersion } from "./ui.js";
 import { parseWebhook, verifyWebhookSignature } from "./webhook.js";
 
 export type Service = {
@@ -18,13 +24,78 @@ export async function startService(
   runner: JobRunner,
   metrics: Metrics,
   logger: Logger,
+  runtime: Pick<Runtime, "actual" | "clients">,
 ): Promise<Service> {
-  let ready = true;
+  const server = await createServer(
+    config,
+    engine,
+    runner,
+    metrics,
+    logger,
+    runtime,
+  );
+  const cron = new Cron(
+    config.schedule.cron,
+    {
+      paused: !config.schedule.enabled,
+      protect: true,
+      timezone: config.schedule.timezone,
+    },
+    () => {
+      runner.enqueue("schedule", "schedule", async () => {
+        await runtime.actual.sync();
+        return engine.reconcile();
+      });
+    },
+  );
+  try {
+    await server.listen({ host: config.server.host, port: config.server.port });
+  } catch (error) {
+    cron.stop();
+    throw error;
+  }
+  logger.info({ port: config.server.port }, "Service started");
+  return {
+    async close() {
+      cron.stop();
+      await server.close();
+      await runner.close();
+    },
+  };
+}
+
+export async function createServer(
+  config: AppConfig,
+  engine: SyncEngine,
+  runner: JobRunner,
+  metrics: Metrics,
+  logger: Logger,
+  runtime: Pick<Runtime, "actual" | "clients">,
+) {
+  const username = environmentValue(config.auth.usernameEnv);
+  const password = environmentValue(config.auth.passwordEnv);
+  if (password.length < 16)
+    throw new Error("UI password must contain at least 16 characters");
+  const htmx = await readFile(
+    createRequire(import.meta.url).resolve("htmx.org/dist/htmx.min.js"),
+    "utf8",
+  );
+  const stylesheet = await readFile(
+    new URL("../assets/style.css", import.meta.url),
+    "utf8",
+  );
   const server = Fastify({
-    bodyLimit: 1_048_576,
+    bodyLimit: 65_536,
     logController: new LogController({ disableRequestLogging: true }),
     loggerInstance: logger,
   });
+
+  server.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string" },
+    (_request, body, done) =>
+      done(null, Object.fromEntries(new URLSearchParams(String(body)))),
+  );
 
   server.addContentTypeParser(
     "application/json",
@@ -33,8 +104,7 @@ export async function startService(
   );
 
   server.get("/livez", async () => ({ status: "ok" }));
-  server.get("/readyz", async (_request, reply) => {
-    if (!ready) return reply.code(503).send({ status: "not-ready" });
+  server.get("/readyz", async () => {
     return { status: "ready" };
   });
   server.get("/metrics", async (_request, reply) => {
@@ -75,37 +145,166 @@ export async function startService(
       }
       const transactionId = event.data.relationships.transaction?.data?.id;
       const key = transactionId ?? event.data.id;
-      runner.enqueue(`webhook:${key}`, "webhook", () =>
-        engine.reconcileWebhook(
-          connection.id,
-          event.data.attributes.eventType,
-          transactionId,
-        ),
+      const accepted = runner.enqueue(
+        `webhook:${key}:${event.data.attributes.eventType}`,
+        "webhook",
+        async () => {
+          await runtime.actual.sync();
+          return engine.reconcileWebhook(
+            connection.id,
+            event.data.attributes.eventType,
+            transactionId,
+          );
+        },
       );
+      if (!accepted)
+        return reply.code(503).send({ error: "queue busy; retry" });
       return reply.code(200).send({ accepted: true });
     },
   );
 
-  const cron = new Cron(
-    config.schedule.cron,
-    { protect: true, timezone: config.schedule.timezone },
-    () => {
-      runner.enqueue("schedule", "schedule", () => engine.reconcile());
+  server.addHook("onRequest", async (request, reply) => {
+    reply.header("Cache-Control", "no-store");
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("Referrer-Policy", "no-referrer");
+    reply.header(
+      "Content-Security-Policy",
+      "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    );
+    const path = request.url.split("?")[0];
+    if (
+      ["/livez", "/readyz", "/metrics"].includes(path!) ||
+      path?.startsWith("/webhooks/up/")
+    )
+      return;
+    if (!authorised(request.headers.authorization, username, password)) {
+      reply.header(
+        "WWW-Authenticate",
+        'Basic realm="Actual Up", charset="UTF-8"',
+      );
+      return reply.code(401).send("Authentication required");
+    }
+    if (request.method === "POST") {
+      const origin = request.headers.origin;
+      const expected = config.server.publicUrl
+        ? new URL(config.server.publicUrl).origin
+        : `${request.protocol}://${request.host}`;
+      if (
+        origin !== expected ||
+        request.headers["sec-fetch-site"] === "cross-site"
+      ) {
+        return reply.code(403).send("Request origin does not match this app");
+      }
+    }
+  });
+
+  server.get("/", async (_request, reply) =>
+    reply.type("text/html").send(dashboard(config, runner)),
+  );
+  server.get<{ Querystring: { version?: string } }>(
+    "/runs",
+    async (request, reply) => {
+      if (request.query.version === statusVersion(runner))
+        return reply.code(204).send();
+      return reply.type("text/html").send(status(runner));
     },
   );
-
-  await server.listen({ host: config.server.host, port: config.server.port });
-  logger.info(
-    { nextRun: cron.nextRun()?.toISOString(), port: config.server.port },
-    "Service started",
+  server.get("/assets/style.css", async (_request, reply) =>
+    reply.type("text/css").send(stylesheet),
+  );
+  server.get("/assets/htmx.js", async (_request, reply) =>
+    reply.type("application/javascript").send(htmx),
   );
 
-  return {
-    async close() {
-      ready = false;
-      cron.stop();
-      await server.close();
-      await runner.drain();
+  server.post<{ Params: { action: string } }>(
+    "/actions/:action",
+    async (request, reply) => {
+      const action = request.params.action;
+      let operation: () => Promise<unknown>;
+      let trigger = action;
+      if (action === "sync") {
+        const parsed = z
+          .object({
+            mode: z.enum(["dry-run", "live"]),
+            account: z.string().default(""),
+            since: z.string().default(""),
+          })
+          .strict()
+          .safeParse(request.body);
+        if (!parsed.success) return reply.code(400).send("Invalid action");
+        const { account, since, mode } = parsed.data;
+        if (
+          account &&
+          !config.mappings.some((mapping) => mapping.alias === account)
+        )
+          return reply.code(400).send("Unknown account");
+        if (
+          since &&
+          (!/^\d{4}-\d{2}-\d{2}$/.test(since) ||
+            !Number.isFinite(Date.parse(since)) ||
+            new Date(since).toISOString().slice(0, 10) !== since ||
+            since > new Date().toISOString().slice(0, 10))
+        )
+          return reply.code(400).send("Choose a valid date in the past");
+        trigger =
+          mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual";
+        operation = async () => {
+          await runtime.actual.sync();
+          return engine.reconcile({
+            dryRun: mode === "dry-run",
+            mappingAliases: account ? [account] : undefined,
+            since: since || undefined,
+          });
+        };
+      } else if (action === "validate") {
+        operation = async () => {
+          for (const client of runtime.clients.values()) await client.ping();
+          const result = await engine.validate();
+          assertActualCompatibility(result.actualVersion);
+          return { ok: true, ...result };
+        };
+      } else if (action === "discover") {
+        operation = async () => {
+          const up = [];
+          for (const [connection, client] of runtime.clients) {
+            const accounts = await client.listAccounts();
+            up.push({
+              connection,
+              accounts: accounts.map(({ id, attributes }) => ({
+                id,
+                name: attributes.displayName,
+              })),
+            });
+          }
+          const accounts = (await runtime.actual.getAccounts()).map(
+            ({ id, name }) => ({ id, name }),
+          );
+          const categories = (await runtime.actual.getCategories()).map(
+            ({ id, name }) => ({ id, name }),
+          );
+          return { actual: { accounts, categories }, up };
+        };
+      } else {
+        return reply.code(404).send("Unknown action");
+      }
+      const accepted = runner.enqueue("manual", trigger, operation);
+      if (request.headers["hx-request"] !== "true")
+        return reply.redirect("/", 303);
+      return reply
+        .header("HX-Trigger", "refresh-status")
+        .type("text/html")
+        .send(
+          accepted
+            ? "Queued. Follow progress in recent activity above."
+            : "An action is already queued, or the queue is full. Please wait.",
+        );
     },
-  };
+  );
+  server.setErrorHandler((_error, _request, reply) => {
+    logger.error("Request failed");
+    return reply
+      .code(500)
+      .send("Request failed; check configuration and connectivity");
+  });
+  return server;
 }

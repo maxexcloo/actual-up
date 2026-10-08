@@ -2,15 +2,9 @@
 
 import { Command } from "commander";
 
-import { ActualBudgetClient } from "./actual-client.js";
-import { createBridgeServer } from "./bridge.js";
-import { environmentValue, loadBridgeConfig, loadConfig } from "./config.js";
+import { loadConfig } from "./config.js";
 import { JobRunner } from "./job-runner.js";
-import {
-  assertActualCompatibility,
-  createLogger,
-  createRuntime,
-} from "./runtime.js";
+import { assertActualCompatibility, createRuntime } from "./runtime.js";
 import { startService } from "./server.js";
 
 const program = new Command()
@@ -23,34 +17,8 @@ const program = new Command()
   );
 
 program
-  .command("bridge")
-  .description("serve the authenticated Actual operations used by Windmill")
-  .action(async () => {
-    const config = await loadBridgeConfig(
-      program.opts<{ config: string }>().config,
-    );
-    const actual = new ActualBudgetClient(config.actual);
-    const logger = createLogger();
-    const bridgeToken = environmentValue("ACTUAL_UP_BRIDGE_TOKEN");
-    await actual.open();
-    try {
-      assertActualCompatibility(await actual.getServerVersion());
-      const server = createBridgeServer(actual, bridgeToken, logger);
-      await server.listen({
-        host: config.server.host,
-        port: config.server.port,
-      });
-      logger.info({ port: config.server.port }, "Actual bridge started");
-      await waitForSignal();
-      await server.close();
-    } finally {
-      await actual.close();
-    }
-  });
-
-program
   .command("serve")
-  .description("run the webhook listener and reconciliation schedule")
+  .description("run the web app and reconciliation schedule")
   .action(async () => {
     const config = await loadConfig(program.opts<{ config: string }>().config);
     const runtime = await createRuntime(config);
@@ -64,8 +32,8 @@ program
         runner,
         runtime.metrics,
         runtime.logger,
+        runtime,
       );
-      runner.enqueue("startup", "startup", () => runtime.engine.reconcile());
       await waitForSignal();
       await service.close();
     } finally {
@@ -233,8 +201,9 @@ webhook
   });
 
 program.parseAsync().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`actual-up: ${message}\n`);
+  process.stderr.write(
+    `actual-up: ${error instanceof Error ? error.name : "Error"}; check configuration and connectivity\n`,
+  );
   process.exitCode = 1;
 });
 

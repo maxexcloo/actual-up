@@ -5,3 +5,6 @@ coverage
 dist
 node_modules
 test
+
+.env*
+config.local.yaml

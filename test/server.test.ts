@@ -1,0 +1,201 @@
+import pino from "pino";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { parseConfig } from "../src/config.js";
+import { JobRunner } from "../src/job-runner.js";
+import { Metrics } from "../src/metrics.js";
+import { createServer } from "../src/server.js";
+import { statusVersion } from "../src/ui.js";
+import type { SyncEngine } from "../src/sync-engine.js";
+import type { ActualClient, UpClientLike } from "../src/types.js";
+
+const logger = pino({ enabled: false });
+const password = "test-password-long-enough";
+const auth = `Basic ${Buffer.from(`operator:${password}`).toString("base64")}`;
+const report = {
+  conflicts: 0,
+  deleted: 0,
+  failed: 0,
+  imported: 1,
+  inspected: 1,
+  updated: 0,
+};
+const servers: Array<Awaited<ReturnType<typeof createServer>>> = [];
+afterEach(async () => {
+  for (const server of servers.splice(0)) await server.close();
+  vi.unstubAllEnvs();
+});
+
+async function fixture() {
+  vi.stubEnv("ACTUAL_UP_USERNAME", "operator");
+  vi.stubEnv("ACTUAL_UP_PASSWORD", password);
+  const config = parseConfig({
+    version: 1,
+    actual: {
+      passwordEnv: "ACTUAL_PASSWORD",
+      serverUrl: "http://actual",
+      syncId: "budget",
+    },
+    up: { connections: [{ id: "max", tokenEnv: "UP_TOKEN" }] },
+    mappings: [
+      {
+        alias: "spending",
+        actualAccountId: "actual-id",
+        upAccountId: "11111111-1111-4111-8111-111111111111",
+        connections: ["max"],
+      },
+    ],
+  });
+  const metrics = new Metrics();
+  const runner = new JobRunner(metrics, logger);
+  const engine = {
+    reconcile: vi.fn().mockResolvedValue(report),
+    validate: vi.fn().mockResolvedValue({ actualVersion: "26.10.0" }),
+  };
+  const actual = {
+    sync: vi.fn(),
+    getAccounts: vi
+      .fn()
+      .mockResolvedValue([{ id: "actual-id", name: "Spending" }]),
+    getCategories: vi.fn().mockResolvedValue([]),
+  };
+  const client = {
+    ping: vi.fn(),
+    listAccounts: vi.fn().mockResolvedValue([
+      {
+        id: "up-id",
+        attributes: {
+          displayName: "<script>alert(1)</script>",
+          balance: { value: "sensitive-balance" },
+        },
+      },
+    ]),
+  };
+  const server = await createServer(
+    config,
+    engine as unknown as SyncEngine,
+    runner,
+    metrics,
+    logger,
+    {
+      actual: actual as unknown as ActualClient,
+      clients: new Map([["max", client as unknown as UpClientLike]]),
+    },
+  );
+  servers.push(server);
+  return { server, runner, engine, actual };
+}
+
+const headers = {
+  authorization: auth,
+  origin: "http://localhost:80",
+  "content-type": "application/x-www-form-urlencoded",
+  "hx-request": "true",
+};
+
+describe("operator app", () => {
+  it("protects the app, assets and actions, while allowing probes", async () => {
+    const { server, runner } = await fixture();
+    for (const url of ["/", "/runs", "/assets/htmx.js"])
+      expect((await server.inject(url)).statusCode).toBe(401);
+    expect(
+      (
+        await server.inject({
+          method: "POST",
+          url: "/actions/sync",
+          payload: "mode=live",
+          headers: { "content-type": headers["content-type"] },
+        })
+      ).statusCode,
+    ).toBe(401);
+    expect(runner.depth).toBe(0);
+    expect((await server.inject("/livez")).statusCode).toBe(200);
+    const page = await server.inject({
+      url: "/",
+      headers: { authorization: auth },
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain("Automatic sync is off");
+    expect(page.headers["cache-control"]).toBe("no-store");
+    expect(page.body).not.toContain(password);
+  });
+
+  it("leaves an unchanged status panel intact and detects background runs", async () => {
+    const { server, runner } = await fixture();
+    const version = statusVersion(runner);
+    const url = `/runs?version=${encodeURIComponent(version)}`;
+    expect((await server.inject({ url, headers })).statusCode).toBe(204);
+    runner.enqueue("schedule", "schedule", async () => report);
+    await runner.drain();
+    const response = await server.inject({ url, headers });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("schedule");
+    expect(response.body).toContain("imported");
+  });
+
+  it("rejects cross-site writes, invalid dates and unknown account aliases", async () => {
+    const { server, runner } = await fixture();
+    for (const origin of ["https://attacker.example", ""])
+      expect(
+        (
+          await server.inject({
+            method: "POST",
+            url: "/actions/sync",
+            headers: { ...headers, origin },
+            payload: "mode=live",
+          })
+        ).statusCode,
+      ).toBe(403);
+    for (const payload of [
+      "mode=live&since=2026-02-30",
+      "mode=live&account=missing",
+      "mode=unknown",
+    ])
+      expect(
+        (
+          await server.inject({
+            method: "POST",
+            url: "/actions/sync",
+            headers,
+            payload,
+          })
+        ).statusCode,
+      ).toBe(400);
+    expect(runner.depth).toBe(0);
+  });
+
+  it("queues dry runs with account selection and backfill, refreshing Actual first", async () => {
+    const { server, runner, engine, actual } = await fixture();
+    const response = await server.inject({
+      method: "POST",
+      url: "/actions/sync",
+      headers,
+      payload: "mode=dry-run&account=spending&since=2025-01-01",
+    });
+    expect(response.statusCode).toBe(200);
+    await runner.drain();
+    expect(engine.reconcile).toHaveBeenCalledWith({
+      dryRun: true,
+      mappingAliases: ["spending"],
+      since: "2025-01-01",
+    });
+    expect(actual.sync.mock.invocationCallOrder[0]).toBeLessThan(
+      engine.reconcile.mock.invocationCallOrder[0]!,
+    );
+    expect(runner.history[0]?.state).toBe("success");
+  });
+
+  it("keeps discovery balances out of results and escapes upstream names", async () => {
+    const { server, runner } = await fixture();
+    await server.inject({
+      method: "POST",
+      url: "/actions/discover",
+      headers,
+      payload: "",
+    });
+    await runner.drain();
+    const response = await server.inject({ url: "/runs", headers });
+    expect(response.body).not.toContain("sensitive-balance");
+    expect(response.body).not.toContain("<script>alert");
+    expect(response.body).toContain("&lt;script&gt;");
+  });
+});

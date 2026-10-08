@@ -1,9 +1,0 @@
-summary: Reconciliation engine
-description: Shared Up-to-Actual reconciliation logic.
-lock: "!inline f/actual_up/sync_engine.script.lock"
-kind: script
-schema:
-  $schema: https://json-schema.org/draft/2020-12/schema
-  type: object
-  properties: {}
-  required: []
