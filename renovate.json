@@ -1,15 +1,16 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
   "packageRules": [
     {
-      "description": "Keep major updates separate",
-      "matchUpdateTypes": ["major"],
-      "groupName": null
+      "description": "Group non-major dependency updates",
+      "groupName": "non-major dependencies",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"]
     },
     {
-      "description": "Group non-major dependency updates",
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-      "groupName": "non-major dependencies"
+      "description": "Keep major updates separate",
+      "groupName": null,
+      "matchUpdateTypes": ["major"]
     }
   ]
 }
