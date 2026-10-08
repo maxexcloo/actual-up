@@ -92,7 +92,13 @@ async function fixture() {
     const result = await server.inject({
       method: "POST",
       url: "/settings",
-      payload: { revision: settingsVersion(config), ...data },
+      payload: {
+        revision: settingsVersion(
+          config,
+          typeof data.upAccountId === "string" ? data.upAccountId : undefined,
+        ),
+        ...data,
+      },
     });
     if (drain) await runner.drain();
     return result;
@@ -151,7 +157,7 @@ describe("browser setup", () => {
 
   it("persists mappings before backfill, restores them on restart and rejects stale writes", async () => {
     const f = await fixture();
-    const revision = settingsVersion(f.config);
+    const revision = settingsVersion(f.config, upId);
     f.engine.reconcile.mockImplementation(async () => {
       expect((await loadSettings(f.config)).mappings).toHaveLength(1);
       return { failed: 0, imported: 1 };
@@ -292,6 +298,129 @@ describe("browser setup", () => {
     await f.post(f.mapping);
     await f.post({ ...command, syncId: "other-budget" });
     expect(f.config.actual.syncId).toBe("new-budget");
+  });
+
+  it("accepts independent account saves from the same page and rejects duplicate destinations", async () => {
+    const f = await fixture();
+    const secondId = "22222222-2222-4222-8222-222222222222";
+    f.client.listAccounts.mockResolvedValue([
+      {
+        id: upId,
+        attributes: { displayName: "Everyday", balance: { value: "private" } },
+      },
+      {
+        id: secondId,
+        attributes: { displayName: "Savings", balance: { value: "private" } },
+      },
+    ]);
+    f.actual.getAccounts.mockResolvedValue([
+      { id: "actual-id", name: "Spending" },
+      { id: "actual-2", name: "Savings" },
+    ]);
+    await f.post({ action: "discover" });
+    let release!: () => void;
+    f.runner.enqueue(
+      "hold",
+      "test",
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    await Promise.resolve();
+    const submit = (id: string, destination: string) =>
+      f.server.inject({
+        method: "POST",
+        url: "/settings",
+        headers: { "hx-request": "true" },
+        payload: {
+          ...f.mapping,
+          alias: id === upId ? "Everyday" : "Savings",
+          upAccountId: id,
+          actualAccountId: destination,
+          revision: settingsVersion(f.config, id),
+        },
+      });
+    try {
+      const first = await submit(upId, "actual-id");
+      const second = await submit(secondId, "actual-2");
+      expect(first.statusCode).toBe(200);
+      expect(second.statusCode).toBe(200);
+      expect(first.body).not.toContain('id="setup"');
+      expect(first.body).not.toContain(secondId);
+      expect((await submit(upId, "actual-id")).statusCode).toBe(409);
+      expect((await f.server.inject(`/accounts/${secondId}`)).statusCode).toBe(
+        204,
+      );
+    } finally {
+      release();
+    }
+    await f.runner.drain();
+    expect(f.config.mappings).toHaveLength(2);
+    expect(f.engine.reconcile).toHaveBeenCalledTimes(2);
+    expect((await f.server.inject(`/accounts/${secondId}`)).body).toContain(
+      "Saved.",
+    );
+    await f.post({ action: "remove-mapping", upAccountId: secondId });
+    await submit(secondId, "actual-id");
+    await f.runner.drain();
+    expect(f.config.mappings).toHaveLength(1);
+    expect((await f.server.inject(`/accounts/${secondId}`)).body).toContain(
+      "only be mapped once",
+    );
+  });
+
+  it("keeps other account saves available while history backfills", async () => {
+    const f = await fixture();
+    const secondId = "22222222-2222-4222-8222-222222222222";
+    f.client.listAccounts.mockResolvedValue([
+      {
+        id: upId,
+        attributes: { displayName: "Everyday", balance: { value: "private" } },
+      },
+      {
+        id: secondId,
+        attributes: { displayName: "Savings", balance: { value: "private" } },
+      },
+    ]);
+    f.actual.getAccounts.mockResolvedValue([
+      { id: "actual-id", name: "Spending" },
+      { id: "actual-2", name: "Savings" },
+    ]);
+    const revision = settingsVersion(f.config, secondId);
+    let release!: () => void;
+    f.engine.reconcile.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ failed: 0, imported: 1 });
+        }),
+    );
+    await f.post(f.mapping, false);
+    await vi.waitFor(() => expect(release).toBeDefined());
+    try {
+      const first = await f.server.inject(`/accounts/${upId}`);
+      expect(first.statusCode).toBe(200);
+      expect(first.body).toContain("backfill queued");
+      const page = await f.server.inject("/");
+      expect(page.body).not.toContain('hx-get="/?pending=1"');
+      expect(page.body).not.toContain("Updating connections…");
+      const second = await f.post(
+        {
+          ...f.mapping,
+          alias: "Savings",
+          upAccountId: secondId,
+          actualAccountId: "actual-2",
+          revision,
+        },
+        false,
+      );
+      expect(second.statusCode).toBe(303);
+      expect(f.config.mappings).toHaveLength(1);
+    } finally {
+      release();
+    }
+    await f.runner.drain();
+    expect(f.config.mappings).toHaveLength(2);
   });
 
   it("fails closed on corrupt persisted settings", async () => {

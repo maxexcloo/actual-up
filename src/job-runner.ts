@@ -71,7 +71,11 @@ export class JobRunner {
   }
 
   async drain(): Promise<void> {
-    await this.chain;
+    let pending;
+    do {
+      pending = this.chain;
+      await pending;
+    } while (pending !== this.chain);
   }
   async close(): Promise<void> {
     this.stopping = true;

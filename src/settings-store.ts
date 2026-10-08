@@ -117,10 +117,13 @@ export function connectionToken(
   throw new Error("Connection has no saved API key");
 }
 
-export function settingsVersion(config: AppConfig): string {
-  return createHash("sha256")
-    .update(JSON.stringify(settings(config)))
-    .digest("hex");
+export function settingsVersion(config: AppConfig, accountId?: string): string {
+  const value = settings(config);
+  // Unrelated account saves do not invalidate this form; validate uniqueness on save.
+  value.mappings = value.mappings.filter(
+    ({ upAccountId }) => upAccountId === accountId,
+  );
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
 export async function loadSettings(config: AppConfig): Promise<AppConfig> {

@@ -32,6 +32,11 @@ for cluster probes and monitoring.
 Use **Test** on Actual or an Up connection to check its saved credentials.
 Results appear inline without importing bank transactions.
 
+Account changes save independently, so you can connect several accounts without
+waiting for backfill. Only the affected account rows refresh; drafts in other
+rows remain in place. Shared account rows update together. Actual operations and
+backfills still run through one serial queue.
+
 Blank credentials on the Actual edit form retain saved values. Existing keys
 are never sent back to the browser. A replacement Up key must still access its
 mapped accounts. Remove mappings before removing a key they use, switching
