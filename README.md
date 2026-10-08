@@ -6,7 +6,8 @@ operation queue. No separate application database or workflow platform.
 
 ## Features
 
-- Configure connections and account mappings in the browser, with encrypted credential storage.
+- Manage connections, API keys and nested account mappings on one page, with
+  encrypted credential storage. Sync an account, a connection or everything.
 - Preview imports, run a sync, backfill from a date and discover account IDs.
 - Check connections and inspect the last 20 runs without exposing transaction
   amounts, payees or messages in logs or run results.
@@ -35,7 +36,7 @@ them with 1Password CLI. Then run:
 mise exec -- pnpm dev --config ./config.local.yaml
 ```
 
-Open `http://localhost:3000` and use the app credentials. Open **Accounts & Connections**,
+Open `http://localhost:3000` and use the app credentials. Open **Connections**,
 enter your Actual credentials, add Up API keys and connect accounts. Saving a mapping automatically backfills
 its history. Automatic sync is enabled by default:
 a full-history backfill runs on startup and nightly at 03:00, with recent changes

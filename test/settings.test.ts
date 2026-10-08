@@ -122,11 +122,31 @@ describe("browser setup", () => {
   it("discovers accounts without balances, escapes names and never exposes keys", async () => {
     const f = await fixture();
     await f.post({ action: "discover" });
-    const page = await f.server.inject("/settings");
+    const page = await f.server.inject("/");
     expect(page.body).toContain("&lt;script&gt;");
     expect(page.body).not.toContain("<script>bad");
     expect(page.body).not.toContain("private-balance");
     expect(page.body).not.toContain("test-secret-never-render");
+  });
+
+  it("discovers automatically on first visit and after adding a connection", async () => {
+    const f = await fixture();
+    await f.server.inject("/");
+    await f.runner.drain();
+    expect(f.client.listAccounts).toHaveBeenCalledOnce();
+    const page = await f.server.inject("/");
+    expect(page.body).toContain('data-connection="max"');
+    expect(page.body).toContain(
+      'data-account="11111111-1111-4111-8111-111111111111"',
+    );
+    await f.post({
+      action: "connection",
+      id: "partner",
+      token: "partner-secret",
+    });
+    const updated = await f.server.inject("/");
+    expect(updated.body).toContain('data-connection="partner"');
+    expect(updated.body).not.toContain("partner-secret");
   });
 
   it("persists mappings before backfill, restores them on restart and rejects stale writes", async () => {
@@ -254,7 +274,7 @@ describe("browser setup", () => {
     expect(await readFile(f.config.settingsFile, "utf8")).not.toContain(
       "actual-secret-token",
     );
-    const page = await f.server.inject("/settings");
+    const page = await f.server.inject("/");
     expect(page.body).not.toContain("actual-secret-token");
     await f.post({ ...command, credential: "" });
     expect(getActualCredentials(f.config)?.credential).toBe(

@@ -1,6 +1,6 @@
 # Configuration
 
-The version 1 YAML file supplies deployment settings. **Accounts & Connections**
+The version 1 YAML file supplies deployment settings. **Connections**
 manages Actual credentials, Up API keys and account mappings in the browser.
 Never commit credentials to either repository.
 
@@ -27,7 +27,7 @@ for cluster probes and monitoring.
 2. Add each Up API key under a short connection name. Keys are checked before
    saving. Replace or remove them here without editing YAML or restarting.
 3. Refresh accounts and connect each Up account to its Actual destination.
-   Shared accounts appear once; select both partners' keys for fallback access.
+   Shared accounts use one mapping; select both partners' keys for fallback access.
 
 Blank credentials on the Actual edit form retain saved values. Existing keys
 are never sent back to the browser. A replacement Up key must still access its
@@ -42,6 +42,12 @@ changes, connection checks and imports all run through one serial queue.
 Actual's API and server must match in major and minor version; connection setup
 checks this before saving. The app starts without an upstream connection so the
 browser remains available for first-time setup and repairs.
+
+Each Up connection contains its accessible accounts, discovered automatically after
+saving a key. **Sync** imports one account; a connection's **Sync All** imports its
+mapped accounts; the page-level **Sync All** imports every mapping. A shared
+account may appear beneath both connections but retains one mapping and one
+import identity. Key settings, mapping edits and backfill controls expand inline.
 
 ## Encrypted Storage
 

@@ -14,7 +14,7 @@ import { registerSettings } from "./settings.js";
 import { startSchedule } from "./schedule.js";
 import type { SyncEngine } from "./sync-engine.js";
 import { loginPage } from "./login-ui.js";
-import { dashboard, status, statusVersion } from "./ui.js";
+import { status, statusVersion } from "./ui.js";
 import { parseWebhook, verifyWebhookSignature } from "./webhook.js";
 
 export type Service = {
@@ -192,7 +192,7 @@ export async function createServer(
     if (path === "/login" || path === "/assets/style.css") return;
     if (!sessions.valid(request.headers.cookie)) {
       if (request.headers["hx-request"] === "true")
-        reply.header("HX-Redirect", "/login");
+        return reply.header("HX-Redirect", "/login").code(200).send();
       return reply.redirect("/login", 303);
     }
   });
@@ -247,9 +247,6 @@ export async function createServer(
     makeUpClient,
   );
 
-  server.get("/", async (_request, reply) =>
-    reply.type("text/html").send(dashboard(config, runner)),
-  );
   server.get<{ Querystring: { version?: string } }>(
     "/runs",
     async (request, reply) => {
@@ -278,12 +275,19 @@ export async function createServer(
           .object({
             mode: z.enum(["dry-run", "live"]),
             account: z.string().default(""),
+            connection: z.string().default(""),
             since: z.string().default(""),
           })
           .strict()
           .safeParse(request.body);
         if (!parsed.success) return reply.code(400).send("Invalid action");
-        const { account, since, mode } = parsed.data;
+        const { account, connection, since, mode } = parsed.data;
+        if (
+          (account && connection) ||
+          (connection &&
+            !config.up.connections.some(({ id }) => id === connection))
+        )
+          return reply.code(400).send("Unknown connection or ambiguous scope");
         if (
           account &&
           !config.mappings.some((mapping) => mapping.alias === account)
@@ -303,7 +307,15 @@ export async function createServer(
           await runtime.actual.sync();
           return engine.reconcile({
             dryRun: mode === "dry-run",
-            mappingAliases: account ? [account] : undefined,
+            mappingAliases: account
+              ? [account]
+              : connection
+                ? config.mappings
+                    .filter(({ connections }) =>
+                      connections.includes(connection),
+                    )
+                    .map(({ alias }) => alias)
+                : undefined,
             since: since || undefined,
           });
         };
@@ -346,7 +358,7 @@ export async function createServer(
         .type("text/html")
         .send(
           accepted
-            ? "Queued. Follow progress in recent activity above."
+            ? "Queued. Follow progress in Recent Activity."
             : "An action is already queued, or the queue is full. Please wait.",
         );
     },

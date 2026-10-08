@@ -90,14 +90,22 @@ export function registerSettings(
 ) {
   let discovery: Discovery | undefined;
   let busy = false;
-  let message = "Discover your accounts to set up automatic sync.";
+  let message = "";
+  let discoveryAttempted = false;
 
   const discover = async (): Promise<Discovery> => {
-    await runtime.actual.sync();
-    const actual = (await runtime.actual.getAccounts()).map(({ id, name }) => ({
-      id,
-      name,
-    }));
+    discoveryAttempted = true;
+    let actual: Discovery["actual"] = [];
+    let actualUnavailable = false;
+    try {
+      await runtime.actual.sync();
+      actual = (await runtime.actual.getAccounts()).map(({ id, name }) => ({
+        id,
+        name,
+      }));
+    } catch {
+      actualUnavailable = true;
+    }
     const accounts = new Map<string, Discovery["up"][number]>();
     const unavailable: string[] = [];
     for (const [connection, client] of runtime.clients) {
@@ -115,20 +123,38 @@ export function registerSettings(
         unavailable.push(connection);
       }
     }
-    return { actual, up: [...accounts.values()], unavailable };
+    return {
+      actual,
+      actualUnavailable,
+      up: [...accounts.values()],
+      unavailable,
+    };
   };
 
-  server.get("/settings", async (_request, reply) =>
-    reply
+  server.get("/settings", async (_request, reply) => reply.redirect("/", 303));
+  server.get("/", async (_request, reply) => {
+    if (!discoveryAttempted && !busy && config.up.connections.length) {
+      busy = true;
+      const accepted = runner.enqueue("settings", "settings", async () => {
+        try {
+          discovery = await discover();
+          return { ok: true };
+        } finally {
+          busy = false;
+        }
+      });
+      if (!accepted) busy = false;
+    }
+    return reply
       .type("text/html")
-      .send(settingsPage(config, discovery, busy, message)),
-  );
+      .send(settingsPage(config, discovery, busy, message, runner));
+  });
   server.post("/settings", async (request, reply) => {
     const reject = (code: number, explanation: string) =>
       reply
         .code(code)
         .type("text/html")
-        .send(settingsPage(config, discovery, busy, explanation));
+        .send(settingsPage(config, discovery, busy, explanation, runner));
     const parsed = commandSchema.safeParse(request.body);
     if (!parsed.success)
       return reject(
@@ -150,7 +176,7 @@ export function registerSettings(
         if (command.action === "discover") {
           discovery = await discover();
           message = discovery.unavailable.length
-            ? "Some keys are unavailable. Check their 1Password fields; other keys can still be used."
+            ? "Some connections are unavailable. Replace their keys or retry; other connections can still sync."
             : "Accounts refreshed. Select the accounts to connect below.";
           return { ok: true };
         }
@@ -210,7 +236,7 @@ export function registerSettings(
               "Could not connect to Actual or save settings. Check the server, budget ID, credentials and storage. Previous settings were retained.",
             );
           }
-          discovery = undefined;
+          discovery = await discover();
           message = "Actual connection checked and saved.";
           return { ok: true };
         }
@@ -319,7 +345,7 @@ export function registerSettings(
           runtime.clients.set(command.id, newClient);
         if (command.action === "remove-connection")
           runtime.clients.delete(command.id);
-        discovery = undefined;
+        discovery = await discover();
         message = "Settings saved.";
         if (command.action === "mapping" && config.schedule.enabled) {
           message = "Settings saved. Backfilling account history…";
@@ -350,6 +376,6 @@ export function registerSettings(
       busy = false;
       message = "The queue is full. Please try again shortly.";
     }
-    return reply.redirect("/settings", 303);
+    return reply.redirect("/", 303);
   });
 }

@@ -97,7 +97,7 @@ async function fixture() {
   });
   expect(login.statusCode).toBe(303);
   headers.cookie = String(login.headers["set-cookie"]).split(";")[0]!;
-  return { server, runner, engine, actual };
+  return { server, runner, engine, actual, config };
 }
 
 const headers = {
@@ -168,7 +168,13 @@ describe("operator app", () => {
       payload: "",
     });
     expect(logout.headers["set-cookie"]).toContain("Max-Age=0");
-    expect((await server.inject({ url: "/", headers })).statusCode).toBe(303);
+    const expired = await server.inject({ url: "/runs", headers });
+    expect(expired.statusCode).toBe(200);
+    expect(expired.headers["hx-redirect"]).toBe("/login");
+    expect(
+      (await server.inject({ url: "/", headers: { cookie: headers.cookie } }))
+        .statusCode,
+    ).toBe(303);
   });
 
   it("leaves an unchanged status panel intact and detects background runs", async () => {
@@ -244,6 +250,49 @@ describe("operator app", () => {
       engine.reconcile.mock.invocationCallOrder[0]!,
     );
     expect(runner.history[0]?.state).toBe("success");
+  });
+
+  it("limits connection syncs to their mapped accounts and includes shared accounts once", async () => {
+    const { server, runner, engine, config } = await fixture();
+    config.up.connections.push({ id: "partner", tokenEnv: "UP_PARTNER" });
+    config.mappings[0]!.connections.push("partner");
+    config.mappings.push({
+      alias: "savings",
+      upAccountId: "22222222-2222-4222-8222-222222222222",
+      actualAccountId: "savings",
+      connections: ["partner"],
+    });
+    for (const [connection, aliases] of [
+      ["max", ["spending"]],
+      ["partner", ["spending", "savings"]],
+    ] as const) {
+      await server.inject({
+        method: "POST",
+        url: "/actions/sync",
+        headers,
+        payload: `mode=live&connection=${connection}`,
+      });
+      await runner.drain();
+      expect(engine.reconcile).toHaveBeenLastCalledWith({
+        dryRun: false,
+        mappingAliases: aliases,
+        since: undefined,
+      });
+    }
+    for (const scope of [
+      "connection=missing",
+      "connection=max&account=spending",
+    ])
+      expect(
+        (
+          await server.inject({
+            method: "POST",
+            url: "/actions/sync",
+            headers,
+            payload: `mode=live&${scope}`,
+          })
+        ).statusCode,
+      ).toBe(400);
   });
 
   it("keeps discovery balances out of results and escapes upstream names", async () => {

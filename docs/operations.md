@@ -9,8 +9,7 @@
    encryption key.
 3. Unsuspend the prepared Helm release when ready to configure it. Mappings
    start empty, so no accounts are imported until they are configured.
-4. Open the private HTTPS app with the login from 1Password. Use **Accounts &
-   Connections** to enter Actual credentials, add Up keys and save mappings.
+4. Open the private HTTPS app with the login from 1Password. Use **Connections** to enter Actual credentials, add Up keys and save mappings.
 5. Saving a mapping automatically backfills it. The app syncs recent
    changes every 15 minutes and backfills nightly. Set `schedule.enabled: false`
    before adding mappings if you want to preview changes first.
