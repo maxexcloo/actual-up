@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "@actual-app/api";
-import { ActualBudgetClient } from "../src/actual-client.js";
+import { ActualApiClient as ActualBudgetClient } from "../src/actual-api-client.js";
 import { parseConfig } from "../src/config.js";
 import { setActualCredentials } from "../src/settings-store.js";
 

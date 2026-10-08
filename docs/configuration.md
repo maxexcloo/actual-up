@@ -35,7 +35,8 @@ Results appear inline without importing bank transactions.
 Account changes save independently, so you can connect several accounts without
 waiting for backfill. Only the affected account rows refresh; drafts in other
 rows remain in place. Shared account rows update together. Actual operations and
-backfills still run through one serial queue.
+backfills still run through one serial queue. The Actual API runs in a single
+worker thread so its synchronous database work cannot block the web server.
 
 Blank credentials on the Actual edit form retain saved values. Existing keys
 are never sent back to the browser. A replacement Up key must still access its
@@ -109,6 +110,9 @@ Polling requires no public endpoint. Optional signed webhooks use
 `/webhooks/up/:connectionId`, with `webhook.id` and `webhook.secretEnv` configured
 on the connection. Keep the UI private. Webhook deliveries and in-memory jobs
 are not durable, so retain periodic reconciliation.
+
+Keep `actual.cacheDirectory` on local pod storage, not NFS. Actual rebuilds this
+cache from the server; encrypted app settings remain on persistent storage.
 
 ## Kubelab & 1Password
 

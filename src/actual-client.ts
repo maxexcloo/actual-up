@@ -1,152 +1,132 @@
-import { createRequire } from "node:module";
-import { getActualCredentials } from "./settings-store.js";
-import { mkdir } from "node:fs/promises";
-
-import * as api from "@actual-app/api";
-
+import { Worker } from "node:worker_threads";
 import { environmentValue, type AppConfig } from "./config.js";
+import { getActualCredentials } from "./settings-store.js";
 import type {
-  ActualAccount,
-  ActualCategory,
   ActualClient,
-  ActualImportResult,
   ActualImportTransaction,
-  ActualPayee,
   ActualTransaction,
 } from "./types.js";
 
+export { assertActualCompatibility } from "./actual-version.js";
+
+/** One worker owns Actual's synchronous database work; the web thread stays responsive. */
 export class ActualBudgetClient implements ActualClient {
-  private opened = false;
+  private worker?: Worker;
+  private nextId = 0;
+  private readonly pending = new Map<
+    number,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+  >();
 
-  constructor(private readonly app: AppConfig) {}
+  constructor(
+    private readonly app: AppConfig,
+    private readonly workerUrl = new URL("./actual-worker.js", import.meta.url),
+  ) {}
 
-  private get config() {
-    return this.app.actual;
-  }
-
-  async open(): Promise<void> {
-    if (this.opened) return;
-    await mkdir(this.config.cacheDirectory, { recursive: true });
-    const base = {
-      dataDir: this.config.cacheDirectory,
-      verbose: false,
-      serverURL: this.config.serverUrl,
-    };
+  private getWorker(): Worker {
+    if (this.worker) return this.worker;
     const credentials = getActualCredentials(this.app);
     const syncId =
-      this.config.syncId ??
-      (this.config.syncIdEnv
-        ? environmentValue(this.config.syncIdEnv)
+      this.app.actual.syncId ??
+      (this.app.actual.syncIdEnv
+        ? environmentValue(this.app.actual.syncIdEnv)
         : undefined);
     if (!credentials || !syncId)
       throw new Error("Configure Actual in the app first");
+    const worker = new Worker(this.workerUrl, {
+      workerData: {
+        config: { ...this.app, actual: { ...this.app.actual, syncId } },
+        credentials,
+      },
+      stdout: true,
+      stderr: true,
+    });
+    // SDK output can contain bank data. Only the app emits sanitised diagnostics.
+    worker.stdout.resume();
+    worker.stderr.resume();
+    this.worker = worker;
+    worker.on(
+      "message",
+      (message: { id: number; ok: boolean; value?: unknown }) => {
+        const pending = this.pending.get(message.id);
+        if (!pending) return;
+        this.pending.delete(message.id);
+        if (message.ok) pending.resolve(message.value);
+        else pending.reject(new Error("Actual operation failed"));
+      },
+    );
+    const failed = () => {
+      if (this.worker !== worker) return;
+      this.worker = undefined;
+      for (const pending of this.pending.values())
+        pending.reject(new Error("Actual worker stopped"));
+      this.pending.clear();
+    };
+    worker.on("error", failed);
+    worker.on("exit", failed);
+    return worker;
+  }
+
+  private call<K extends keyof ActualClient>(
+    method: K,
+    ...args: Parameters<ActualClient[K]>
+  ): Promise<Awaited<ReturnType<ActualClient[K]>>> {
+    const id = ++this.nextId;
+    return new Promise<Awaited<ReturnType<ActualClient[K]>>>(
+      (resolve, reject) => {
+        const worker = this.getWorker();
+        this.pending.set(id, {
+          resolve: (value) =>
+            resolve(value as Awaited<ReturnType<ActualClient[K]>>),
+          reject,
+        });
+        try {
+          worker.postMessage({ id, method, args });
+        } catch {
+          this.pending.delete(id);
+          reject(new Error("Actual operation could not be queued"));
+        }
+      },
+    );
+  }
+
+  open() {
+    return this.call("open");
+  }
+  async close(): Promise<void> {
+    const worker = this.worker;
+    if (!worker) return;
     try {
-      await api.init({
-        ...base,
-        ...(credentials.method === "password"
-          ? { password: credentials.credential }
-          : { sessionToken: credentials.credential }),
-      });
-      const version = await api.getServerVersion();
-      if ("error" in version) throw new Error("Actual server check failed");
-      assertActualCompatibility(version.version);
-      await api.downloadBudget(syncId, {
-        password: credentials.encryptionPassword,
-      });
-      this.opened = true;
-    } catch (error) {
-      await api.shutdown().catch(() => {});
-      throw error;
+      await this.call("close");
+    } finally {
+      await worker.terminate();
     }
   }
-
-  async close(): Promise<void> {
-    if (!this.opened) return;
-    await api.shutdown();
-    this.opened = false;
+  getServerVersion() {
+    return this.call("getServerVersion");
   }
-
-  async getServerVersion(): Promise<string> {
-    await this.open();
-    const result = await api.getServerVersion();
-    if ("error" in result)
-      throw new Error(`Actual server check failed: ${result.error}`);
-    return result.version;
+  getAccounts() {
+    return this.call("getAccounts");
   }
-
-  async getAccounts(): Promise<ActualAccount[]> {
-    await this.open();
-    return api.getAccounts();
+  getCategories() {
+    return this.call("getCategories");
   }
-
-  async getCategories(): Promise<ActualCategory[]> {
-    await this.open();
-    return api.getCategories();
+  getPayees() {
+    return this.call("getPayees");
   }
-
-  async getPayees(): Promise<ActualPayee[]> {
-    await this.open();
-    return api.getPayees();
+  getTransactions(accountId: string, startDate: string, endDate: string) {
+    return this.call("getTransactions", accountId, startDate, endDate);
   }
-
-  async getTransactions(
-    accountId: string,
-    startDate: string,
-    endDate: string,
-  ): Promise<ActualTransaction[]> {
-    await this.open();
-    return api.getTransactions(accountId, startDate, endDate);
+  importTransaction(accountId: string, transaction: ActualImportTransaction) {
+    return this.call("importTransaction", accountId, transaction);
   }
-
-  async importTransaction(
-    accountId: string,
-    transaction: ActualImportTransaction,
-  ): Promise<ActualImportResult> {
-    await this.open();
-    const result = await api.importTransactions(accountId, [transaction], {
-      defaultCleared: transaction.cleared,
-      reimportDeleted: false,
-    });
-    return {
-      added: result.added,
-      errors: result.errors,
-      updated: result.updated,
-    };
+  updateTransaction(id: string, fields: Partial<ActualTransaction>) {
+    return this.call("updateTransaction", id, fields);
   }
-
-  async updateTransaction(
-    id: string,
-    fields: Partial<ActualTransaction>,
-  ): Promise<void> {
-    await this.open();
-    await api.updateTransaction(id, fields);
+  deleteTransaction(id: string) {
+    return this.call("deleteTransaction", id);
   }
-
-  async deleteTransaction(id: string): Promise<void> {
-    await this.open();
-    await api.deleteTransaction(id);
-  }
-
-  async sync(): Promise<void> {
-    await this.open();
-    await api.sync();
-  }
-}
-
-const require = createRequire(import.meta.url);
-const packageManifest = require("../package.json") as {
-  dependencies: Record<string, string>;
-};
-
-export function assertActualCompatibility(serverVersion: string): void {
-  const apiVersion = packageManifest.dependencies["@actual-app/api"];
-  if (!apiVersion)
-    throw new Error("@actual-app/api is missing from dependencies");
-  const expected = apiVersion.split(".").slice(0, 2).join(".");
-  const actual = serverVersion.split(".").slice(0, 2).join(".");
-  if (expected !== actual) {
-    throw new Error(
-      `Actual server ${serverVersion} is incompatible with API ${apiVersion}; align the versions`,
-    );
+  sync() {
+    return this.call("sync");
   }
 }

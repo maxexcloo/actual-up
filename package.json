@@ -1,6 +1,6 @@
 {
   "name": "actual-up",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Synchronise Up transactions into Actual Budget.",
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && pnpm run build:css",
     "check": "pnpm run format:check && pnpm run lint && pnpm run build && pnpm run test",
-    "dev": "pnpm run build:css && tsx src/cli.ts serve",
+    "dev": "pnpm run build && node dist/cli.js serve",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "oxlint --deny-warnings src test",
