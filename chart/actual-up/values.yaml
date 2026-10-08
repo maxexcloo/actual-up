@@ -13,6 +13,11 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+persistence:
+  existingClaim: ""
+  size: 1Gi
+  storageClass: ""
+
 podAnnotations: {}
 podLabels: {}
 

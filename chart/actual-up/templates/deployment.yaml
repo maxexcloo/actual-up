@@ -72,7 +72,8 @@ spec:
               mountPath: /tmp
       volumes:
         - name: cache
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: {{ default (include "actual-up.fullname" .) .Values.persistence.existingClaim }}
         - name: configuration
           configMap:
             name: {{ include "actual-up.configMapName" . }}

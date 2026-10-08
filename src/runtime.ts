@@ -1,5 +1,3 @@
-import { createRequire } from "node:module";
-
 import pino, { type Logger } from "pino";
 
 import { ActualBudgetClient } from "./actual-client.js";
@@ -12,12 +10,8 @@ import { environmentValue, type AppConfig } from "./config.js";
 import { Metrics } from "./metrics.js";
 import { SyncEngine } from "./sync-engine.js";
 import type { ActualClient, UpClientLike } from "./types.js";
+import { connectionToken } from "./settings-store.js";
 import { UpClient } from "./up-client.js";
-
-const require = createRequire(import.meta.url);
-const packageManifest = require("../package.json") as {
-  dependencies: Record<string, string>;
-};
 
 export type Runtime = {
   actual: ActualClient;
@@ -61,13 +55,12 @@ export async function createRuntime(config: AppConfig): Promise<Runtime> {
     config.up.connections.map((connection) => [
       connection.id,
       new UpClient(
-        environmentValue(connection.tokenEnv),
+        connectionToken(config, connection),
         logger.child({ connection: connection.id }),
       ),
     ]),
   );
-  const actual = new ActualBudgetClient(config.actual);
-  await actual.open();
+  const actual = new ActualBudgetClient(config);
   const alerts = config.alerts
     ? new WebhookAlertSink(config.alerts, logger)
     : new LoggingAlertSink(logger);
@@ -82,15 +75,4 @@ export async function createRuntime(config: AppConfig): Promise<Runtime> {
   return { actual, alerts, clients, engine, logger, metrics };
 }
 
-export function assertActualCompatibility(serverVersion: string): void {
-  const apiVersion = packageManifest.dependencies["@actual-app/api"];
-  if (!apiVersion)
-    throw new Error("@actual-app/api is missing from dependencies");
-  const expected = apiVersion.split(".").slice(0, 2).join(".");
-  const actual = serverVersion.split(".").slice(0, 2).join(".");
-  if (expected !== actual) {
-    throw new Error(
-      `Actual server ${serverVersion} is incompatible with API ${apiVersion}; align the versions`,
-    );
-  }
-}
+export { assertActualCompatibility } from "./actual-client.js";

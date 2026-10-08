@@ -1,4 +1,5 @@
 .actual-cache/
+.actual-up/
 .env
 .env.windmill.local
 .pnpm-store/

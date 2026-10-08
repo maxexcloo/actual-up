@@ -10,7 +10,7 @@ import type { ActualClient, UpClientLike } from "../src/types.js";
 
 const logger = pino({ enabled: false });
 const password = "test-password-long-enough";
-const auth = `Basic ${Buffer.from(`operator:${password}`).toString("base64")}`;
+
 const report = {
   conflicts: 0,
   deleted: 0,
@@ -26,6 +26,10 @@ afterEach(async () => {
 });
 
 async function fixture() {
+  vi.stubEnv(
+    "ACTUAL_UP_ENCRYPTION_KEY",
+    "test-encryption-key-at-least-32-characters",
+  );
   vi.stubEnv("ACTUAL_UP_USERNAME", "operator");
   vi.stubEnv("ACTUAL_UP_PASSWORD", password);
   const config = parseConfig({
@@ -82,11 +86,22 @@ async function fixture() {
     },
   );
   servers.push(server);
+  const login = await server.inject({
+    method: "POST",
+    url: "/login",
+    headers: {
+      origin: "http://localhost:80",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    payload: `username=operator&password=${password}`,
+  });
+  expect(login.statusCode).toBe(303);
+  headers.cookie = String(login.headers["set-cookie"]).split(";")[0]!;
   return { server, runner, engine, actual };
 }
 
 const headers = {
-  authorization: auth,
+  cookie: "",
   origin: "http://localhost:80",
   "content-type": "application/x-www-form-urlencoded",
   "hx-request": "true",
@@ -95,28 +110,65 @@ const headers = {
 describe("operator app", () => {
   it("protects the app, assets and actions, while allowing probes", async () => {
     const { server, runner } = await fixture();
-    for (const url of ["/", "/runs", "/assets/htmx.js"])
-      expect((await server.inject(url)).statusCode).toBe(401);
+    for (const url of ["/", "/settings", "/runs", "/assets/htmx.js"])
+      expect((await server.inject(url)).statusCode).toBe(303);
     expect(
       (
         await server.inject({
           method: "POST",
           url: "/actions/sync",
           payload: "mode=live",
-          headers: { "content-type": headers["content-type"] },
+          headers: {
+            origin: headers.origin,
+            "content-type": headers["content-type"],
+          },
         })
       ).statusCode,
-    ).toBe(401);
+    ).toBe(303);
     expect(runner.depth).toBe(0);
     expect((await server.inject("/livez")).statusCode).toBe(200);
     const page = await server.inject({
       url: "/",
-      headers: { authorization: auth },
+      headers,
     });
     expect(page.statusCode).toBe(200);
-    expect(page.body).toContain("Automatic sync is on");
+    expect(page.body).toContain("Automatic Sync On");
     expect(page.headers["cache-control"]).toBe("no-store");
     expect(page.body).not.toContain(password);
+  });
+
+  it("uses a normal login page, rejects cross-site login and invalidates sessions on logout", async () => {
+    const { server } = await fixture();
+    const page = await server.inject("/login");
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('autocomplete="current-password"');
+    expect(page.headers["www-authenticate"]).toBeUndefined();
+    expect(
+      (
+        await server.inject({
+          method: "POST",
+          url: "/login",
+          headers: { ...headers, origin: "https://other.example" },
+          payload: "username=operator&password=wrong",
+        })
+      ).statusCode,
+    ).toBe(403);
+    const rejected = await server.inject({
+      method: "POST",
+      url: "/login",
+      headers,
+      payload: "username=operator&password=wrong",
+    });
+    expect(rejected.statusCode).toBe(401);
+    expect(rejected.headers["set-cookie"]).toBeUndefined();
+    const logout = await server.inject({
+      method: "POST",
+      url: "/logout",
+      headers,
+      payload: "",
+    });
+    expect(logout.headers["set-cookie"]).toContain("Max-Age=0");
+    expect((await server.inject({ url: "/", headers })).statusCode).toBe(303);
   });
 
   it("leaves an unchanged status panel intact and detects background runs", async () => {
@@ -128,7 +180,7 @@ describe("operator app", () => {
     await runner.drain();
     const response = await server.inject({ url, headers });
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain("Scheduled sync");
+    expect(response.body).toContain("Scheduled Sync");
     expect(response.body).toContain("imported");
   });
 
@@ -160,6 +212,16 @@ describe("operator app", () => {
           })
         ).statusCode,
       ).toBe(400);
+    expect(
+      (
+        await server.inject({
+          method: "POST",
+          url: "/settings",
+          headers: { ...headers, origin: "https://attacker.example" },
+          payload: "action=discover",
+        })
+      ).statusCode,
+    ).toBe(403);
     expect(runner.depth).toBe(0);
   });
 

@@ -12,7 +12,7 @@ afterEach(() => {
   stop();
   vi.useRealTimers();
 });
-function fixture(enabled = true) {
+function fixture(enabled = true, mapped = true) {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-08T15:59:50Z")); // 02:59:50 in Sydney.
   const config = parseConfig({
@@ -24,6 +24,16 @@ function fixture(enabled = true) {
     },
     up: { connections: [{ id: "first", tokenEnv: "UP_TOKEN" }] },
     schedule: { enabled },
+    mappings: mapped
+      ? [
+          {
+            alias: "spending",
+            upAccountId: "11111111-1111-4111-8111-111111111111",
+            actualAccountId: "spending",
+            connections: ["first"],
+          },
+        ]
+      : [],
   });
   const actual = { sync: vi.fn().mockResolvedValue(undefined) };
   const engine = { reconcile: vi.fn().mockResolvedValue({ failed: 0 }) };
@@ -53,6 +63,13 @@ describe("automatic reconciliation", () => {
     stop();
     await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
     expect(engine.reconcile).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a new installation idle until accounts are mapped", async () => {
+    const { engine, runner } = fixture(true, false);
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
+    await runner.drain();
+    expect(engine.reconcile).not.toHaveBeenCalled();
   });
 
   it("does not write or schedule when explicitly disabled", async () => {

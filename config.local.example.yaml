@@ -1,10 +1,9 @@
 version: 1
+settingsFile: ./.actual-up/settings.json
 
 actual:
   cacheDirectory: ./.actual-cache
-  passwordEnv: ACTUAL_PASSWORD
   serverUrl: http://127.0.0.1:5006
-  syncId: replace-with-actual-sync-id
 
 mappings: []
 
@@ -27,6 +26,4 @@ server:
   port: 3000
 
 up:
-  connections:
-    - id: max
-      tokenEnv: UP_TOKEN_MAX
+  connections: []

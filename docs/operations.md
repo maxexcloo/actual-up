@@ -5,19 +5,19 @@
 1. Push `main` to publish a commit-tagged image, or tag the matching package
    version (for example `v0.1.0`) to publish a versioned image. Pin the resulting
    tag and digest in kubelab.
-2. Let kubelab provision the `Actual Up` 1Password item. Supply its Actual session
-   token, budget sync ID and Up token; the app password is generated separately.
-3. Unsuspend the prepared Helm release after verifying those fields. Mappings
+2. Let kubelab provision the `Actual Up` 1Password item with app login and
+   encryption key.
+3. Unsuspend the prepared Helm release when ready to configure it. Mappings
    start empty, so no accounts are imported until they are configured.
-4. Open the private HTTPS app with the login from 1Password. Check connections
-   and discover account IDs. Update mappings in kubelab's YAML and reconcile.
-5. The restarted app automatically backfills mapped accounts, syncs recent
+4. Open the private HTTPS app with the login from 1Password. Use **Accounts &
+   Connections** to enter Actual credentials, add Up keys and save mappings.
+5. Saving a mapping automatically backfills it. The app syncs recent
    changes every 15 minutes and backfills nightly. Set `schedule.enabled: false`
    before adding mappings if you want to preview changes first.
 
-Configuration changes roll the pod through a generated ConfigMap name. Secret
-rotation requires a rollout after External Secrets refreshes, because credentials
-are supplied through environment variables. Keep app login and Actual credentials
+Configuration changes roll the pod through a generated ConfigMap name. App login rotation requires a rollout after External Secrets refreshes.
+Up and Actual credential changes apply directly in the browser. Preserve the
+settings encryption key; changing it requires re-encrypting or resetting settings. Keep app login and Actual credentials
 separate. Health checks confirm the process is serving; use connection checks and
 run results to diagnose upstream failures.
 
@@ -29,8 +29,10 @@ It holds at most 32 operations and retains the latest 20 completed results in
 memory. Exceptions are reported without their potentially sensitive contents.
 An account failure makes the run fail even if other accounts succeeded.
 
-History and queued jobs reset on restart. The Actual cache uses `emptyDir` and is
-re-downloaded on startup. Import identities make reconciliation repeatable.
+History and queued jobs reset on restart. `/data` uses a persistent volume for
+browser settings and the Actual cache. Back up `settings.json`; only the Actual
+cache can be rebuilt. The chart creates a 1Gi claim by default, or accepts
+`persistence.existingClaim` and `persistence.storageClass`. Import identities make reconciliation repeatable.
 Startup and nightly full-history backfills recover gaps after an extended outage
 or interrupted run. Manual backfill remains available. Do not run a
 standalone CLI writer alongside the service, or deploy a second instance for the

@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+import { getActualCredentials } from "./settings-store.js";
 import { mkdir } from "node:fs/promises";
 
 import * as api from "@actual-app/api";
@@ -16,35 +18,46 @@ import type {
 export class ActualBudgetClient implements ActualClient {
   private opened = false;
 
-  constructor(private readonly config: AppConfig["actual"]) {}
+  constructor(private readonly app: AppConfig) {}
+
+  private get config() {
+    return this.app.actual;
+  }
 
   async open(): Promise<void> {
     if (this.opened) return;
     await mkdir(this.config.cacheDirectory, { recursive: true });
     const base = {
       dataDir: this.config.cacheDirectory,
+      verbose: false,
       serverURL: this.config.serverUrl,
     };
-    if (this.config.passwordEnv) {
+    const credentials = getActualCredentials(this.app);
+    const syncId =
+      this.config.syncId ??
+      (this.config.syncIdEnv
+        ? environmentValue(this.config.syncIdEnv)
+        : undefined);
+    if (!credentials || !syncId)
+      throw new Error("Configure Actual in the app first");
+    try {
       await api.init({
         ...base,
-        password: environmentValue(this.config.passwordEnv),
+        ...(credentials.method === "password"
+          ? { password: credentials.credential }
+          : { sessionToken: credentials.credential }),
       });
-    } else {
-      await api.init({
-        ...base,
-        sessionToken: environmentValue(this.config.sessionTokenEnv!),
+      const version = await api.getServerVersion();
+      if ("error" in version) throw new Error("Actual server check failed");
+      assertActualCompatibility(version.version);
+      await api.downloadBudget(syncId, {
+        password: credentials.encryptionPassword,
       });
+      this.opened = true;
+    } catch (error) {
+      await api.shutdown().catch(() => {});
+      throw error;
     }
-    await api.downloadBudget(
-      this.config.syncId ?? environmentValue(this.config.syncIdEnv!),
-      {
-        password: this.config.encryptionPasswordEnv
-          ? environmentValue(this.config.encryptionPasswordEnv)
-          : undefined,
-      },
-    );
-    this.opened = true;
   }
 
   async close(): Promise<void> {
@@ -54,6 +67,7 @@ export class ActualBudgetClient implements ActualClient {
   }
 
   async getServerVersion(): Promise<string> {
+    await this.open();
     const result = await api.getServerVersion();
     if ("error" in result)
       throw new Error(`Actual server check failed: ${result.error}`);
@@ -61,14 +75,17 @@ export class ActualBudgetClient implements ActualClient {
   }
 
   async getAccounts(): Promise<ActualAccount[]> {
+    await this.open();
     return api.getAccounts();
   }
 
   async getCategories(): Promise<ActualCategory[]> {
+    await this.open();
     return api.getCategories();
   }
 
   async getPayees(): Promise<ActualPayee[]> {
+    await this.open();
     return api.getPayees();
   }
 
@@ -77,6 +94,7 @@ export class ActualBudgetClient implements ActualClient {
     startDate: string,
     endDate: string,
   ): Promise<ActualTransaction[]> {
+    await this.open();
     return api.getTransactions(accountId, startDate, endDate);
   }
 
@@ -84,6 +102,7 @@ export class ActualBudgetClient implements ActualClient {
     accountId: string,
     transaction: ActualImportTransaction,
   ): Promise<ActualImportResult> {
+    await this.open();
     const result = await api.importTransactions(accountId, [transaction], {
       defaultCleared: transaction.cleared,
       reimportDeleted: false,
@@ -99,14 +118,35 @@ export class ActualBudgetClient implements ActualClient {
     id: string,
     fields: Partial<ActualTransaction>,
   ): Promise<void> {
+    await this.open();
     await api.updateTransaction(id, fields);
   }
 
   async deleteTransaction(id: string): Promise<void> {
+    await this.open();
     await api.deleteTransaction(id);
   }
 
   async sync(): Promise<void> {
+    await this.open();
     await api.sync();
+  }
+}
+
+const require = createRequire(import.meta.url);
+const packageManifest = require("../package.json") as {
+  dependencies: Record<string, string>;
+};
+
+export function assertActualCompatibility(serverVersion: string): void {
+  const apiVersion = packageManifest.dependencies["@actual-app/api"];
+  if (!apiVersion)
+    throw new Error("@actual-app/api is missing from dependencies");
+  const expected = apiVersion.split(".").slice(0, 2).join(".");
+  const actual = serverVersion.split(".").slice(0, 2).join(".");
+  if (expected !== actual) {
+    throw new Error(
+      `Actual server ${serverVersion} is incompatible with API ${apiVersion}; align the versions`,
+    );
   }
 }

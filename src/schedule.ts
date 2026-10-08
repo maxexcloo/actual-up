@@ -14,6 +14,7 @@ export function startSchedule(
 ): () => void {
   if (!config.schedule.enabled) return () => {};
   const reconcile = (backfill: boolean) => {
+    if (!config.mappings.length) return;
     runner.enqueue(
       backfill ? "automatic-backfill" : "schedule",
       backfill ? "automatic-backfill" : "schedule",

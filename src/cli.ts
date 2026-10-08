@@ -23,8 +23,6 @@ program
     const config = await loadConfig(program.opts<{ config: string }>().config);
     const runtime = await createRuntime(config);
     try {
-      const validation = await runtime.engine.validate();
-      assertActualCompatibility(validation.actualVersion);
       const runner = new JobRunner(runtime.metrics, runtime.logger);
       const service = await startService(
         config,

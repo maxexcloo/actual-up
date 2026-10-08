@@ -1,10 +1,14 @@
 @import "tailwindcss" source(none);
 @source "../src/ui.ts";
+@source "../src/login-ui.ts";
+@source "../src/settings-ui.ts";
 @plugin "daisyui" {
-  themes: light --default;
+  themes:
+    light --default,
+    dark --prefersdark;
 }
 
-[data-theme="light"] {
+:root {
   --color-primary: #25493b;
   --color-primary-content: #ffffff;
   --radius-box: 0.75rem;
@@ -14,4 +18,11 @@
 .htmx-request button,
 button.htmx-request {
   cursor: wait;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #94d5b4;
+    --color-primary-content: #102b20;
+  }
 }

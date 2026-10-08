@@ -1,6 +1,7 @@
 .git
 .github
 .actual-cache
+.actual-up
 coverage
 dist
 node_modules

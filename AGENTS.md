@@ -11,11 +11,13 @@
 ## Conventions
 
 - Use Australian English for project-owned names and prose.
+- Use Title Case for UI headings, labels and actions; keep explanatory prose in sentence case.
 - Keep Up and Actual API field names unchanged.
 - Treat Up IDs as immutable bank identities and prefix Actual import IDs with `up:`.
 - Never log transaction amounts, payees, messages, webhook bodies or credentials.
 - Serialise Actual API access; do not add replicas or parallel budget writers.
 - Keep the service configuration-driven with one operation queue and no application database.
+- Persist browser settings and credentials together as authenticated ciphertext; keep the encryption key in 1Password.
 - Serve UI assets locally; keep credentials on the server and require authentication and same-origin checks for actions.
 
 ## Verification

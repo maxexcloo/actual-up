@@ -5,6 +5,8 @@ import { Cron } from "croner";
 import { parse } from "yaml";
 import { z } from "zod";
 
+import { loadSettings } from "./settings-store.js";
+
 const environmentName = z
   .string()
   .regex(/^[A-Z][A-Z0-9_]*$/, "must be an environment variable name");
@@ -26,18 +28,17 @@ const actualSchema = z
     syncIdEnv: environmentName.optional(),
   })
   .refine(
-    ({ syncId, syncIdEnv }) => Boolean(syncId) !== Boolean(syncIdEnv),
-    "set exactly one of syncId or syncIdEnv",
+    ({ syncId, syncIdEnv }) => !(syncId && syncIdEnv),
+    "set at most one of syncId or syncIdEnv",
   )
   .refine(
-    ({ passwordEnv, sessionTokenEnv }) =>
-      Boolean(passwordEnv) !== Boolean(sessionTokenEnv),
-    "set exactly one of passwordEnv or sessionTokenEnv",
+    ({ passwordEnv, sessionTokenEnv }) => !(passwordEnv && sessionTokenEnv),
+    "set at most one of passwordEnv or sessionTokenEnv",
   );
 
 const connectionSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),
-  tokenEnv: environmentName,
+  tokenEnv: environmentName.optional(),
   webhook: z
     .object({
       id: z.string().uuid(),
@@ -55,6 +56,8 @@ const mappingSchema = z.object({
 
 const configSchema = z.object({
   version: z.literal(1),
+  encryptionKeyEnv: environmentName.default("ACTUAL_UP_ENCRYPTION_KEY"),
+  settingsFile: z.string().min(1).default("/data/settings.json"),
   auth: z
     .object({
       usernameEnv: environmentName.default("ACTUAL_UP_USERNAME"),
@@ -110,7 +113,7 @@ const configSchema = z.object({
       publicUrl: httpUrl.optional(),
     })
     .default({ host: "0.0.0.0", port: 3000 }),
-  up: z.object({ connections: z.array(connectionSchema).min(1) }),
+  up: z.object({ connections: z.array(connectionSchema) }),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -131,7 +134,7 @@ export async function loadConfig(path: string): Promise<AppConfig> {
   const parsed: unknown = parse(source);
   const config = configSchema.parse(parsed);
   validateConfig(config);
-  return config;
+  return loadSettings(config);
 }
 
 export function parseConfig(value: unknown): AppConfig {

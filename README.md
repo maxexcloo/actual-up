@@ -6,6 +6,7 @@ operation queue. No separate application database or workflow platform.
 
 ## Features
 
+- Configure connections and account mappings in the browser, with encrypted credential storage.
 - Preview imports, run a sync, backfill from a date and discover account IDs.
 - Check connections and inspect the last 20 runs without exposing transaction
   amounts, payees or messages in logs or run results.
@@ -15,7 +16,7 @@ operation queue. No separate application database or workflow platform.
   bank account once, with partner keys in fallback order; use `up:` import identities.
 - Apply Actual reconciliation and rules, optional category mappings and transfers.
 - Serve a responsive daisyUI + htmx interface from the same process, with password
-  authentication and same-origin checks for actions.
+  authentication, same-origin checks and automatic browser light/dark mode.
 
 ## Run locally
 
@@ -26,17 +27,17 @@ mise run setup
 cp config.local.example.yaml config.local.yaml
 ```
 
-Set `ACTUAL_UP_USERNAME`, `ACTUAL_UP_PASSWORD` (at least 16 characters),
-`ACTUAL_PASSWORD` and `UP_TOKEN_MAX` in your environment or inject them with
-1Password CLI. Set the Actual server URL and budget sync ID in the configuration.
-Then run:
+Set `ACTUAL_UP_USERNAME`, `ACTUAL_UP_PASSWORD` and a random
+`ACTUAL_UP_ENCRYPTION_KEY` (at least 32 characters) in your environment, or inject
+them with 1Password CLI. Then run:
 
 ```sh
 mise exec -- pnpm dev --config ./config.local.yaml
 ```
 
-Open `http://localhost:3000` and use the app credentials. Discover accounts,
-add their IDs to `mappings` and restart. Automatic sync is enabled by default:
+Open `http://localhost:3000` and use the app credentials. Open **Accounts & Connections**,
+enter your Actual credentials, add Up API keys and connect accounts. Saving a mapping automatically backfills
+its history. Automatic sync is enabled by default:
 a full-history backfill runs on startup and nightly at 03:00, with recent changes
 synchronised every 15 minutes. Set `schedule.enabled: false` to pause automation
 while using discovery or dry runs.
@@ -44,9 +45,10 @@ while using discovery or dry runs.
 ## Deploy
 
 The image runs `serve`, listens on port 3000 and needs writable `/data` and `/tmp`
-directories. Use one replica with `Recreate`; the Actual cache is rebuildable.
-Expose the app through private HTTPS. HTTP Basic authentication relies on TLS
-outside localhost. Secrets are supplied through environment variables.
+directories. Persist `/data`: browser settings live in `/data/settings.json`.
+Use one replica with `Recreate`; only the Actual cache is rebuildable.
+Expose the app through private HTTPS. Use the normal sign-in page. The app login and settings encryption key come
+from environment variables; upstream credentials are managed in the browser.
 
 The GitHub Container workflow tests, builds and scans the image before publishing
 to `ghcr.io/maxexcloo/actual-up`. Pushes to `main` publish `latest` and
@@ -54,7 +56,7 @@ to `ghcr.io/maxexcloo/actual-up`. Pushes to `main` publish `latest` and
 the Git tag must match `package.json`. Pull requests build and scan without
 publishing. Images include OCI labels, provenance and an SBOM. Kubelab owns
 its deployment using `bjw-s/app-template`, private routing and External Secrets.
-Its `Actual Up` 1Password item holds the app login and upstream credentials.
+Its `Actual Up` 1Password item holds the app login and settings encryption key.
 Pin the published image tag and digest in kubelab before enabling the release.
 Publishing uses the repository’s `GITHUB_TOKEN`; no registry password is needed.
 

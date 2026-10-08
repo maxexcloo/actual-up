@@ -16,9 +16,10 @@ const muted = "text-base-content/55";
 
 export function dashboard(config: AppConfig, runner: JobRunner): string {
   return /* HTML */ `<!doctype html>
-    <html lang="en-AU" data-theme="light">
+    <html lang="en-AU">
       <head>
         <meta charset="utf-8" />
+        <meta name="color-scheme" content="light dark" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <meta
           name="htmx-config"
@@ -42,18 +43,20 @@ export function dashboard(config: AppConfig, runner: JobRunner): string {
                 >↗</span
               >Actual Up</a
             >
-            <span class="badge badge-ghost badge-sm">Private workspace</span>
+            <a class="btn btn-ghost btn-sm" href="/settings"
+              >Accounts &amp; Connections</a
+            >
           </header>
           <div class="flex flex-wrap items-end justify-between gap-3 py-7">
             <div>
-              <h1 class="text-2xl font-semibold tracking-tight">Bank sync</h1>
+              <h1 class="text-2xl font-semibold tracking-tight">Bank Sync</h1>
               <p class="mt-1 text-sm ${muted}">
                 Up accounts, connected to Actual Budget.
               </p>
             </div>
             <span
               class="badge badge-outline badge-sm ${config.schedule.enabled ? "badge-success" : "badge-warning"}"
-              >${config.schedule.enabled ? "Automatic sync is on" : "Automatic sync is off"}</span
+              >${config.schedule.enabled ? "Automatic Sync On" : "Automatic Sync Off"}</span
             >
           </div>
           ${status(runner, config.schedule.timezone)}
@@ -61,19 +64,19 @@ export function dashboard(config: AppConfig, runner: JobRunner): string {
             <div class="card-body gap-4 p-5 sm:p-6">
               <div class="flex items-center justify-between gap-3">
                 <h2 id="accounts-heading" class="text-base font-semibold">
-                  Connected accounts
+                  Connected Accounts
                 </h2>
                 <span class="badge badge-ghost badge-sm"
-                  >${config.mappings.length} mapped</span
+                  >${config.mappings.length} Mapped</span
                 >
               </div>
-              ${config.mappings.length ? `<div class="overflow-x-auto"><table class="table table-sm"><thead><tr><th>Account</th><th>Up account</th><th>Actual account</th><th>API keys</th></tr></thead><tbody>${config.mappings.map((mapping) => `<tr><th class="font-medium">${escapeHtml(mapping.alias)}</th><td><code class="text-xs">${escapeHtml(mapping.upAccountId)}</code></td><td><code class="text-xs">${escapeHtml(mapping.actualAccountId)}</code></td><td><div class="flex flex-wrap gap-1">${mapping.connections.map((id) => `<span class="badge badge-ghost badge-sm">${escapeHtml(id)}</span>`).join("")}</div>${mapping.connections.length > 1 ? `<span class="mt-1 block text-xs ${muted}">Shared access · one import</span>` : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="text-sm ${muted}">Discover your accounts below, then add their IDs to the configuration. New mappings are backfilled automatically when the app restarts.</p>`}
+              ${config.mappings.length ? `<div class="overflow-x-auto"><table class="table table-sm"><thead><tr><th>Account</th><th>Up Account</th><th>Actual Account</th><th>API Keys</th></tr></thead><tbody>${config.mappings.map((mapping) => `<tr><th class="font-medium">${escapeHtml(mapping.alias)}</th><td><code class="text-xs">${escapeHtml(mapping.upAccountId)}</code></td><td><code class="text-xs">${escapeHtml(mapping.actualAccountId)}</code></td><td><div class="flex flex-wrap gap-1">${mapping.connections.map((id) => `<span class="badge badge-ghost badge-sm">${escapeHtml(id)}</span>`).join("")}</div>${mapping.connections.length > 1 ? `<span class="mt-1 block text-xs ${muted}">Shared Access · One Import</span>` : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="text-sm ${muted}">Open Accounts &amp; Connections to connect your accounts. New mappings are backfilled automatically.</p>`}
             </div>
           </section>
           <div class="grid gap-5 md:grid-cols-2">
             <section class="${panel}">
               <div class="card-body gap-4 p-5 sm:p-6">
-                <h2 class="text-base font-semibold">Sync controls</h2>
+                <h2 class="text-base font-semibold">Sync Controls</h2>
                 <form
                   class="space-y-4"
                   method="post"
@@ -88,14 +91,14 @@ export function dashboard(config: AppConfig, runner: JobRunner): string {
                       for="account"
                       >Account</label
                     ><select class="select w-full" id="account" name="account">
-                      <option value="">All mapped accounts</option>
+                      <option value="">All Mapped Accounts</option>
                       ${config.mappings.map((mapping) => `<option value="${escapeHtml(mapping.alias)}">${escapeHtml(mapping.alias)}</option>`).join("")}
                     </select>
                   </div>
                   <div>
                     <label class="mb-1.5 block text-xs font-medium" for="since"
-                      >Backfill from
-                      <span class="${muted}">(optional)</span></label
+                      >Backfill From
+                      <span class="${muted}">(Optional)</span></label
                     ><input
                       class="input w-full"
                       type="date"
@@ -110,7 +113,7 @@ export function dashboard(config: AppConfig, runner: JobRunner): string {
                   </div>
                   <div class="flex flex-wrap gap-2">
                     <button class="btn btn-sm" name="mode" value="dry-run">
-                      Preview changes</button
+                      Preview Changes</button
                     ><button
                       class="btn btn-primary btn-sm"
                       type="button"
@@ -122,7 +125,7 @@ export function dashboard(config: AppConfig, runner: JobRunner): string {
                       hx-disabled-elt="this"
                       hx-confirm="Import these transactions into Actual?"
                     >
-                      Sync now
+                      Sync Now
                     </button>
                   </div>
                 </form>
@@ -135,7 +138,7 @@ export function dashboard(config: AppConfig, runner: JobRunner): string {
                     hx-disabled-elt="find button"
                   >
                     <button class="btn btn-ghost btn-sm">
-                      Check connections
+                      Check Connections
                     </button>
                   </form>
                   <form
@@ -146,7 +149,7 @@ export function dashboard(config: AppConfig, runner: JobRunner): string {
                     hx-disabled-elt="find button"
                   >
                     <button class="btn btn-ghost btn-sm">
-                      Discover accounts
+                      Discover Accounts
                     </button>
                   </form>
                 </div>
@@ -156,8 +159,7 @@ export function dashboard(config: AppConfig, runner: JobRunner): string {
                   role="status"
                   aria-live="polite"
                 >
-                  Manual actions are optional. Automatic sync runs in the
-                  background.
+                  ${config.schedule.enabled ? "Manual actions are optional. Automatic sync runs in the background." : "Automatic sync is paused. Use the controls above to sync manually."}
                 </p>
               </div>
             </section>
@@ -165,21 +167,24 @@ export function dashboard(config: AppConfig, runner: JobRunner): string {
               <div class="card-body gap-4 p-5 sm:p-6">
                 <h2 class="text-base font-semibold">Automation</h2>
                 <dl class="divide-y divide-base-200 text-sm">
-                  ${setting("Recent sync", config.schedule.cron === "*/15 * * * *" ? "Every 15 minutes" : config.schedule.cron)}
-                  ${setting("Full backfill", config.schedule.backfillCron === "0 3 * * *" ? "On startup + nightly at 03:00" : `On startup + ${config.schedule.backfillCron}`)}
+                  ${setting("Recent Sync", config.schedule.cron === "*/15 * * * *" ? "Every 15 minutes" : config.schedule.cron)}
+                  ${setting("Full Backfill", config.schedule.backfillCron === "0 3 * * *" ? "On startup + nightly at 03:00" : `On startup + ${config.schedule.backfillCron}`)}
                   ${setting("Timezone", config.schedule.timezone)}
-                  ${setting("Recent lookback", `${config.schedule.lookbackDays} days`)}
-                  ${setting("API keys", config.up.connections.map(({ id }) => id).join(", "))}
+                  ${setting("Recent Lookback", `${config.schedule.lookbackDays} days`)}
+                  ${setting("API Keys", config.up.connections.map(({ id }) => id).join(", "))}
                 </dl>
                 <p class="text-xs leading-relaxed ${muted}">
-                  Manage mappings and schedules in configuration. Credentials
-                  are supplied from 1Password.
+                  Manage accounts and connections in the browser. API keys are
+                  encrypted on the server.
                 </p>
               </div>
             </section>
           </div>
           <footer class="flex justify-between gap-4 py-6 text-xs ${muted}">
-            <span>Up → Actual Budget</span><span>Actual Up</span>
+            <span>Up → Actual Budget</span>
+            <form method="post" action="/logout">
+              <button class="link link-hover">Sign Out</button>
+            </form>
           </footer>
         </main>
       </body>
@@ -201,15 +206,15 @@ export function status(
 ): string {
   const latest = runner.history[0];
   const heading = runner.depth
-    ? "Sync in progress"
+    ? "Sync in Progress"
     : latest?.state === "failure"
-      ? "A run needs attention"
+      ? "A Run Needs Attention"
       : latest
-        ? "Ready for the next sync"
-        : "Ready to connect";
-  return `<section id="runs" hx-get="/runs?version=${encodeURIComponent(statusVersion(runner))}" hx-trigger="refresh-status from:body, every 3s" hx-swap="outerHTML" aria-label="Run status" class="${panel}"><div class="card-body gap-4 p-5 sm:p-6"><div class="flex items-center justify-between gap-3"><div><h2 class="text-base font-semibold">${heading}</h2><p class="mt-1 text-xs ${muted}">${latest ? `${escapeHtml(triggerLabel(latest.trigger))} · ${escapeHtml(runTime(latest, timezone))}` : "Your first sync will appear here."}</p></div>${badge(latest?.state ?? "idle")}</div>${latest?.state === "failure" ? '<div class="alert alert-soft alert-error text-sm" role="status">Check credentials, mappings and connectivity. The next scheduled run will try again.</div>' : ""}${latest?.result !== undefined ? renderResult(latest.result) : ""}${
+        ? "Ready for the Next Sync"
+        : "Ready to Connect";
+  return `<section id="runs" hx-get="/runs?version=${encodeURIComponent(statusVersion(runner))}" hx-trigger="refresh-status from:body, every 3s" hx-swap="outerHTML" aria-label="Run Status" class="${panel}"><div class="card-body gap-4 p-5 sm:p-6"><div class="flex items-center justify-between gap-3"><div><h2 class="text-base font-semibold">${heading}</h2><p class="mt-1 text-xs ${muted}">${latest ? `${escapeHtml(triggerLabel(latest.trigger))} · ${escapeHtml(runTime(latest, timezone))}` : "Your first sync will appear here."}</p></div>${badge(latest?.state ?? "idle")}</div>${latest?.state === "failure" ? '<div class="alert alert-soft alert-error text-sm" role="status">Check credentials, mappings and connectivity. The next scheduled run will try again.</div>' : ""}${latest?.result !== undefined ? renderResult(latest.result) : ""}${
     runner.history.length > 1
-      ? `<details class="border-t border-base-200 pt-3"><summary class="cursor-pointer text-xs ${muted}">Recent activity · ${runner.history.length} runs</summary><div class="mt-3 space-y-3">${runner.history
+      ? `<details class="border-t border-base-200 pt-3"><summary class="cursor-pointer text-xs ${muted}">Recent Activity · ${runner.history.length} Runs</summary><div class="mt-3 space-y-3">${runner.history
           .slice(1)
           .map(
             (job) =>
@@ -229,21 +234,22 @@ function badge(state: string): string {
       : state === "success"
         ? "badge-success"
         : "badge-ghost";
-  return `<span class="badge badge-soft badge-sm ${colour}">${escapeHtml(state)}</span>`;
+  return `<span class="badge badge-soft badge-sm ${colour}">${escapeHtml(state.charAt(0).toUpperCase() + state.slice(1))}</span>`;
 }
 
 function triggerLabel(trigger: string): string {
   return (
     (
       {
-        "automatic-backfill": "Automatic backfill",
-        schedule: "Scheduled sync",
-        manual: "Manual sync",
+        "automatic-backfill": "Automatic Backfill",
+        schedule: "Scheduled Sync",
+        manual: "Manual Sync",
         "dry-run": "Preview",
         backfill: "Backfill",
-        validate: "Connection check",
-        discover: "Account discovery",
-        webhook: "Up webhook",
+        validate: "Connection Check",
+        discover: "Account Discovery",
+        webhook: "Up Webhook",
+        settings: "Account Setup",
       } as Record<string, string>
     )[trigger] ?? trigger
   );
@@ -286,6 +292,6 @@ function renderResult(value: unknown): string {
     "ok" in value &&
     value.ok === true
   )
-    return '<p class="text-sm text-success">Connections and mappings checked successfully.</p>';
+    return '<p class="text-sm text-success">Operation completed successfully.</p>';
   return `<pre class="max-h-72 overflow-auto rounded-lg bg-base-200/50 p-4 text-xs leading-relaxed">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
 }
