@@ -1,6 +1,6 @@
 {
   "name": "actual-up",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Synchronise Up transactions into Actual Budget.",
   "license": "AGPL-3.0-only",
   "type": "module",

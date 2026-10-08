@@ -68,6 +68,7 @@ function triggerLabel(trigger: string): string {
         discover: "Account Discovery",
         webhook: "Up Webhook",
         settings: "Account Setup",
+        "test-connection": "Connection Test",
       } as Record<string, string>
     )[trigger] ?? trigger
   );
@@ -112,4 +113,22 @@ function renderResult(value: unknown): string {
   )
     return '<p class="text-sm text-success">Operation completed successfully.</p>';
   return `<pre class="max-h-72 overflow-auto rounded-lg bg-base-200/50 p-4 text-xs leading-relaxed">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
+}
+
+export function connectionTestStatus(
+  target: string,
+  state?: "queued" | "running" | "success" | "failure" | "busy",
+): string {
+  const pending = state === "queued" || state === "running";
+  const message =
+    state === "success"
+      ? "Connection Working"
+      : state === "failure"
+        ? "Connection Failed"
+        : state === "busy"
+          ? "Queue Busy — Try Again Shortly"
+          : pending
+            ? "Testing Connection…"
+            : "";
+  return `<span id="test-${escapeHtml(target)}" class="text-xs ${state === "failure" ? "text-error" : state === "success" ? "text-success" : "text-base-content/65"}" role="status" aria-live="polite"${pending ? ` hx-get="/connection-tests/${encodeURIComponent(target)}" hx-trigger="every 1s" hx-swap="outerHTML"` : ""}>${message}</span>`;
 }

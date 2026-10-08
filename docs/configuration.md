@@ -29,6 +29,9 @@ for cluster probes and monitoring.
 3. Refresh accounts and connect each Up account to its Actual destination.
    Shared accounts use one mapping; select both partners' keys for fallback access.
 
+Use **Test** on Actual or an Up connection to check its saved credentials.
+Results appear inline without importing bank transactions.
+
 Blank credentials on the Actual edit form retain saved values. Existing keys
 are never sent back to the browser. A replacement Up key must still access its
 mapped accounts. Remove mappings before removing a key they use, switching

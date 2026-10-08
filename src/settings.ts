@@ -132,23 +132,27 @@ export function registerSettings(
   };
 
   server.get("/settings", async (_request, reply) => reply.redirect("/", 303));
-  server.get("/", async (_request, reply) => {
-    if (!discoveryAttempted && !busy && config.up.connections.length) {
-      busy = true;
-      const accepted = runner.enqueue("settings", "settings", async () => {
-        try {
-          discovery = await discover();
-          return { ok: true };
-        } finally {
-          busy = false;
-        }
-      });
-      if (!accepted) busy = false;
-    }
-    return reply
-      .type("text/html")
-      .send(settingsPage(config, discovery, busy, message, runner));
-  });
+  server.get<{ Querystring: { pending?: string } }>(
+    "/",
+    async (request, reply) => {
+      if (request.query.pending === "1" && busy) return reply.code(204).send();
+      if (!discoveryAttempted && !busy && config.up.connections.length) {
+        busy = true;
+        const accepted = runner.enqueue("settings", "settings", async () => {
+          try {
+            discovery = await discover();
+            return { ok: true };
+          } finally {
+            busy = false;
+          }
+        });
+        if (!accepted) busy = false;
+      }
+      return reply
+        .type("text/html")
+        .send(settingsPage(config, discovery, busy, message, runner));
+    },
+  );
   server.post("/settings", async (request, reply) => {
     const reject = (code: number, explanation: string) =>
       reply

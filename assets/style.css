@@ -26,3 +26,60 @@ button.htmx-request {
     --color-primary-content: #102b20;
   }
 }
+
+.action-progress {
+  display: none;
+}
+
+.htmx-request .action-label {
+  display: none;
+}
+
+.htmx-request .action-progress {
+  display: inline;
+}
+
+.account-editor > summary {
+  list-style: none;
+}
+
+.account-editor > summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-editor[open] .disclosure {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn,
+  .input,
+  .select,
+  .account-row,
+  .disclosure {
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      opacity 150ms ease,
+      transform 150ms ease;
+  }
+
+  details[open] > :not(summary) {
+    animation: reveal 160ms ease-out;
+  }
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+#feedback:empty {
+  display: none;
+}

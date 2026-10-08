@@ -14,7 +14,7 @@ import { registerSettings } from "./settings.js";
 import { startSchedule } from "./schedule.js";
 import type { SyncEngine } from "./sync-engine.js";
 import { loginPage } from "./login-ui.js";
-import { status, statusVersion } from "./ui.js";
+import { connectionTestStatus, status, statusVersion } from "./ui.js";
 import { parseWebhook, verifyWebhookSignature } from "./webhook.js";
 
 export type Service = {
@@ -263,6 +263,75 @@ export async function createServer(
   server.get("/assets/htmx.js", async (_request, reply) =>
     reply.type("application/javascript").send(htmx),
   );
+
+  const connectionTests = new Map<
+    string,
+    "queued" | "running" | "success" | "failure"
+  >();
+  server.get<{ Params: { target: string } }>(
+    "/connection-tests/:target",
+    async (request, reply) => {
+      if (!connectionTests.has(request.params.target))
+        return reply.code(404).send("Unknown connection test");
+      return reply
+        .type("text/html")
+        .send(
+          connectionTestStatus(
+            request.params.target,
+            connectionTests.get(request.params.target),
+          ),
+        );
+    },
+  );
+  server.post("/actions/test", async (request, reply) => {
+    const parsed = z
+      .object({
+        target: z.enum(["actual", "up"]),
+        connection: z.string().default(""),
+      })
+      .strict()
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send("Invalid connection test");
+    const { target, connection } = parsed.data;
+    if (
+      (target === "actual" && connection) ||
+      (target === "up" && !runtime.clients.has(connection))
+    )
+      return reply.code(400).send("Unknown connection");
+    const id = target === "actual" ? "actual" : `up-${connection}`;
+    const accepted = runner.enqueue(
+      `test:${id}`,
+      "test-connection",
+      async () => {
+        connectionTests.set(id, "running");
+        try {
+          if (target === "actual")
+            assertActualCompatibility(await runtime.actual.getServerVersion());
+          else await runtime.clients.get(connection)!.ping();
+          connectionTests.set(id, "success");
+          return { ok: true };
+        } catch {
+          connectionTests.set(id, "failure");
+          throw new Error("Connection test failed");
+        }
+      },
+    );
+    if (accepted) connectionTests.set(id, "queued");
+    if (request.headers["hx-request"] !== "true")
+      return reply.redirect("/", 303);
+    return reply
+      .header("HX-Trigger", "refresh-status")
+      .type("text/html")
+      .send(
+        connectionTestStatus(
+          id,
+          accepted ||
+            ["queued", "running"].includes(connectionTests.get(id) ?? "")
+            ? connectionTests.get(id)
+            : "busy",
+        ),
+      );
+  });
 
   server.post<{ Params: { action: string } }>(
     "/actions/:action",

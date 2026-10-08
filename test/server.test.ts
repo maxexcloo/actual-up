@@ -56,6 +56,7 @@ async function fixture() {
     validate: vi.fn().mockResolvedValue({ actualVersion: "26.10.0" }),
   };
   const actual = {
+    getServerVersion: vi.fn().mockResolvedValue("26.10.0"),
     sync: vi.fn(),
     getAccounts: vi
       .fn()
@@ -97,7 +98,7 @@ async function fixture() {
   });
   expect(login.statusCode).toBe(303);
   headers.cookie = String(login.headers["set-cookie"]).split(";")[0]!;
-  return { server, runner, engine, actual, config };
+  return { server, runner, engine, actual, config, client };
 }
 
 const headers = {
@@ -293,6 +294,53 @@ describe("operator app", () => {
           })
         ).statusCode,
       ).toBe(400);
+  });
+
+  it("tests Actual and individual Up connections without importing, and reports safe inline failures", async () => {
+    const { server, runner, actual, client, engine } = await fixture();
+    for (const payload of ["target=actual", "target=up&connection=max"]) {
+      const queued = await server.inject({
+        method: "POST",
+        url: "/actions/test",
+        headers,
+        payload,
+      });
+      expect(queued.statusCode).toBe(200);
+      await runner.drain();
+    }
+    expect(actual.getServerVersion).toHaveBeenCalledOnce();
+    expect(client.ping).toHaveBeenCalledOnce();
+    expect(engine.reconcile).not.toHaveBeenCalled();
+    expect(actual.sync).not.toHaveBeenCalled();
+    const result = await server.inject({
+      url: "/connection-tests/up-max",
+      headers,
+    });
+    expect(result.body).toContain("Connection Working");
+    client.ping.mockRejectedValueOnce(new Error("sensitive-token"));
+    await server.inject({
+      method: "POST",
+      url: "/actions/test",
+      headers,
+      payload: "target=up&connection=max",
+    });
+    await runner.drain();
+    const failed = await server.inject({
+      url: "/connection-tests/up-max",
+      headers,
+    });
+    expect(failed.body).toContain("Connection Failed");
+    expect(failed.body).not.toContain("sensitive-token");
+    expect(
+      (
+        await server.inject({
+          method: "POST",
+          url: "/actions/test",
+          headers,
+          payload: "target=up&connection=missing",
+        })
+      ).statusCode,
+    ).toBe(400);
   });
 
   it("keeps discovery balances out of results and escapes upstream names", async () => {
