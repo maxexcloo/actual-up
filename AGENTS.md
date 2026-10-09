@@ -10,8 +10,6 @@
 
 ## Conventions
 
-- Use Australian English for project-owned names and prose.
-- Use Title Case for UI headings, labels and actions; keep explanatory prose in sentence case.
 - Keep Up and Actual API field names unchanged.
 - Treat Up IDs as immutable bank identities and prefix Actual import IDs with `up:`.
 - Never log transaction amounts, payees, messages, webhook bodies or credentials.
@@ -22,4 +20,4 @@
 
 ## Verification
 
-Run `mise run check` after code changes. Run `helm lint chart/actual-up --set existingConfigMap=test` and render the chart after template changes. Use `git diff --check` before handoff.
+Run `helm lint chart/actual-up --set existingConfigMap=test` and render the chart after template changes.
