@@ -71,6 +71,10 @@ helm upgrade --install actual-up ./chart/actual-up \
   --set-file configuration=./config.yaml
 ```
 
+The chart ingress exposes `/webhooks/up` by default. For the private app, enable
+`ingress.enabled`, configure your private ingress class and host, and set
+`ingress.path: /`. Keep the default webhook path for public ingress.
+
 See [configuration](docs/configuration.md) and [operations](docs/operations.md).
 
 ## Development

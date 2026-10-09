@@ -17,7 +17,7 @@ spec:
     - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
-          - path: /webhooks/up
+          - path: {{ .Values.ingress.path | quote }}
             pathType: Prefix
             backend:
               service:

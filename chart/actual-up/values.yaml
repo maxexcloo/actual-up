@@ -1,67 +1,56 @@
+affinity: {}
 configuration: ""
 existingConfigMap: ""
 existingSecret: actual-up
-
 fullnameOverride: ""
-
+imagePullSecrets: []
 nameOverride: ""
+nodeSelector: {}
+podAnnotations: {}
+podLabels: {}
 replicaCount: 1
-
 terminationGracePeriodSeconds: 60
-affinity: {}
+tolerations: []
 image:
   pullPolicy: IfNotPresent
   repository: ghcr.io/maxexcloo/actual-up
   tag: ""
-
-imagePullSecrets: []
 ingress:
+  annotations: {}
   className: ""
   enabled: false
   host: actual-up.example.com
-  annotations: {}
+  path: /webhooks/up
   tls: []
-
 networkPolicy:
   enabled: false
   ingressFrom: []
-nodeSelector: {}
 persistence:
   existingClaim: ""
   size: 1Gi
   storageClass: ""
-
-podAnnotations: {}
-podLabels: {}
-
 podSecurityContext:
   fsGroup: 1000
   fsGroupChangePolicy: OnRootMismatch
   runAsNonRoot: true
-
 resources:
   limits:
     memory: 512Mi
   requests:
     cpu: 25m
     memory: 128Mi
-
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
   runAsGroup: 1000
   runAsUser: 1000
-
   capabilities:
     drop:
       - ALL
 service:
   port: 3000
   type: ClusterIP
-
 serviceMonitor:
+  additionalLabels: {}
   enabled: false
   interval: 30s
-
-  additionalLabels: {}
-tolerations: []

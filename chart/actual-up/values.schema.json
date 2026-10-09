@@ -19,7 +19,12 @@
       }
     },
     "imagePullSecrets": { "type": "array" },
-    "ingress": { "type": "object" },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" }
+      }
+    },
     "nameOverride": { "type": "string" },
     "networkPolicy": { "type": "object" },
     "nodeSelector": { "type": "object" },
