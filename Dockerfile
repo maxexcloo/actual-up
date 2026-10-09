@@ -1,7 +1,7 @@
-FROM node:26.10.0-bookworm-slim AS build
+FROM node:26.11.1-bookworm-slim AS build
 
 WORKDIR /workspace
-RUN npm install --global pnpm@12.9.1
+RUN npm install --global pnpm@12.10.1
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -11,7 +11,7 @@ COPY src ./src
 COPY tsconfig.build.json tsconfig.json ./
 RUN pnpm run build && pnpm prune --prod
 
-FROM node:26.10.0-bookworm-slim AS runtime
+FROM node:26.11.1-bookworm-slim AS runtime
 
 ENV ACTUAL_UP_CONFIG=/config/config.yaml
 ENV NODE_ENV=production
