@@ -13,7 +13,9 @@ SameSite=Strict cookies and an eight-hour lifetime. Sessions reset on restart;
 signing out invalidates the session. Failed sign-ins are rate-limited.
 
 Use a private HTTPS route in production. Set `server.publicUrl` to the external
-HTTPS URL: it supplies the expected origin and enables Secure cookies. Without
+HTTPS URL, or supply `ACTUAL_UP_PUBLIC_URL` to override it through the environment.
+The override uses the same HTTP/HTTPS URL validation and rejects empty or invalid
+values. The effective URL supplies the expected origin and enables Secure cookies. Without
 it, actions must match the request's own origin. All POSTs, including sign-in,
 require a matching Origin. The login page and CSS are public; app pages and
 operations require a session. `/livez`, `/readyz` and `/metrics` remain available

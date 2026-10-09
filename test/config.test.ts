@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { parseConfig } from "../src/config.js";
 
@@ -20,7 +20,36 @@ const base = {
   up: { connections: [{ id: "max", tokenEnv: "UP_TOKEN_MAX" }] },
 };
 
+beforeEach(() => vi.stubEnv("ACTUAL_UP_PUBLIC_URL", undefined));
+afterEach(() => vi.unstubAllEnvs());
+
 describe("configuration", () => {
+  it("preserves the configured public URL when no environment override is set", () => {
+    expect(parseConfig(base).server.publicUrl).toBeUndefined();
+    expect(
+      parseConfig({
+        ...base,
+        server: { publicUrl: "http://app.example.com:3000" },
+      }).server.publicUrl,
+    ).toBe("http://app.example.com:3000");
+  });
+
+  it("uses the environment public URL instead of the configured URL", () => {
+    vi.stubEnv("ACTUAL_UP_PUBLIC_URL", "https://private.example.com");
+    expect(
+      parseConfig({ ...base, server: { publicUrl: "http://localhost:3000" } })
+        .server.publicUrl,
+    ).toBe("https://private.example.com");
+  });
+
+  it.each(["", "relative", "ftp://private.example.com"])(
+    "rejects an invalid environment public URL: %s",
+    (publicUrl) => {
+      vi.stubEnv("ACTUAL_UP_PUBLIC_URL", publicUrl);
+      expect(() => parseConfig(base)).toThrow();
+    },
+  );
+
   it("applies safe defaults", () => {
     const config = parseConfig(base);
     expect(config.schedule).toEqual({

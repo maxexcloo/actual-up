@@ -91,7 +91,7 @@ async function fixture() {
     method: "POST",
     url: "/login",
     headers: {
-      origin: "http://localhost:80",
+      origin: config.server.publicUrl ?? "http://localhost:80",
       "content-type": "application/x-www-form-urlencoded",
     },
     payload: `username=operator&password=${password}`,
@@ -109,6 +109,26 @@ const headers = {
 };
 
 describe("operator app", () => {
+  it("uses the public URL override for Secure cookies and origin checks", async () => {
+    vi.stubEnv("ACTUAL_UP_PUBLIC_URL", "https://private.example.com");
+    const { server } = await fixture();
+    const login = await server.inject({
+      method: "POST",
+      url: "/login",
+      headers: { ...headers, origin: "https://private.example.com" },
+      payload: `username=operator&password=${password}`,
+    });
+    expect(login.statusCode).toBe(303);
+    expect(login.headers["set-cookie"]).toContain("; Secure");
+    const rejected = await server.inject({
+      method: "POST",
+      url: "/login",
+      headers,
+      payload: `username=operator&password=${password}`,
+    });
+    expect(rejected.statusCode).toBe(403);
+  });
+
   it("protects the app, assets and actions, while allowing probes", async () => {
     const { server, runner } = await fixture();
     for (const url of ["/", "/settings", "/runs", "/assets/htmx.js"])

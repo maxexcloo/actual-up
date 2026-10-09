@@ -132,13 +132,14 @@ export async function loadConfig(path: string): Promise<AppConfig> {
   const absolutePath = resolve(path);
   const source = await readFile(absolutePath, "utf8");
   const parsed: unknown = parse(source);
-  const config = configSchema.parse(parsed);
-  validateConfig(config);
-  return loadSettings(config);
+  return loadSettings(parseConfig(parsed));
 }
 
 export function parseConfig(value: unknown): AppConfig {
   const config = configSchema.parse(value);
+  const publicUrl = process.env.ACTUAL_UP_PUBLIC_URL;
+  if (publicUrl !== undefined)
+    config.server.publicUrl = httpUrl.parse(publicUrl);
   validateConfig(config);
   return config;
 }
