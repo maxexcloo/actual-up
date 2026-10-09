@@ -34,12 +34,12 @@ export class ActualBudgetClient implements ActualClient {
     if (!credentials || !syncId)
       throw new Error("Configure Actual in the app first");
     const worker = new Worker(this.workerUrl, {
-      workerData: {
-        config: { ...this.app, actual: { ...this.app.actual, syncId } },
-        credentials,
-      },
-      stdout: true,
       stderr: true,
+      stdout: true,
+      workerData: {
+        credentials,
+        config: { ...this.app, actual: { ...this.app.actual, syncId } },
+      },
     });
     // SDK output can contain bank data. Only the app emits sanitised diagnostics.
     worker.stdout.resume();
@@ -81,7 +81,7 @@ export class ActualBudgetClient implements ActualClient {
           reject,
         });
         try {
-          worker.postMessage({ id, method, args });
+          worker.postMessage({ args, id, method });
         } catch {
           this.pending.delete(id);
           reject(new Error("Actual operation could not be queued"));

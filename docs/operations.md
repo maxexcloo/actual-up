@@ -1,6 +1,6 @@
 # Operations
 
-## First run
+## First Run
 
 1. Push `main` to publish a commit-tagged image, or tag the matching package
    version (for example `v0.1.0`) to publish a versioned image. Pin the resulting
@@ -20,7 +20,7 @@ settings encryption key; changing it requires re-encrypting or resetting setting
 separate. Health checks confirm the process is serving; use connection checks and
 run results to diagnose upstream failures.
 
-## Runs and recovery
+## Runs & Recovery
 
 The queue serialises whole operations, including discovery and validation. Only
 one manual action can be queued at a time; duplicate scheduled runs coalesce.
@@ -43,7 +43,7 @@ Metrics are exposed at `/metrics`. `actual_up_jobs_total` records outcomes and
 trigger. Monitor `schedule` and `automatic-backfill` for unattended imports; a successful
 validation or dry run does not prove a scheduled import succeeded.
 
-## Windmill migration
+## Windmill Migration
 
 The duplicate Windmill scripts and bridge have been removed from this repository.
 This does not delete deployed Windmill resources. Before enabling this app's

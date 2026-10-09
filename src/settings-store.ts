@@ -178,7 +178,7 @@ export async function saveSettings(config: AppConfig): Promise<void> {
     data: encrypted.toString("base64"),
   };
   const directory = dirname(config.settingsFile);
-  await mkdir(directory, { recursive: true, mode: 0o700 });
+  await mkdir(directory, { mode: 0o700, recursive: true });
   const temporary = `${config.settingsFile}.${randomUUID()}.tmp`;
   try {
     const file = await open(temporary, "wx", 0o600);

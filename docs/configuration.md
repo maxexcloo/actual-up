@@ -80,12 +80,12 @@ Actual's budget cache is separate and is not encrypted by this settings mechanis
 
 ## Deployment Defaults
 
-- `actual.serverUrl` prefills the Actual setup form; prefer its internal cluster URL.
 - `actual.cacheDirectory` defaults to `/data/actual-cache`.
-- `up.connections: []` and `mappings: []` start with browser setup.
-- Optional preconfigured Up connections use stable `id` and `tokenEnv` references.
+- `actual.serverUrl` prefills the Actual setup form; prefer its internal cluster URL.
 - Optional Actual defaults use one of `syncId`/`syncIdEnv` and one of
   `passwordEnv`/`sessionTokenEnv`; `encryptionPasswordEnv` supports encrypted budgets.
+- Optional preconfigured Up connections use stable `id` and `tokenEnv` references.
+- `up.connections: []` and `mappings: []` start with browser setup.
 
 Preconfigured environment secrets remain supported for CLI deployments. Replacing
 credentials in the browser switches that connection to encrypted app storage.

@@ -29,8 +29,8 @@ export class ActualApiClient implements ActualClient {
     await mkdir(this.config.cacheDirectory, { recursive: true });
     const base = {
       dataDir: this.config.cacheDirectory,
-      verbose: false,
       serverURL: this.config.serverUrl,
+      verbose: false,
     };
     const credentials = getActualCredentials(this.app);
     const syncId =

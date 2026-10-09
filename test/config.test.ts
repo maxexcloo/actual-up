@@ -13,8 +13,8 @@ const base = {
     {
       actualAccountId: "actual-spending",
       alias: "spending",
-      connections: ["max"],
       upAccountId: "11111111-1111-4111-8111-111111111111",
+      connections: ["max"],
     },
   ],
   up: { connections: [{ id: "max", tokenEnv: "UP_TOKEN_MAX" }] },
@@ -24,9 +24,9 @@ describe("configuration", () => {
   it("applies safe defaults", () => {
     const config = parseConfig(base);
     expect(config.schedule).toEqual({
-      enabled: true,
       backfillCron: "0 3 * * *",
       cron: "*/15 * * * *",
+      enabled: true,
       lookbackDays: 30,
       timezone: "Australia/Sydney",
     });

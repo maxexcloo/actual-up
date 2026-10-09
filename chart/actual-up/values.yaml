@@ -1,18 +1,31 @@
-replicaCount: 1
-
 configuration: ""
 existingConfigMap: ""
 existingSecret: actual-up
 
+fullnameOverride: ""
+
+nameOverride: ""
+replicaCount: 1
+
+terminationGracePeriodSeconds: 60
+affinity: {}
 image:
   pullPolicy: IfNotPresent
   repository: ghcr.io/maxexcloo/actual-up
   tag: ""
 
 imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
+ingress:
+  className: ""
+  enabled: false
+  host: actual-up.example.com
+  annotations: {}
+  tls: []
 
+networkPolicy:
+  enabled: false
+  ingressFrom: []
+nodeSelector: {}
 persistence:
   existingClaim: ""
   size: 1Gi
@@ -26,35 +39,6 @@ podSecurityContext:
   fsGroupChangePolicy: OnRootMismatch
   runAsNonRoot: true
 
-securityContext:
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop:
-      - ALL
-  readOnlyRootFilesystem: true
-  runAsGroup: 1000
-  runAsUser: 1000
-
-service:
-  port: 3000
-  type: ClusterIP
-
-ingress:
-  annotations: {}
-  className: ""
-  enabled: false
-  host: actual-up.example.com
-  tls: []
-
-networkPolicy:
-  enabled: false
-  ingressFrom: []
-
-serviceMonitor:
-  additionalLabels: {}
-  enabled: false
-  interval: 30s
-
 resources:
   limits:
     memory: 512Mi
@@ -62,8 +46,22 @@ resources:
     cpu: 25m
     memory: 128Mi
 
-nodeSelector: {}
-tolerations: []
-affinity: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsGroup: 1000
+  runAsUser: 1000
 
-terminationGracePeriodSeconds: 60
+  capabilities:
+    drop:
+      - ALL
+service:
+  port: 3000
+  type: ClusterIP
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+
+  additionalLabels: {}
+tolerations: []

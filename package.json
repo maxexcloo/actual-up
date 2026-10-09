@@ -1,29 +1,13 @@
 {
-  "name": "actual-up",
-  "version": "0.2.5",
   "description": "Synchronise Up transactions into Actual Budget.",
+  "exports": "./dist/index.js",
   "license": "AGPL-3.0-only",
+  "name": "actual-up",
+  "packageManager": "pnpm@12.10.1",
   "type": "module",
+  "version": "0.2.5",
   "bin": {
     "actual-up": "dist/cli.js"
-  },
-  "exports": "./dist/index.js",
-  "files": [
-    "dist"
-  ],
-  "engines": {
-    "node": ">=22"
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.build.json && pnpm run build:css",
-    "check": "pnpm run format:check && pnpm run lint && pnpm run build && pnpm run test",
-    "dev": "pnpm run build && node dist/cli.js serve",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint": "oxlint --deny-warnings src test",
-    "start": "node dist/cli.js serve",
-    "test": "vitest run",
-    "build:css": "tailwindcss -i assets/style.css -o dist/style.css --minify"
   },
   "dependencies": {
     "@actual-app/api": "26.10.0",
@@ -47,5 +31,21 @@
     "typescript": "7.0.2",
     "vitest": "5.0.3"
   },
-  "packageManager": "pnpm@12.10.1"
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && pnpm run build:css",
+    "build:css": "tailwindcss -i assets/style.css -o dist/style.css --minify",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run build && pnpm run test",
+    "dev": "pnpm run build && node dist/cli.js serve",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "oxlint --deny-warnings src test",
+    "start": "node dist/cli.js serve",
+    "test": "vitest run"
+  }
 }

@@ -39,8 +39,8 @@ function config(overrides: Partial<AppConfig> = {}): AppConfig {
       {
         actualAccountId: "actual-spending",
         alias: "joint-spending",
-        connections: ["first", "second"],
         upAccountId,
+        connections: ["first", "second"],
       },
     ],
     up: {
@@ -57,14 +57,14 @@ function transaction(status: "HELD" | "SETTLED" = "HELD"): UpTransaction {
   return {
     id: "22222222-2222-4222-8222-222222222222",
     attributes: {
-      amount: { currencyCode: "AUD", value: "-12.50", valueInBaseUnits: -1250 },
       createdAt: "2026-08-19T23:30:00Z",
       description: "Dinner",
       message: "shared meal",
-      performingCustomer: { displayName: "Max" },
       rawText: "DINNER PLACE 123",
       settledAt: status === "SETTLED" ? "2026-08-21T01:00:00Z" : null,
       status,
+      amount: { currencyCode: "AUD", value: "-12.50", valueInBaseUnits: -1250 },
+      performingCustomer: { displayName: "Max" },
     },
     relationships: {
       account: { data: { id: upAccountId, type: "accounts" } },
@@ -145,9 +145,9 @@ class StubUp implements UpClientLike {
         id: upAccountId,
         attributes: {
           accountType: "TRANSACTIONAL",
-          balance: { currencyCode: "AUD", value: "0.00", valueInBaseUnits: 0 },
           displayName: "2Up",
           ownershipType: "JOINT",
+          balance: { currencyCode: "AUD", value: "0.00", valueInBaseUnits: 0 },
         },
       },
     ];
@@ -236,9 +236,9 @@ describe("sync engine", () => {
     const sharedFetch = vi.spyOn(second, "listTransactions");
     const app = config();
     app.mappings.push({
+      actualAccountId: "actual-personal",
       alias: "personal",
       upAccountId: personalId,
-      actualAccountId: "actual-personal",
       connections: ["first"],
     });
     const value = new SyncEngine(

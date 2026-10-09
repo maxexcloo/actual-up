@@ -2,12 +2,12 @@ name: Container
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches:
       - main
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -28,15 +28,15 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Set up tools
+      - name: Set Up Tools
         uses: jdx/mise-action@v5
         with:
           version: 2026.10.5
-      - name: Install dependencies
+      - name: Install Dependencies
         run: mise run setup
-      - name: Run checks
+      - name: Run Checks
         run: mise run check
-      - name: Validate release version
+      - name: Validate Release Version
         if: startsWith(github.ref, 'refs/tags/')
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -47,31 +47,31 @@ jobs:
             const { version } = JSON.parse(readFileSync("package.json", "utf8"));
             assert.equal(process.env.RELEASE_TAG, `v${version}`, "Tag must match package.json");
           NODE
-      - name: Lint chart
+      - name: Lint Chart
         run: mise exec -- helm lint chart/actual-up --set existingConfigMap=test
-      - name: Render chart
+      - name: Render Chart
         run: mise exec -- helm template test chart/actual-up --set existingConfigMap=test
 
   image:
     name: Image
     needs: check
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Set up Docker Buildx
+      - name: Set Up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - id: metadata
-        name: Extract metadata
+        name: Extract Metadata
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.IMAGE_NAME }}
           flavor: latest=false
+          images: ${{ env.IMAGE_NAME }}
           labels: |
             org.opencontainers.image.licenses=AGPL-3.0-only
           tags: |
@@ -79,7 +79,7 @@ jobs:
             type=sha,format=long,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-      - name: Build image for verification
+      - name: Build Image for Verification
         uses: docker/build-push-action@v7
         with:
           cache-from: type=gha
@@ -89,18 +89,18 @@ jobs:
           load: true
           platforms: linux/amd64
           tags: actual-up:test
-      - name: Smoke-test runtime
+      - name: Smoke-Test Runtime
         run: |
-          docker run --rm --read-only --cap-drop=ALL \
+          docker run --cap-drop=ALL --read-only --rm \
             --security-opt=no-new-privileges actual-up:test node dist/cli.js --help
-      - name: Scan image
+      - name: Scan Image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           exit-code: "1"
-          image-ref: actual-up:test
           ignore-unfixed: true
+          image-ref: actual-up:test
           severity: CRITICAL,HIGH
-      - name: Log in to GHCR
+      - name: Log In to GHCR
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v4
         with:
@@ -108,7 +108,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
       - id: publish
-        name: Publish verified image
+        name: Publish Verified Image
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/build-push-action@v7
         with:
@@ -119,7 +119,7 @@ jobs:
           push: true
           sbom: true
           tags: ${{ steps.metadata.outputs.tags }}
-      - name: Summarise image
+      - name: Summarise Image
         if: steps.publish.outcome == 'success'
         env:
           IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}

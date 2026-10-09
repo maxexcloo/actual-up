@@ -17,7 +17,7 @@ vi.mock("@actual-app/api", () => ({
 const directories: string[] = [];
 afterEach(async () => {
   for (const directory of directories.splice(0))
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { force: true, recursive: true });
   vi.resetAllMocks();
 });
 async function fixture() {
@@ -39,8 +39,8 @@ describe("Actual connection lifecycle", () => {
     expect(api.init).not.toHaveBeenCalled();
     await expect(client.open()).rejects.toThrow("Configure Actual");
     setActualCredentials(config, {
-      method: "session",
       credential: "first-secret",
+      method: "session",
     });
     await client.getAccounts();
     expect(api.init).toHaveBeenCalledWith(
@@ -50,9 +50,9 @@ describe("Actual connection lifecycle", () => {
     expect(api.init).toHaveBeenCalledTimes(1);
     await client.close();
     setActualCredentials(config, {
-      method: "password",
       credential: "replacement",
       encryptionPassword: "budget-encryption",
+      method: "password",
     });
     await client.open();
     expect(api.init).toHaveBeenLastCalledWith(
@@ -64,7 +64,7 @@ describe("Actual connection lifecycle", () => {
   });
   it("cleans up failed connections and refuses incompatible servers before downloading", async () => {
     const { config, client } = await fixture();
-    setActualCredentials(config, { method: "session", credential: "secret" });
+    setActualCredentials(config, { credential: "secret", method: "session" });
     vi.mocked(api.getServerVersion).mockResolvedValueOnce({
       version: "25.1.0",
     });

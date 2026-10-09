@@ -4,7 +4,7 @@ export function escapeHtml(value: unknown): string {
   return String(value).replace(
     /[&<>"']/g,
     (char) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+      ({ "'": "&#39;", '"': "&quot;", "&": "&amp;", "<": "&lt;", ">": "&gt;" })[
         char
       ]!,
   );
@@ -60,15 +60,15 @@ function triggerLabel(trigger: string): string {
     (
       {
         "automatic-backfill": "Automatic Backfill",
-        schedule: "Scheduled Sync",
-        manual: "Manual Sync",
-        "dry-run": "Preview",
         backfill: "Backfill",
-        validate: "Connection Check",
         discover: "Account Discovery",
-        webhook: "Up Webhook",
+        "dry-run": "Preview",
+        manual: "Manual Sync",
+        schedule: "Scheduled Sync",
         settings: "Account Setup",
         "test-connection": "Connection Test",
+        validate: "Connection Check",
+        webhook: "Up Webhook",
       } as Record<string, string>
     )[trigger] ?? trigger
   );

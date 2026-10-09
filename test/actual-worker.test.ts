@@ -13,7 +13,7 @@ function fixture() {
     config,
     new URL("./fixtures/actual-worker.mjs", import.meta.url),
   );
-  return { config, client };
+  return { client, config };
 }
 
 describe("Actual worker isolation", () => {
@@ -21,8 +21,8 @@ describe("Actual worker isolation", () => {
     const { config, client } = fixture();
     await expect(client.open()).rejects.toThrow("Configure Actual");
     setActualCredentials(config, {
-      method: "password",
       credential: "test-secret",
+      method: "password",
     });
     try {
       await client.open();
@@ -36,8 +36,8 @@ describe("Actual worker isolation", () => {
       expect(await client.getServerVersion()).toBe("password");
       await client.close();
       setActualCredentials(config, {
-        method: "session",
         credential: "replacement-secret",
+        method: "session",
       });
       expect(await client.getServerVersion()).toBe("session");
     } finally {
@@ -47,8 +47,8 @@ describe("Actual worker isolation", () => {
   it("rejects pending calls on worker failure, sanitises errors and permits a fresh connection", async () => {
     const { config, client } = fixture();
     setActualCredentials(config, {
-      method: "password",
       credential: "test-secret",
+      method: "password",
     });
     try {
       await expect(client.getPayees()).rejects.toThrow(

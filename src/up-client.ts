@@ -76,7 +76,7 @@ export class UpClient implements UpClientLike {
     const value = singleSchema.parse(
       await this.request("/webhooks", {
         body: JSON.stringify({
-          data: { attributes: { description, url }, type: "webhooks" },
+          data: { type: "webhooks", attributes: { description, url } },
         }),
         method: "POST",
       }),

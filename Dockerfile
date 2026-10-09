@@ -17,14 +17,14 @@ ENV ACTUAL_UP_CONFIG=/config/config.yaml
 ENV NODE_ENV=production
 
 WORKDIR /app
-COPY --from=build --chown=node:node /workspace/dist ./dist
-COPY --from=build --chown=node:node /workspace/node_modules ./node_modules
-COPY --from=build --chown=node:node /workspace/package.json ./package.json
+COPY --chown=node:node --from=build /workspace/dist ./dist
+COPY --chown=node:node --from=build /workspace/node_modules ./node_modules
+COPY --chown=node:node --from=build /workspace/package.json ./package.json
 
 # Apply Debian fixes not yet included in the pinned Node image. The runtime
 # only executes Node; package managers and their dependencies are unnecessary.
 RUN apt-get update \
-    && apt-get upgrade -y --no-install-recommends \
+    && apt-get upgrade --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/* /usr/local/lib/node_modules/npm /opt/yarn* \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
     && mkdir -p /data/actual-cache \

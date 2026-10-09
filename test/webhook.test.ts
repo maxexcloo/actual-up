@@ -8,16 +8,16 @@ describe("Up webhooks", () => {
   const body = Buffer.from(
     JSON.stringify({
       data: {
+        id: "event-id",
+        type: "webhook-events",
         attributes: {
           createdAt: "2026-08-19T10:00:00+10:00",
           eventType: "TRANSACTION_CREATED",
         },
-        id: "event-id",
         relationships: {
           transaction: { data: { id: "transaction-id", type: "transactions" } },
           webhook: { data: { id: "webhook-id", type: "webhooks" } },
         },
-        type: "webhook-events",
       },
     }),
   );

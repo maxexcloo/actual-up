@@ -64,8 +64,8 @@ const configSchema = z.object({
       passwordEnv: environmentName.default("ACTUAL_UP_PASSWORD"),
     })
     .default({
-      usernameEnv: "ACTUAL_UP_USERNAME",
       passwordEnv: "ACTUAL_UP_PASSWORD",
+      usernameEnv: "ACTUAL_UP_USERNAME",
     }),
   actual: actualSchema,
   alerts: z
@@ -100,9 +100,9 @@ const configSchema = z.object({
       timezone: z.string().min(1).default("Australia/Sydney"),
     })
     .default({
-      enabled: true,
       backfillCron: "0 3 * * *",
       cron: "*/15 * * * *",
+      enabled: true,
       lookbackDays: 30,
       timezone: "Australia/Sydney",
     }),

@@ -26,6 +26,7 @@ export function createLogger(): Logger {
   return pino({
     level: process.env.LOG_LEVEL ?? "info",
     redact: {
+      remove: true,
       paths: [
         "req.headers.authorization",
         "req.headers.x-up-authenticity-signature",
@@ -34,7 +35,6 @@ export function createLogger(): Logger {
         "sessionToken",
         "secret",
       ],
-      remove: true,
     },
   });
 }

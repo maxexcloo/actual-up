@@ -6,20 +6,20 @@ operation queue. No separate application database or workflow platform.
 
 ## Features
 
-- Manage connections, API keys and nested account mappings on one page, with
-  encrypted credential storage. Sync an account, a connection or everything.
-- Preview imports, run a sync, backfill from a date and discover account IDs.
+- Apply Actual reconciliation and rules, optional category mappings and transfers.
 - Check connections and inspect the last 20 runs without exposing transaction
   amounts, payees or messages in logs or run results.
 - Import held transactions as uncleared, update settlements and safely handle
   cancelled holds while preserving edits made in Actual.
-- Support multiple API keys, personal accounts and shared 2Up accounts. Map each
-  bank account once, with partner keys in fallback order; use `up:` import identities.
-- Apply Actual reconciliation and rules, optional category mappings and transfers.
+- Manage connections, API keys and nested account mappings on one page, with
+  encrypted credential storage. Sync an account, a connection or everything.
+- Preview imports, run a sync, backfill from a date and discover account IDs.
 - Serve a responsive daisyUI + htmx interface from the same process, with password
   authentication, same-origin checks and automatic browser light/dark mode.
+- Support multiple API keys, personal accounts and shared 2Up accounts. Map each
+  bank account once, with partner keys in fallback order; use `up:` import identities.
 
-## Run locally
+## Run Locally
 
 Requires Node.js 22 or later. Install the pinned tools and dependencies:
 

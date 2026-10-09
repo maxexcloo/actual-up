@@ -27,9 +27,9 @@ function fixture(enabled = true, mapped = true) {
     mappings: mapped
       ? [
           {
+            actualAccountId: "spending",
             alias: "spending",
             upAccountId: "11111111-1111-4111-8111-111111111111",
-            actualAccountId: "spending",
             connections: ["first"],
           },
         ]

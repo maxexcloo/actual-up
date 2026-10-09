@@ -115,9 +115,9 @@ export function registerSettings(
       ({ upAccountId }) => upAccountId === id,
     );
     const account = discovery?.up.find((account) => account.id === id) ?? {
+      connections: mapping?.connections ?? [],
       id,
       name: mapping?.alias ?? "Account",
-      connections: mapping?.connections ?? [],
     };
     const primary = viewConnection ?? account.connections[0] ?? "";
     const others = account.connections.filter(
@@ -242,9 +242,9 @@ export function registerSettings(
             ? accountRow(
                 accountId,
                 {
-                  pending: false,
-                  message: explanation,
                   failed: true,
+                  message: explanation,
+                  pending: false,
                 },
                 viewConnection,
               )
@@ -274,8 +274,8 @@ export function registerSettings(
       return reject(409, "Settings changed. Reload before saving.");
     if (accountId)
       accountUpdates.set(accountId, {
-        pending: true,
         message: "Save queued. You can continue with other accounts.",
+        pending: true,
       });
     else {
       busy = true;
@@ -330,8 +330,8 @@ export function registerSettings(
               syncId: command.syncId,
             };
             setActualCredentials(next, {
-              method: command.method,
               credential,
+              method: command.method,
               encryptionPassword: command.clearEncryption
                 ? undefined
                 : command.encryptionPassword ||
@@ -436,10 +436,10 @@ export function registerSettings(
                 "Disconnect the mapping before changing its Actual destination. Existing transactions will remain in the old account.",
               );
             const mapping = {
-              alias: command.alias,
-              upAccountId: command.upAccountId,
               actualAccountId: command.actualAccountId,
+              alias: command.alias,
               connections: command.connections,
+              upAccountId: command.upAccountId,
             };
             next.mappings = [
               ...next.mappings.filter(
@@ -504,9 +504,9 @@ export function registerSettings(
         } finally {
           if (accountId)
             accountUpdates.set(accountId, {
-              pending: false,
-              message: operationMessage,
               failed,
+              message: operationMessage,
+              pending: false,
             });
           else {
             busy = false;
@@ -518,9 +518,9 @@ export function registerSettings(
     if (!accepted) {
       if (accountId)
         accountUpdates.set(accountId, {
-          pending: false,
-          message: "The queue is full. Please try again shortly.",
           failed: true,
+          message: "The queue is full. Please try again shortly.",
+          pending: false,
         });
       else {
         busy = false;

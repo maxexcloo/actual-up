@@ -10,9 +10,9 @@ categoryMappings:
   restaurants-and-cafes: 00000000-0000-4000-8000-000000000003
 
 mappings:
-  - alias: joint-spending
+  - actualAccountId: 00000000-0000-4000-8000-000000000002
+    alias: joint-spending
     upAccountId: 00000000-0000-4000-8000-000000000001
-    actualAccountId: 00000000-0000-4000-8000-000000000002
     connections:
       - alex
       - sam
@@ -25,9 +25,9 @@ notes:
   includeRoundUp: false
 
 schedule:
-  enabled: true
   backfillCron: "0 3 * * *"
   cron: "*/15 * * * *"
+  enabled: true
   lookbackDays: 30
   timezone: Australia/Sydney
 

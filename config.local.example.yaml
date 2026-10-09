@@ -1,6 +1,6 @@
-version: 1
 settingsFile: ./.actual-up/settings.json
 
+version: 1
 actual:
   cacheDirectory: ./.actual-cache
   serverUrl: http://127.0.0.1:5006
@@ -15,9 +15,9 @@ notes:
   includeRoundUp: false
 
 schedule:
-  enabled: true
   backfillCron: "0 3 * * *"
   cron: "*/15 * * * *"
+  enabled: true
   lookbackDays: 30
   timezone: Australia/Sydney
 

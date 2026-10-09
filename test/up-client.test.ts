@@ -8,18 +8,18 @@ function page(id: string, next: string | null) {
     JSON.stringify({
       data: [
         {
+          id,
+          type: "accounts",
           attributes: {
             accountType: "TRANSACTIONAL",
+            displayName: id,
+            ownershipType: "INDIVIDUAL",
             balance: {
               currencyCode: "AUD",
               value: "0.00",
               valueInBaseUnits: 0,
             },
-            displayName: id,
-            ownershipType: "INDIVIDUAL",
           },
-          id,
-          type: "accounts",
         },
       ],
       links: { next, prev: null },

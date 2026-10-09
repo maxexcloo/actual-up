@@ -10,26 +10,26 @@ export class Metrics {
   readonly registry = new Registry();
   readonly jobs = new Counter({
     help: "Completed sync jobs by trigger and outcome.",
-    labelNames: ["outcome", "trigger"],
     name: "actual_up_jobs_total",
+    labelNames: ["outcome", "trigger"],
     registers: [this.registry],
   });
   readonly jobDuration = new Histogram({
     help: "Sync job duration in seconds.",
-    labelNames: ["trigger"],
     name: "actual_up_job_duration_seconds",
+    labelNames: ["trigger"],
     registers: [this.registry],
   });
   readonly lastSuccess = new Gauge({
     help: "Unix timestamp of the last successful sync.",
-    labelNames: ["trigger"],
     name: "actual_up_last_success_timestamp_seconds",
+    labelNames: ["trigger"],
     registers: [this.registry],
   });
   readonly transactions = new Counter({
     help: "Transactions considered by action and account alias.",
-    labelNames: ["account", "action"],
     name: "actual_up_transactions_total",
+    labelNames: ["account", "action"],
     registers: [this.registry],
   });
   readonly queueDepth = new Gauge({

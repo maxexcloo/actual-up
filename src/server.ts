@@ -414,7 +414,7 @@ export async function createServer(
           const categories = (await runtime.actual.getCategories()).map(
             ({ id, name }) => ({ id, name }),
           );
-          return { actual: { accounts, categories }, up };
+          return { up, actual: { accounts, categories } };
         };
       } else {
         return reply.code(404).send("Unknown action");

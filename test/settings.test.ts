@@ -26,7 +26,7 @@ afterEach(async () => {
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "actual-up-settings-"));
-  cleanups.push(() => rm(directory, { recursive: true, force: true }));
+  cleanups.push(() => rm(directory, { force: true, recursive: true }));
   vi.stubEnv(
     "ACTUAL_UP_ENCRYPTION_KEY",
     "test-encryption-key-at-least-32-characters",
@@ -105,22 +105,22 @@ async function fixture() {
   };
   const mapping = {
     action: "mapping",
+    actualAccountId: "actual-id",
     alias: "spending",
     upAccountId: upId,
-    actualAccountId: "actual-id",
     connections: ["max"],
   };
   return {
-    config,
-    runner,
     actual,
-    engine,
     client,
     clients,
+    config,
+    engine,
     makeClient,
-    server,
-    post,
     mapping,
+    post,
+    runner,
+    server,
   };
 }
 
@@ -176,7 +176,7 @@ describe("browser setup", () => {
       "test-secret",
     );
     expect(
-      (await f.post({ action: "remove-mapping", upAccountId: upId, revision }))
+      (await f.post({ action: "remove-mapping", revision, upAccountId: upId }))
         .statusCode,
     ).toBe(409);
     expect(f.config.mappings).toHaveLength(1);

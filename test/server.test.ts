@@ -42,8 +42,8 @@ async function fixture() {
     up: { connections: [{ id: "max", tokenEnv: "UP_TOKEN" }] },
     mappings: [
       {
-        alias: "spending",
         actualAccountId: "actual-id",
+        alias: "spending",
         upAccountId: "11111111-1111-4111-8111-111111111111",
         connections: ["max"],
       },
@@ -98,7 +98,7 @@ async function fixture() {
   });
   expect(login.statusCode).toBe(303);
   headers.cookie = String(login.headers["set-cookie"]).split(";")[0]!;
-  return { server, runner, engine, actual, config, client };
+  return { actual, client, config, engine, runner, server };
 }
 
 const headers = {
@@ -117,11 +117,11 @@ describe("operator app", () => {
       (
         await server.inject({
           method: "POST",
-          url: "/actions/sync",
           payload: "mode=live",
+          url: "/actions/sync",
           headers: {
-            origin: headers.origin,
             "content-type": headers["content-type"],
+            origin: headers.origin,
           },
         })
       ).statusCode,
@@ -129,8 +129,8 @@ describe("operator app", () => {
     expect(runner.depth).toBe(0);
     expect((await server.inject("/livez")).statusCode).toBe(200);
     const page = await server.inject({
-      url: "/",
       headers,
+      url: "/",
     });
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain("Automatic Sync On");
@@ -155,21 +155,21 @@ describe("operator app", () => {
       ).statusCode,
     ).toBe(403);
     const rejected = await server.inject({
-      method: "POST",
-      url: "/login",
       headers,
+      method: "POST",
       payload: "username=operator&password=wrong",
+      url: "/login",
     });
     expect(rejected.statusCode).toBe(401);
     expect(rejected.headers["set-cookie"]).toBeUndefined();
     const logout = await server.inject({
-      method: "POST",
-      url: "/logout",
       headers,
+      method: "POST",
       payload: "",
+      url: "/logout",
     });
     expect(logout.headers["set-cookie"]).toContain("Max-Age=0");
-    const expired = await server.inject({ url: "/runs", headers });
+    const expired = await server.inject({ headers, url: "/runs" });
     expect(expired.statusCode).toBe(200);
     expect(expired.headers["hx-redirect"]).toBe("/login");
     expect(
@@ -182,10 +182,10 @@ describe("operator app", () => {
     const { server, runner } = await fixture();
     const version = statusVersion(runner);
     const url = `/runs?version=${encodeURIComponent(version)}`;
-    expect((await server.inject({ url, headers })).statusCode).toBe(204);
+    expect((await server.inject({ headers, url })).statusCode).toBe(204);
     runner.enqueue("schedule", "schedule", async () => report);
     await runner.drain();
-    const response = await server.inject({ url, headers });
+    const response = await server.inject({ headers, url });
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("Scheduled Sync");
     expect(response.body).toContain("imported");
@@ -198,9 +198,9 @@ describe("operator app", () => {
         (
           await server.inject({
             method: "POST",
+            payload: "mode=live",
             url: "/actions/sync",
             headers: { ...headers, origin },
-            payload: "mode=live",
           })
         ).statusCode,
       ).toBe(403);
@@ -212,10 +212,10 @@ describe("operator app", () => {
       expect(
         (
           await server.inject({
-            method: "POST",
-            url: "/actions/sync",
             headers,
+            method: "POST",
             payload,
+            url: "/actions/sync",
           })
         ).statusCode,
       ).toBe(400);
@@ -235,17 +235,17 @@ describe("operator app", () => {
   it("queues dry runs with account selection and backfill, refreshing Actual first", async () => {
     const { server, runner, engine, actual } = await fixture();
     const response = await server.inject({
-      method: "POST",
-      url: "/actions/sync",
       headers,
+      method: "POST",
       payload: "mode=dry-run&account=spending&since=2025-01-01",
+      url: "/actions/sync",
     });
     expect(response.statusCode).toBe(200);
     await runner.drain();
     expect(engine.reconcile).toHaveBeenCalledWith({
       dryRun: true,
-      mappingAliases: ["spending"],
       since: "2025-01-01",
+      mappingAliases: ["spending"],
     });
     expect(actual.sync.mock.invocationCallOrder[0]).toBeLessThan(
       engine.reconcile.mock.invocationCallOrder[0]!,
@@ -258,9 +258,9 @@ describe("operator app", () => {
     config.up.connections.push({ id: "partner", tokenEnv: "UP_PARTNER" });
     config.mappings[0]!.connections.push("partner");
     config.mappings.push({
+      actualAccountId: "savings",
       alias: "savings",
       upAccountId: "22222222-2222-4222-8222-222222222222",
-      actualAccountId: "savings",
       connections: ["partner"],
     });
     for (const [connection, aliases] of [
@@ -268,10 +268,10 @@ describe("operator app", () => {
       ["partner", ["spending", "savings"]],
     ] as const) {
       await server.inject({
-        method: "POST",
-        url: "/actions/sync",
         headers,
+        method: "POST",
         payload: `mode=live&connection=${connection}`,
+        url: "/actions/sync",
       });
       await runner.drain();
       expect(engine.reconcile).toHaveBeenLastCalledWith({
@@ -287,10 +287,10 @@ describe("operator app", () => {
       expect(
         (
           await server.inject({
-            method: "POST",
-            url: "/actions/sync",
             headers,
+            method: "POST",
             payload: `mode=live&${scope}`,
+            url: "/actions/sync",
           })
         ).statusCode,
       ).toBe(400);
@@ -300,10 +300,10 @@ describe("operator app", () => {
     const { server, runner, actual, client, engine } = await fixture();
     for (const payload of ["target=actual", "target=up&connection=max"]) {
       const queued = await server.inject({
-        method: "POST",
-        url: "/actions/test",
         headers,
+        method: "POST",
         payload,
+        url: "/actions/test",
       });
       expect(queued.statusCode).toBe(200);
       await runner.drain();
@@ -313,31 +313,31 @@ describe("operator app", () => {
     expect(engine.reconcile).not.toHaveBeenCalled();
     expect(actual.sync).not.toHaveBeenCalled();
     const result = await server.inject({
-      url: "/connection-tests/up-max",
       headers,
+      url: "/connection-tests/up-max",
     });
     expect(result.body).toContain("Connection Working");
     client.ping.mockRejectedValueOnce(new Error("sensitive-token"));
     await server.inject({
-      method: "POST",
-      url: "/actions/test",
       headers,
+      method: "POST",
       payload: "target=up&connection=max",
+      url: "/actions/test",
     });
     await runner.drain();
     const failed = await server.inject({
-      url: "/connection-tests/up-max",
       headers,
+      url: "/connection-tests/up-max",
     });
     expect(failed.body).toContain("Connection Failed");
     expect(failed.body).not.toContain("sensitive-token");
     expect(
       (
         await server.inject({
-          method: "POST",
-          url: "/actions/test",
           headers,
+          method: "POST",
           payload: "target=up&connection=missing",
+          url: "/actions/test",
         })
       ).statusCode,
     ).toBe(400);
@@ -346,13 +346,13 @@ describe("operator app", () => {
   it("keeps discovery balances out of results and escapes upstream names", async () => {
     const { server, runner } = await fixture();
     await server.inject({
-      method: "POST",
-      url: "/actions/discover",
       headers,
+      method: "POST",
       payload: "",
+      url: "/actions/discover",
     });
     await runner.drain();
-    const response = await server.inject({ url: "/runs", headers });
+    const response = await server.inject({ headers, url: "/runs" });
     expect(response.body).not.toContain("sensitive-balance");
     expect(response.body).not.toContain("<script>alert");
     expect(response.body).toContain("&lt;script&gt;");

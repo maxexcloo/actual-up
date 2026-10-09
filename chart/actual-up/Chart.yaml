@@ -1,6 +1,6 @@
-apiVersion: v2
 name: actual-up
+apiVersion: v2
+appVersion: "0.2.5"
 description: Up to Actual Budget synchronisation with a private operator app.
 type: application
 version: 0.2.5
-appVersion: "0.2.5"
