@@ -1,7 +1,7 @@
 [tools]
 helm = "4.3.0"
 node = "26.11.1"
-pnpm = "12.10.1"
+pnpm = "12.11.2"
 
 [tasks.check]
 run = "pnpm run check"
