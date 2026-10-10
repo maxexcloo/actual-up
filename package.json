@@ -3,7 +3,7 @@
   "exports": "./dist/index.js",
   "license": "AGPL-3.0-only",
   "name": "actual-up",
-  "packageManager": "pnpm@12.10.1",
+  "packageManager": "pnpm@12.11.2",
   "type": "module",
   "version": "0.2.5",
   "bin": {
@@ -22,10 +22,10 @@
   },
   "devDependencies": {
     "@tailwindcss/cli": "4.3.3",
-    "@types/node": "26.6.4",
+    "@types/node": "26.6.5",
     "daisyui": "5.7.47",
     "oxlint": "1.87.0",
-    "prettier": "3.9.9",
+    "prettier": "3.9.10",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
