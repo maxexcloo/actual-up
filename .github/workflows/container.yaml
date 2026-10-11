@@ -31,7 +31,7 @@ jobs:
       - name: Set Up Tools
         uses: jdx/mise-action@v5
         with:
-          version: 2026.10.5
+          version: 2026.10.7
       - name: Install Dependencies
         run: mise run setup
       - name: Run Checks
