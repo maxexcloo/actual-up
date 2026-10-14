@@ -3,11 +3,7 @@ helm = "4.3.0"
 node = "26.11.1"
 updatecli = "0.122.1"
 
-[tasks.check]
-run = """
-updatecli manifest validate --config .updatecli.d --disable-templating --strict
-npm run check
-"""
+# Dependency Updates
 
 [tasks."dependencies:check"]
 description = "Preview Local Dependency Updates"
@@ -30,8 +26,18 @@ fi
 updatecli pipeline apply --config .updatecli.d --disable-changelog --disable-udash-report --unique-tmp-dir "$@"
 """
 
+# Development
+
+[tasks.check]
+run = """
+updatecli manifest validate --config .updatecli.d --disable-templating --strict
+npm run check
+"""
+
 [tasks.fmt]
 run = "npm run format"
+
+# Setup
 
 [tasks.setup]
 run = "npm ci"

@@ -5,10 +5,11 @@ autodiscovery:
   crawlers:
     github/action:
       digest: false
+      rootdir: .github
       credentials:
         github.com:
-          token: '{{ env "GITHUB_TOKEN" }}'
           kind: github
+          token: '{{ env "GITHUB_TOKEN" }}'
       ignore:
         - actions:
             aquasecurity/trivy-action: ""
@@ -16,8 +17,25 @@ autodiscovery:
         kind: regex/semver
         pattern: "*"
         regex: ^v?([0-9]+)$
+labels:
+  group: actions
+---
+name: Update Versioned Actions
+pipelineid: update-versioned-actions
+autodiscovery:
+  crawlers:
+    github/action:
+      digest: false
       rootdir: .github
-      age:
-        minimum: 1d
+      credentials:
+        github.com:
+          kind: github
+          token: '{{ env "GITHUB_TOKEN" }}'
+      only:
+        - actions:
+            aquasecurity/trivy-action: ""
+      versionfilter:
+        kind: semver
+        pattern: "*"
 labels:
   group: actions
