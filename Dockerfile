@@ -1,10 +1,9 @@
 FROM node:26.11.1-bookworm-slim AS build
 
 WORKDIR /workspace
-RUN npm install --global pnpm@12.10.1
-
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN npm install --global "$(node --print 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).packageManager')" \
+    && pnpm install --frozen-lockfile
 
 COPY assets ./assets
 COPY src ./src
