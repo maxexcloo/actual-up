@@ -33,7 +33,7 @@ Set `ACTUAL_UP_USERNAME`, `ACTUAL_UP_PASSWORD` and a random
 them with 1Password CLI. Then run:
 
 ```sh
-mise exec -- pnpm dev --config ./config.local.yaml
+mise exec -- npm run dev -- --config ./config.local.yaml
 ```
 
 Open `http://localhost:3000` and use the app credentials. Open **Connections**,
@@ -86,3 +86,21 @@ helm template test chart/actual-up --set existingConfigMap=test
 ```
 
 The repository is licensed under AGPL-3.0-only.
+
+## Dependency Updates
+
+Mise installs the pinned Node.js runtime with npm and the Updatecli CLI. Run `mise run dependencies:check` locally
+to preview updates from `.updatecli.d/`. GitHub authentication uses the existing
+`gh` login; credentials stay in the command process.
+
+Accept releases only after they are at least one day old. Review compatibility
+and major upgrades separately, then apply a selected group:
+
+```sh
+mise run dependencies:update --labels group:tools
+```
+
+Use the groups declared in the policy, review the Git diff and run the project
+checks before committing or deploying. Updatecli changes local files; it does
+not create issues, pull requests, commits or deployments. The npm crawler refreshes
+`package-lock.json` when dependencies change. Hosted Renovate is disabled.

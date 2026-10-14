@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://www.updatecli.io/schema/latest/policy/manifest/config.json
+name: Update Development Tools
+pipelineid: update-development-tools
+labels:
+  group: tools
+sources:
+  helm:
+    kind: shell
+    spec:
+      command: mise latest helm
+  node:
+    kind: shell
+    spec:
+      command: mise latest node
+  updatecli:
+    kind: shell
+    spec:
+      command: mise latest updatecli
+targets:
+  helm:
+    kind: file
+    sourceid: helm
+    spec:
+      file: .mise.toml
+      matchpattern: (?m)^(helm = ")[^"]+(")$
+      replacepattern: ${1}{{ source "helm" }}${2}
+  node:
+    kind: file
+    sourceid: node
+    spec:
+      file: .mise.toml
+      matchpattern: (?m)^(node = ")[^"]+(")$
+      replacepattern: ${1}{{ source "node" }}${2}
+  updatecli:
+    kind: file
+    sourceid: updatecli
+    spec:
+      file: .mise.toml
+      matchpattern: (?m)^(updatecli = ")[^"]+(")$
+      replacepattern: ${1}{{ source "updatecli" }}${2}
