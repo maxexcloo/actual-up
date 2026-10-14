@@ -33,7 +33,7 @@ Set `ACTUAL_UP_USERNAME`, `ACTUAL_UP_PASSWORD` and a random
 them with 1Password CLI. Then run:
 
 ```sh
-mise exec -- npm run dev -- --config ./config.local.yaml
+mise run dev -- --config ./config.local.yaml
 ```
 
 Open `http://localhost:3000` and use the app credentials. Open **Connections**,

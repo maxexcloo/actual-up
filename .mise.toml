@@ -3,9 +3,9 @@
 # helm = "latest"
 # node = "latest"
 # updatecli = "latest"
-helm = "4.3.0"
-node = "26.11.1"
-updatecli = "0.122.1"
+
+[env]
+_.path = ["node_modules/.bin"]
 
 # Dependency Updates
 [tasks."dependencies:check"]
@@ -30,11 +30,30 @@ updatecli pipeline apply --config .updatecli.d --disable-changelog --disable-uda
 """
 
 # Development
+[tasks.build]
+run = """
+tsc -p tsconfig.build.json
+tailwindcss -i assets/style.css -o dist/style.css --minify
+"""
+
 [tasks.check]
-run = "npm run check"
+run = """
+updatecli manifest validate --config .updatecli.d --disable-templating --strict
+prettier --check .
+oxlint --deny-warnings src test
+tsc --noEmit
+vitest run
+"""
+
+[tasks.dev]
+depends = ["build"]
+run = "node dist/cli.js serve"
 
 [tasks.fmt]
-run = "npm run format"
+run = "prettier --write ."
+
+[tasks.test]
+run = "vitest run"
 
 # Setup
 [tasks.setup]
