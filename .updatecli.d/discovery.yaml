@@ -5,6 +5,7 @@ autodiscovery:
   crawlers:
     dockerfile: {}
     npm:
-      ignoreversionconstraints: true
+      age:
+        minimum: 1d
 labels:
   group: standard

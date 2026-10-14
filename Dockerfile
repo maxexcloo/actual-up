@@ -1,5 +1,9 @@
+# Separate tag arguments keep native dependency discovery from mixing image variants.
+ARG NODE_BUILD_TAG=26.11.1-bookworm
+ARG NODE_RUNTIME_TAG=26.11.1-bookworm-slim
+
 # The full build image supplies Python and a compiler for SQLite native bindings.
-FROM node:26.11.1-bookworm AS build
+FROM node:${NODE_BUILD_TAG} AS build
 
 WORKDIR /workspace
 COPY package.json package-lock.json ./
@@ -10,7 +14,7 @@ COPY src ./src
 COPY tsconfig.build.json tsconfig.json ./
 RUN npm run build && npm prune --omit=dev
 
-FROM node:26.11.1-bookworm-slim AS runtime
+FROM node:${NODE_RUNTIME_TAG} AS runtime
 
 ENV ACTUAL_UP_CONFIG=/config/config.yaml
 ENV NODE_ENV=production

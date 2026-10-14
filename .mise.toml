@@ -1,10 +1,13 @@
 [tools]
+# gh = "latest"
+# helm = "latest"
+# node = "latest"
+# updatecli = "latest"
 helm = "4.3.0"
 node = "26.11.1"
 updatecli = "0.122.1"
 
 # Dependency Updates
-
 [tasks."dependencies:check"]
 description = "Preview Local Dependency Updates"
 run = """
@@ -27,17 +30,12 @@ updatecli pipeline apply --config .updatecli.d --disable-changelog --disable-uda
 """
 
 # Development
-
 [tasks.check]
-run = """
-updatecli manifest validate --config .updatecli.d --disable-templating --strict
-npm run check
-"""
+run = "npm run check"
 
 [tasks.fmt]
 run = "npm run format"
 
 # Setup
-
 [tasks.setup]
 run = "npm ci"

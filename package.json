@@ -44,12 +44,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && npm run build:css",
     "build:css": "tailwindcss -i assets/style.css -o dist/style.css --minify",
-    "check": "npm run format:check && npm run lint && npm run build && npm run test",
+    "check": "updatecli manifest validate --config .updatecli.d --disable-templating --strict && npm run format:check && npm run lint && npm run typecheck && npm test",
     "dev": "npm run build && node dist/cli.js serve",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "oxlint --deny-warnings src test",
     "start": "node dist/cli.js serve",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   }
 }
