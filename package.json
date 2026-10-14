@@ -3,9 +3,13 @@
   "exports": "./dist/index.js",
   "license": "AGPL-3.0-only",
   "name": "actual-up",
-  "packageManager": "pnpm@12.11.2",
   "type": "module",
   "version": "0.2.5",
+  "allowScripts": {
+    "@parcel/watcher": false,
+    "better-sqlite3": true,
+    "esbuild": true
+  },
   "bin": {
     "actual-up": "dist/cli.js"
   },
@@ -38,10 +42,10 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && pnpm run build:css",
+    "build": "tsc -p tsconfig.build.json && npm run build:css",
     "build:css": "tailwindcss -i assets/style.css -o dist/style.css --minify",
-    "check": "pnpm run format:check && pnpm run lint && pnpm run build && pnpm run test",
-    "dev": "pnpm run build && node dist/cli.js serve",
+    "check": "npm run format:check && npm run lint && npm run build && npm run test",
+    "dev": "npm run build && node dist/cli.js serve",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "oxlint --deny-warnings src test",

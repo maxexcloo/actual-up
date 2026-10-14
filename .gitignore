@@ -1,6 +1,5 @@
 .actual-cache/
 .actual-up/
-.pnpm-store/
 coverage/
 dist/
 node_modules/
