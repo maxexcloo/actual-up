@@ -86,21 +86,3 @@ helm template test chart/actual-up --set existingConfigMap=test
 ```
 
 The repository is licensed under AGPL-3.0-only.
-
-## Dependency Updates
-
-Mise installs the pinned Node.js runtime with npm and the Updatecli CLI. Run `mise run dependencies:check` locally
-to preview updates from `.updatecli.d/`. GitHub authentication uses the existing
-`gh` login; credentials stay in the command process.
-
-Accept releases only after they are at least one day old. Review compatibility
-and major upgrades separately, then apply a selected group:
-
-```sh
-mise run dependencies:update --labels group:tools
-```
-
-Use the groups declared in the policy, review the Git diff and run the project
-checks before committing or deploying. Updatecli changes local files; it does
-not create issues, pull requests, commits or deployments. The npm crawler refreshes
-`package-lock.json` when dependencies change. Hosted Renovate is disabled.

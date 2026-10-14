@@ -8,10 +8,5 @@ autodiscovery:
       ignoreversionconstraints: true
       age:
         minimum: 1d
-      versionfilter:
-        kind: semver
-        pattern: "*"
-      only:
-        - path: package.json
 labels:
   group: standard

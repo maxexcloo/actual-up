@@ -9,14 +9,9 @@ autodiscovery:
         github.com:
           token: '{{ env "GITHUB_TOKEN" }}'
           kind: github
-      only:
+      ignore:
         - actions:
-            actions/checkout: ""
-            docker/build-push-action: ""
-            docker/login-action: ""
-            docker/metadata-action: ""
-            docker/setup-buildx-action: ""
-            jdx/mise-action: ""
+            aquasecurity/trivy-action: ""
       versionfilter:
         kind: regex/semver
         pattern: "*"
