@@ -9,10 +9,7 @@ _.path = ["node_modules/.bin"]
 
 # Development
 [tasks.build]
-run = """
-tsc -p tsconfig.build.json
-tailwindcss -i assets/style.css -o dist/style.css --minify
-"""
+run = "npm run build"
 
 [tasks.check]
 depends = ["build"]
