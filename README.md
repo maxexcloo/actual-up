@@ -51,11 +51,10 @@ Use one replica with `Recreate`; only the Actual cache is rebuildable.
 Expose the app through private HTTPS. Use the normal sign-in page. The app login and settings encryption key come
 from environment variables; upstream credentials are managed in the browser.
 
-The GitHub Container workflow tests, builds and scans the image before publishing
+The GitHub Container workflow builds, smoke-tests and scans the image before publishing
 to `ghcr.io/maxexcloo/actual-up`. Pushes to `main` publish `latest` and
 `sha-<full-commit>`. Version tags such as `v0.1.0` publish `0.1.0` and `0.1`;
-the Git tag must match `package.json`. Pull requests build and scan without
-publishing. Images include OCI labels, provenance and an SBOM. Kubelab owns
+Pull requests provide source review without rebuilding images. Images include OCI labels, provenance and an SBOM. Kubelab owns
 its deployment using `bjw-s/app-template`, private routing and External Secrets.
 Its `Actual Up` 1Password item holds the app login and settings encryption key.
 Pin the published image tag and digest in kubelab before enabling the release.
