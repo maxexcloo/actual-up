@@ -52,7 +52,7 @@ Expose the app through private HTTPS. Use the normal sign-in page. The app login
 from environment variables; upstream credentials are managed in the browser.
 
 The GitHub Container workflow builds, smoke-tests and scans the image before publishing
-to `ghcr.io/maxexcloo/actual-up`. Pushes to `main` publish `latest` and
+to `ghcr.io/maxexcloo/actual-up`. Runtime or build-input changes on `main` publish `latest` and
 `sha-<full-commit>`. Version tags such as `v0.1.0` publish `0.1.0` and `0.1`;
 Pull requests test and verify the image without publishing. Images include OCI labels, provenance and an SBOM. Kubelab owns
 its deployment using `bjw-s/app-template`, private routing and External Secrets.

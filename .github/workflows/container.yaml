@@ -23,11 +23,26 @@ jobs:
   check:
     name: Check
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.changes.outputs.image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - id: changes
+        name: Identify Image Inputs
+        env:
+          BASE_REVISION: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          image=true
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && [ "$GITHUB_REF_TYPE" != tag ] && [ -n "$BASE_REVISION" ] && [ "$BASE_REVISION" != 0000000000000000000000000000000000000000 ]; then
+            if git diff --quiet "$BASE_REVISION" HEAD -- . ':!AGENTS.md' ':!LICENSE' ':!README.md' ':!docs/**' ':!.gitignore' ':!.mise.toml' ':!.updatecli.d/**'; then
+              image=false
+            fi
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
       - name: Set Up Node
         uses: actions/setup-node@v6
         with:
@@ -42,6 +57,7 @@ jobs:
 
   image:
     name: Image
+    if: needs.check.outputs.image == 'true'
     needs: check
     runs-on: ubuntu-latest
     permissions:
