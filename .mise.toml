@@ -15,6 +15,7 @@ tailwindcss -i assets/style.css -o dist/style.css --minify
 """
 
 [tasks.check]
+depends = ["build"]
 run = """
 updatecli manifest validate --config .updatecli.d --disable-templating --strict
 prettier --check .
