@@ -86,27 +86,6 @@ jobs:
             type=sha,format=long,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-      - name: Build Image for Verification
-        uses: docker/build-push-action@v7
-        with:
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,ignore-error=true
-          context: .
-          labels: ${{ steps.metadata.outputs.labels }}
-          load: true
-          platforms: linux/amd64
-          tags: actual-up:test
-      - name: Smoke-Test Runtime
-        run: |
-          docker run --cap-drop=ALL --read-only --rm \
-            --security-opt=no-new-privileges actual-up:test node dist/cli.js --help
-      - name: Scan Image
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          exit-code: "1"
-          ignore-unfixed: true
-          image-ref: actual-up:test
-          severity: CRITICAL,HIGH
       - name: Log In to GHCR
         if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v4
@@ -114,22 +93,61 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
           registry: ghcr.io
           username: ${{ github.actor }}
-      - id: publish
-        name: Publish Verified Image
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+      - id: build
+        name: Build Image For Verification
         uses: docker/build-push-action@v7
         with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max,ignore-error=true
           context: .
           labels: ${{ steps.metadata.outputs.labels }}
+          load: ${{ !(github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) }}
           platforms: linux/amd64
-          provenance: mode=max
-          push: true
-          sbom: true
-          tags: ${{ steps.metadata.outputs.tags }}
+          provenance: ${{ (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) && 'mode=max' || 'false' }}
+          push: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
+          sbom: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
+          tags: ${{ (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) && format('{0}:candidate-{1}-{2}', env.IMAGE_NAME, github.run_id, github.run_attempt) || 'actual-up:test' }}
+      - id: verification
+        name: Select Verification Image
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          PUBLISH_IMAGE: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
+        run: |
+          image=actual-up:test
+          if [ "$PUBLISH_IMAGE" = true ]; then
+            image="$IMAGE_NAME@$IMAGE_DIGEST"
+            docker pull "$image"
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+      - name: Smoke-Test Runtime
+        env:
+          IMAGE_REFERENCE: ${{ steps.verification.outputs.image }}
+        run: |
+          docker run --cap-drop=ALL --read-only --rm \
+            --security-opt=no-new-privileges "$IMAGE_REFERENCE" node dist/cli.js --help
+      - name: Scan Image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          exit-code: "1"
+          ignore-unfixed: true
+          image-ref: ${{ steps.verification.outputs.image }}
+          severity: CRITICAL,HIGH
+      - id: publish
+        name: Promote Verified Image
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_TAGS: ${{ steps.metadata.outputs.tags }}
+        run: |
+          set --
+          while IFS= read -r tag; do
+            if [ -n "$tag" ]; then set -- "$@" --tag "$tag"; fi
+          done <<< "$IMAGE_TAGS"
+          docker buildx imagetools create --prefer-index=false "$@" "$IMAGE_NAME@$IMAGE_DIGEST"
       - name: Summarise Image
         if: steps.publish.outcome == 'success'
         env:
-          IMAGE_DIGEST: ${{ steps.publish.outputs.digest }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
           IMAGE_TAGS: ${{ steps.metadata.outputs.tags }}
         run: |
           {
