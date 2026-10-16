@@ -45,8 +45,15 @@ export function settingsPage(
 ): string {
   const revision = settingsVersion(config);
   const actualCredentials = getActualCredentials(config);
-  const form = (action: string, content: string, confirmation?: string) =>
-    `<form id="settings-${e(action)}-${content.match(/name="id" value="([^"]+)"/)?.[1] ?? "global"}" method="post" action="/settings" hx-post="/settings" hx-target="#setup" hx-select="#setup" hx-swap="outerHTML"${confirmation ? ` hx-confirm="${e(confirmation)}"` : ""}>${hidden("revision", revision)}${hidden("action", action)}<fieldset class="wa-stack" ${busy ? "disabled" : ""}>${content}</fieldset></form>`;
+  const form = (
+    action: string,
+    content: string,
+    {
+      confirmation,
+      id = "global",
+    }: { confirmation?: string; id?: string } = {},
+  ) =>
+    `<form id="settings-${e(action)}-${e(id)}" method="post" action="/settings" hx-post="/settings" hx-target="#setup" hx-select="#setup" hx-swap="outerHTML"${confirmation ? ` hx-confirm="${e(confirmation)}"` : ""}>${hidden("revision", revision)}${hidden("action", action)}<fieldset class="wa-stack" ${busy ? "disabled" : ""}>${content}</fieldset></form>`;
   const testConnection = (connection?: string) => {
     if (!connection && !actualCredentials) return "";
     const target = connection ? `up-${connection}` : "actual";
@@ -84,7 +91,7 @@ export function settingsPage(
             name: mapping.alias,
           });
       const unavailable = discovery?.unavailable.includes(connection.id);
-      return `<section class="${card}" data-connection="${e(connection.id)}"><div class="wa-split"><div class="section-intro"><h2>${e(name(connection.id))}</h2><p class="hint">Up · ${accounts.size} ${accounts.size === 1 ? "Account" : "Accounts"}</p></div><div class="wa-cluster section-actions"><wa-badge variant="${unavailable ? "warning" : discovery ? "success" : "neutral"}">${unavailable ? "Needs Attention" : discovery ? "Connected" : "Not Checked"}</wa-badge>${testConnection(connection.id)}${sync("Sync All", { connection: connection.id })}</div></div>${connectionTestStatus(`up-${connection.id}`)}<div id="connection-${e(connection.id)}" class="wa-stack">${form("connection", `${hidden("id", connection.id)}<label><span>Replace API Key</span><input type="password" name="token" autocomplete="new-password" maxlength="8192" required></label><button>Save Key</button>`)}${!mapped.length ? form("remove-connection", `${hidden("id", connection.id)}<button class="wa-danger">Remove Connection</button>`, "Remove this connection and its saved API key?") : '<p class="hint">Disconnect its accounts before removing this connection.</p>'}</div>${[...accounts.values()].map((account) => accountRow(account, connection.id)).join("") || '<p class="hint">Accounts will appear here after discovery.</p>'}</section>`;
+      return `<section class="${card}" data-connection="${e(connection.id)}"><div class="wa-split"><div class="section-intro"><h2>${e(name(connection.id))}</h2><p class="hint">Up · ${accounts.size} ${accounts.size === 1 ? "Account" : "Accounts"}</p></div><div class="wa-cluster section-actions"><wa-badge variant="${unavailable ? "warning" : discovery ? "success" : "neutral"}">${unavailable ? "Needs Attention" : discovery ? "Connected" : "Not Checked"}</wa-badge>${testConnection(connection.id)}${sync("Sync All", { connection: connection.id })}</div></div>${connectionTestStatus(`up-${connection.id}`)}<div id="connection-${e(connection.id)}" class="wa-stack">${form("connection", `${hidden("id", connection.id)}<label><span>Replace API Key</span><input type="password" name="token" autocomplete="new-password" maxlength="8192" required></label><button>Save Key</button>`, { id: connection.id })}${!mapped.length ? form("remove-connection", `${hidden("id", connection.id)}<button class="wa-danger">Remove Connection</button>`, { confirmation: "Remove this connection and its saved API key?", id: connection.id }) : '<p class="hint">Disconnect its accounts before removing this connection.</p>'}</div>${[...accounts.values()].map((account) => accountRow(account, connection.id)).join("") || '<p class="hint">Accounts will appear here after discovery.</p>'}</section>`;
     })
     .join("");
   return `<!doctype html><html lang="en-AU"><head>${pageHead}<script src="/assets/htmx.js" defer></script><title>Actual Up</title></head><body hx-history="false"><header class="wa-split"><div class="app-title"><a href="/">Actual Up</a>${themeControl}</div><div class="wa-cluster"><form method="post" action="/logout"><button class="wa-plain">Sign Out</button></form></div></header><main id="setup" class="wa-stack" ${busy ? ' hx-get="/?pending=1" hx-trigger="every 2s" hx-select="#setup" hx-swap="outerHTML"' : ""}>
@@ -120,6 +127,7 @@ export function accountSettingsRow(
   account: Discovery["up"][number],
   update?: AccountUpdate,
   viewConnection = account.connections[0] ?? "",
+  outOfBand = false,
 ): string {
   const mapping = config.mappings.find(
     ({ upAccountId }) => upAccountId === account.id,
@@ -147,7 +155,7 @@ export function accountSettingsRow(
   `,
         )
       : '<p class="hint">Connect to Actual or refresh the connection to choose an account.</p>';
-  return `<div class="account-row wa-stack" id="account-${e(viewConnection)}-${e(account.id)}" data-account="${e(account.id)}"${update?.pending ? ` hx-get="/accounts/${encodeURIComponent(account.id)}?connection=${encodeURIComponent(viewConnection)}" hx-trigger="every 1s" hx-swap="outerHTML"` : ""}>
+  return `<div${outOfBand ? ' hx-swap-oob="outerHTML"' : ""} class="account-row wa-stack" id="account-${e(viewConnection)}-${e(account.id)}" data-account="${e(account.id)}"${update?.pending ? ` hx-get="/accounts/${encodeURIComponent(account.id)}?connection=${encodeURIComponent(viewConnection)}" hx-trigger="every 1s" hx-swap="outerHTML"` : ""}>
     <div class="wa-split"><div class="section-intro"><div class="wa-cluster"><h3>${e(mapping?.alias ?? account.name)}</h3>${connections.length > 1 ? '<wa-badge variant="neutral">Shared</wa-badge>' : ""}</div>${mapping ? `<p class="hint">→ ${e(destination ?? "Actual Budget")}</p>` : ""}</div>
     ${mapping ? `<form method="post" action="/actions/sync" hx-post="/actions/sync" hx-target="#feedback" hx-disabled-elt="find button">${hidden("account", mapping.alias)}${hidden("mode", "live")}<button class="wa-plain" aria-label="Sync ${e(mapping.alias)}"><span class="action-label">Sync</span><span class="action-progress">Queuing…</span></button></form>` : ""}</div>
     ${mapping ? `<div id="edit-${e(viewConnection)}-${e(account.id)}" class="wa-stack" aria-label="Manage ${e(mapping.alias)}">${editor}<div class="wa-split"><form id="backfill-${e(viewConnection)}-${e(account.id)}" class="wa-cluster" method="post" action="/actions/sync" hx-post="/actions/sync" hx-target="#feedback" hx-disabled-elt="find button">${hidden("account", mapping.alias)}<label><span>From Date</span><input type="date" name="since" value="1970-01-01" required></label><button class="wa-plain" name="mode" value="dry-run">Preview</button><button name="mode" value="live">Backfill</button><p class="hint">Preview or import from this date. Regular Sync checks the last ${config.schedule.lookbackDays} days.</p></form>${form("remove-mapping", '<button class="wa-danger">Disconnect</button>', "Stop syncing this account? Existing Actual transactions will remain.")}</div></div>` : `<div class="wa-stack">${editor}</div>`}

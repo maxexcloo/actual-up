@@ -133,9 +133,7 @@ export function registerSettings(
             account,
             update,
             connection,
-          ).replace(
-            '<div class="account-row',
-            '<div hx-swap-oob="outerHTML" class="account-row',
+            true,
           ),
         )
         .join("")

@@ -228,6 +228,20 @@ describe("browser setup", () => {
       token: "another-secret",
     });
     await f.post({ ...f.mapping, connections: ["max", "partner"] });
+    const page = await f.server.inject({ method: "GET", url: "/" });
+    expect(page.body).toContain('id="settings-connection-max"');
+    expect(page.body).toContain('id="settings-connection-partner"');
+    expect(page.body).toContain('id="settings-connection-global"');
+    const rows = await f.server.inject({
+      method: "GET",
+      url: `/accounts/${upId}?connection=max`,
+    });
+    expect(rows.body).toContain(
+      `<div class="account-row wa-stack" id="account-max-${upId}"`,
+    );
+    expect(rows.body).toContain(
+      `<div hx-swap-oob="outerHTML" class="account-row wa-stack" id="account-partner-${upId}"`,
+    );
     f.clients.set("max", {
       listAccounts: vi.fn().mockRejectedValue(new Error("unavailable")),
     } as unknown as UpClientLike);
