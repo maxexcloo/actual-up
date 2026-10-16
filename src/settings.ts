@@ -3,6 +3,7 @@ import type { Server, IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "pino";
 import { z } from "zod";
 import { environmentValue, parseConfig, type AppConfig } from "./config.js";
+import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import type { JobRunner } from "./job-runner.js";
 import { assertActualCompatibility, type Runtime } from "./runtime.js";
 import {
@@ -160,10 +161,7 @@ export function registerSettings(
     let actualUnavailable = false;
     try {
       await runtime.actual.sync();
-      actual = (await runtime.actual.getAccounts()).map(({ id, name }) => ({
-        id,
-        name,
-      }));
+      actual = await discoverActualAccounts(runtime.actual);
     } catch {
       actualUnavailable = true;
     }
@@ -171,10 +169,10 @@ export function registerSettings(
     const unavailable: string[] = [];
     for (const [connection, client] of runtime.clients) {
       try {
-        for (const { id, attributes } of await client.listAccounts()) {
+        for (const { id, name } of await discoverUpAccounts(client)) {
           const account = accounts.get(id) ?? {
             id,
-            name: attributes.displayName,
+            name,
             connections: [],
           };
           account.connections.push(connection);

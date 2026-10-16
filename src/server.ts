@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { LoginAttempts } from "./auth.js";
 import { environmentValue, type AppConfig } from "./config.js";
+import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import type { JobRunner } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
 import { assertActualCompatibility, type Runtime } from "./runtime.js";
@@ -473,18 +474,12 @@ export async function createServer(
         operation = async () => {
           const up = [];
           for (const [connection, client] of runtime.clients) {
-            const accounts = await client.listAccounts();
             up.push({
               connection,
-              accounts: accounts.map(({ id, attributes }) => ({
-                id,
-                name: attributes.displayName,
-              })),
+              accounts: await discoverUpAccounts(client),
             });
           }
-          const accounts = (await runtime.actual.getAccounts()).map(
-            ({ id, name }) => ({ id, name }),
-          );
+          const accounts = await discoverActualAccounts(runtime.actual);
           const categories = (await runtime.actual.getCategories()).map(
             ({ id, name }) => ({ id, name }),
           );
