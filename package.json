@@ -15,9 +15,10 @@
   },
   "dependencies": {
     "@actual-app/api": "26.10.0",
+    "@awesome.me/webawesome": "3.14.0",
     "commander": "15.0.0",
     "croner": "10.0.1",
-    "fastify": "5.12.5",
+    "fastify": "5.12.7",
     "htmx.org": "2.0.11",
     "pino": "10.4.0",
     "prom-client": "15.1.3",
@@ -25,12 +26,9 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "4.3.3",
     "@types/node": "26.6.5",
-    "daisyui": "5.7.48",
+    "esbuild": "0.28.2",
     "oxlint": "1.87.0",
-    "prettier": "3.9.10",
-    "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
     "vitest": "5.0.4"
   },
@@ -41,8 +39,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && npm run build:css",
-    "build:css": "tailwindcss -i assets/style.css -o dist/style.css --minify",
+    "build": "tsc -p tsconfig.build.json && npm run build:ui",
+    "build:ui": "node assets/build.mjs",
     "start": "node dist/cli.js serve"
   }
 }

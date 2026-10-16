@@ -1,9 +1,3 @@
-[tools]
-# gh = "latest"
-# helm = "latest"
-# node = "latest"
-# updatecli = "latest"
-
 [env]
 _.path = ["node_modules/.bin"]
 
@@ -12,13 +6,17 @@ _.path = ["node_modules/.bin"]
 run = "npm run build"
 
 [tasks.check]
-depends = ["build"]
+depends = ["build", "check:actions", "check:chart", "check:prettier", "check:updates"]
+run = [
+  "oxlint --deny-warnings src test",
+  { task = "check:typescript" },
+  { task = "test" },
+]
+
+[tasks."check:chart"]
 run = """
-updatecli manifest validate --config .updatecli.d --disable-templating --strict
-prettier --check .
-oxlint --deny-warnings src test
-tsc --noEmit
-vitest run
+helm lint chart/actual-up --set existingConfigMap=test
+helm template test chart/actual-up --set existingConfigMap=test
 """
 
 [tasks.dev]
@@ -26,11 +24,11 @@ depends = ["build"]
 run = "node dist/cli.js serve"
 
 [tasks.fmt]
-run = "prettier --write ."
+depends = ["fmt:prettier"]
 
 [tasks.test]
 run = "vitest run"
 
 # Setup
 [tasks.setup]
-run = "npm ci"
+depends = ["setup:node"]

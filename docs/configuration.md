@@ -1,6 +1,8 @@
 # Configuration
 
-The version 1 YAML file supplies deployment settings. **Connections**
+The version 1 YAML file supplies deployment settings. Start from
+[config.example.yaml](../config.example.yaml); optional settings use the defaults
+below. **Accounts & Sync**
 manages Actual credentials, Up API keys and account mappings in the browser.
 Never commit credentials to either repository.
 
@@ -31,7 +33,7 @@ for cluster probes and monitoring.
 3. Refresh accounts and connect each Up account to its Actual destination.
    Shared accounts use one mapping; select both partners' keys for fallback access.
 
-Use **Test** on Actual or an Up connection to check its saved credentials.
+Use **Test Connection** on Actual or an Up connection to check its saved credentials.
 Results appear inline without importing bank transactions.
 
 Account changes save independently, so you can connect several accounts without
@@ -46,7 +48,8 @@ mapped accounts. Remove mappings before removing a key they use, switching
 Actual budgets/servers or changing a mapping's destination. Disconnecting keeps
 existing Actual transactions; review them before reconnecting elsewhere.
 
-Saving a mapping starts a full backfill when automation is enabled. An unavailable
+Connecting a new mapping starts a full backfill when automation is enabled.
+Editing an existing mapping does not start another backfill. An unavailable
 existing fallback key can be retained if another selected key works. Configuration
 changes, connection checks and imports all run through one serial queue.
 
@@ -58,7 +61,7 @@ Each Up connection contains its accessible accounts, discovered automatically af
 saving a key. **Sync** imports one account; a connection's **Sync All** imports its
 mapped accounts; the page-level **Sync All** imports every mapping. A shared
 account may appear beneath both connections but retains one mapping and one
-import identity. Key settings, mapping edits and backfill controls expand inline.
+import identity. Key settings, mapping edits and backfill controls stay visible.
 
 ## Encrypted Storage
 

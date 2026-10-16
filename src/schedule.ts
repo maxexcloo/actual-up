@@ -18,10 +18,15 @@ export function startSchedule(
     runner.enqueue(
       backfill ? "automatic-backfill" : "schedule",
       backfill ? "automatic-backfill" : "schedule",
-      async () => {
+      async (progress) => {
+        progress({ stage: "Refresh Actual" });
         await actual.sync();
-        return engine.reconcile(backfill ? { since: "1970-01-01" } : {});
+        return engine.reconcile({
+          ...(backfill ? { since: "1970-01-01" } : {}),
+          progress,
+        });
       },
+      { mode: "live", since: backfill ? "1970-01-01" : undefined },
     );
   };
   const options = { paused: true, timezone: config.schedule.timezone };

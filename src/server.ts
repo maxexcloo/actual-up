@@ -74,6 +74,14 @@ export async function createServer(
     new URL("../dist/style.css", import.meta.url),
     "utf8",
   );
+  const themeScript = await readFile(
+    new URL("../dist/theme.js", import.meta.url),
+    "utf8",
+  );
+  const components = await readFile(
+    new URL("../dist/components.js", import.meta.url),
+    "utf8",
+  );
   const server = Fastify({
     bodyLimit: 65_536,
     logController: new LogController({ disableRequestLogging: true }),
@@ -148,14 +156,17 @@ export async function createServer(
       const accepted = runner.enqueue(
         `webhook:${key}:${event.data.attributes.eventType}`,
         "webhook",
-        async () => {
+        async (progress) => {
+          progress({ stage: "Refresh Actual" });
           await runtime.actual.sync();
+          progress({ stage: "Process Up Webhook" });
           return engine.reconcileWebhook(
             connection.id,
             event.data.attributes.eventType,
             transactionId,
           );
         },
+        { connection: connection.id, mode: "live" },
       );
       if (!accepted)
         return reply.code(503).send({ error: "queue busy; retry" });
@@ -189,7 +200,15 @@ export async function createServer(
         return reply.code(403).send("Request origin does not match this app");
       }
     }
-    if (path === "/login" || path === "/assets/style.css") return;
+    if (
+      [
+        "/login",
+        "/assets/components.js",
+        "/assets/style.css",
+        "/assets/theme.js",
+      ].includes(path!)
+    )
+      return;
     if (!sessions.valid(request.headers.cookie)) {
       if (request.headers["hx-request"] === "true")
         return reply.header("HX-Redirect", "/login").code(200).send();
@@ -254,7 +273,7 @@ export async function createServer(
         return reply.code(204).send();
       return reply
         .type("text/html")
-        .send(status(runner, config.schedule.timezone));
+        .send(status(runner, config.schedule.timezone, config.schedule));
     },
   );
   server.get("/assets/style.css", async (_request, reply) =>
@@ -262,6 +281,14 @@ export async function createServer(
   );
   server.get("/assets/htmx.js", async (_request, reply) =>
     reply.type("application/javascript").send(htmx),
+  );
+
+  server.get("/assets/theme.js", async (_request, reply) =>
+    reply.type("application/javascript").send(themeScript),
+  );
+
+  server.get("/assets/components.js", async (_request, reply) =>
+    reply.type("application/javascript").send(components),
   );
 
   const connectionTests = new Map<
@@ -337,7 +364,9 @@ export async function createServer(
     "/actions/:action",
     async (request, reply) => {
       const action = request.params.action;
-      let operation: () => Promise<unknown>;
+      let operation: Parameters<JobRunner["enqueue"]>[2];
+      let scope: Parameters<JobRunner["enqueue"]>[3];
+      let queueKey = "manual";
       let trigger = action;
       if (action === "sync") {
         const parsed = z
@@ -372,7 +401,10 @@ export async function createServer(
           return reply.code(400).send("Choose a valid date in the past");
         trigger =
           mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual";
-        operation = async () => {
+        scope = { account, connection, mode, since };
+        queueKey = `manual:${JSON.stringify(scope)}`;
+        operation = async (progress) => {
+          progress({ stage: "Refresh Actual" });
           await runtime.actual.sync();
           return engine.reconcile({
             dryRun: mode === "dry-run",
@@ -386,6 +418,7 @@ export async function createServer(
                     .map(({ alias }) => alias)
                 : undefined,
             since: since || undefined,
+            progress,
           });
         };
       } else if (action === "validate") {
@@ -419,7 +452,7 @@ export async function createServer(
       } else {
         return reply.code(404).send("Unknown action");
       }
-      const accepted = runner.enqueue("manual", trigger, operation);
+      const accepted = runner.enqueue(queueKey, trigger, operation, scope);
       if (request.headers["hx-request"] !== "true")
         return reply.redirect("/", 303);
       return reply
@@ -427,7 +460,7 @@ export async function createServer(
         .type("text/html")
         .send(
           accepted
-            ? "Queued. Follow progress in Recent Activity."
+            ? "Queued. Follow progress in Sync Status."
             : "An action is already queued, or the queue is full. Please wait.",
         );
     },

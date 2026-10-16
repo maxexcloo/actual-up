@@ -208,7 +208,7 @@ describe("operator app", () => {
     const response = await server.inject({ headers, url });
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("Scheduled Sync");
-    expect(response.body).toContain("imported");
+    expect(response.body).toContain("Imported");
   });
 
   it("rejects cross-site writes, invalid dates and unknown account aliases", async () => {
@@ -264,6 +264,7 @@ describe("operator app", () => {
     await runner.drain();
     expect(engine.reconcile).toHaveBeenCalledWith({
       dryRun: true,
+      progress: expect.any(Function),
       since: "2025-01-01",
       mappingAliases: ["spending"],
     });
@@ -296,6 +297,7 @@ describe("operator app", () => {
       await runner.drain();
       expect(engine.reconcile).toHaveBeenLastCalledWith({
         dryRun: false,
+        progress: expect.any(Function),
         mappingAliases: aliases,
         since: undefined,
       });

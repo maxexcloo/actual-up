@@ -165,6 +165,7 @@ describe("browser setup", () => {
     expect((await f.post(f.mapping)).statusCode).toBe(303);
     expect(f.engine.reconcile).toHaveBeenCalledWith({
       since: "1970-01-01",
+      progress: expect.any(Function),
       mappingAliases: ["spending"],
     });
     const restored = await loadSettings(
@@ -180,6 +181,15 @@ describe("browser setup", () => {
         .statusCode,
     ).toBe(409);
     expect(f.config.mappings).toHaveLength(1);
+  });
+
+  it("does not backfill again when an existing account name is edited", async () => {
+    const f = await fixture();
+    await f.post(f.mapping);
+    f.engine.reconcile.mockClear();
+    await f.post({ ...f.mapping, alias: "renamed" });
+    expect(f.config.mappings[0]?.alias).toBe("renamed");
+    expect(f.engine.reconcile).not.toHaveBeenCalled();
   });
 
   it("checks new keys, encrypts them and rejects invalid keys or deleting keys in use", async () => {

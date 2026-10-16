@@ -2,6 +2,7 @@ import type { Logger } from "pino";
 
 import type { AlertSink } from "./alerts.js";
 import type { AccountMapping, AppConfig } from "./config.js";
+import type { JobProgress } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
 import type {
   ActualClient,
@@ -15,19 +16,27 @@ import type {
 const IMPORT_PREFIX = "up:";
 const END_DATE = "2999-12-31";
 
-export type SyncReport = {
+export type SyncCounts = {
   conflicts: number;
   deleted: number;
   failed: number;
   imported: number;
   inspected: number;
+  unchanged: number;
   updated: number;
+};
+
+export type SyncReport = SyncCounts & {
+  accounts: Array<SyncCounts & { account: string; issue?: string }>;
+  preview: boolean;
+  publication: "not-required" | "pending" | "published" | "failed";
 };
 
 type SyncOptions = {
   dryRun?: boolean;
   mappingAliases?: string[];
   since?: string;
+  progress?: (value: JobProgress) => void;
 };
 
 export class SyncEngine {
@@ -83,30 +92,79 @@ export class SyncEngine {
       ({ alias }) =>
         !options.mappingAliases || options.mappingAliases.includes(alias),
     );
-    const transferPayees = await this.transferPayees();
-
+    report.preview = Boolean(options.dryRun);
+    report.publication = options.dryRun ? "not-required" : "pending";
+    let completed = 0;
     for (const mapping of mappings) {
+      const accountReport = {
+        ...emptyCounts(),
+        account: mapping.alias,
+        issue: undefined as string | undefined,
+      };
+      let stage = "Read Actual";
+      const progress = (next: string) => {
+        stage = next;
+        options.progress?.({
+          account: mapping.alias,
+          completed,
+          stage,
+          total: mappings.length,
+        });
+      };
       try {
+        progress("Read Actual");
+        const transferPayees = await this.transferPayees();
         await this.reconcileMapping(
           mapping,
           since,
           transferPayees,
-          report,
+          accountReport,
           options.dryRun,
+          progress,
         );
       } catch {
-        report.failed += 1;
+        accountReport.failed = 1;
+        accountReport.issue =
+          stage === "Read Up"
+            ? "up-unavailable"
+            : stage === "Read Actual"
+              ? "actual-unavailable"
+              : "actual-write-failed";
         this.logger.error({ account: mapping.alias }, "Account sync failed");
-        await this.alerts.send({
-          account: mapping.alias,
-          detail: "Account sync failed; see service logs",
-          severity: "error",
-          type: "account-sync-failed",
-        });
+        await this.alerts
+          .send({
+            account: mapping.alias,
+            detail: "Account sync failed; check the account result in the app",
+            severity: "error",
+            type: "account-sync-failed",
+          })
+          .catch(() => this.logger.warn("Alert delivery failed"));
       }
+      report.accounts.push(accountReport);
+      for (const key of Object.keys(emptyCounts()) as Array<keyof SyncCounts>)
+        report[key] += accountReport[key];
+      completed += 1;
+      options.progress?.({
+        completed,
+        stage: "Accounts Processed",
+        total: mappings.length,
+      });
     }
 
-    if (!options.dryRun && report.failed === 0) await this.actual.sync();
+    // Publish successful and partial account writes even when another account failed.
+    if (!options.dryRun) {
+      options.progress?.({
+        completed,
+        stage: "Publish to Actual",
+        total: mappings.length,
+      });
+      try {
+        await this.actual.sync();
+        report.publication = "published";
+      } catch {
+        report.publication = "failed";
+      }
+    }
     return report;
   }
 
@@ -152,7 +210,13 @@ export class SyncEngine {
       report,
       false,
     );
-    await this.actual.sync();
+    report.accounts.push({ ...reportCounts(report), account: mapping.alias });
+    try {
+      await this.actual.sync();
+      report.publication = "published";
+    } catch {
+      report.publication = "failed";
+    }
     return report;
   }
 
@@ -160,13 +224,16 @@ export class SyncEngine {
     mapping: AccountMapping,
     since: string,
     transferPayees: Map<string, ActualPayee>,
-    report: SyncReport,
+    report: SyncCounts,
     dryRun = false,
+    progress: (stage: string) => void = () => {},
   ): Promise<void> {
+    progress("Read Up");
     const transactions = await this.withConnectionFallback(mapping, (client) =>
       client.listTransactions(mapping.upAccountId, since),
     );
     const startDate = actualDate(since, this.config.schedule.timezone);
+    progress("Read Actual");
     const existing = await this.existingTransactions(mapping, startDate);
     const seen = new Set(transactions.map(({ id }) => importedId(id)));
 
@@ -180,6 +247,7 @@ export class SyncEngine {
       return Number(Boolean(rightTransfer)) - Number(Boolean(leftTransfer));
     });
 
+    progress(dryRun ? "Preview Changes" : "Apply Changes");
     for (const transaction of transactions) {
       await this.importOne(
         mapping,
@@ -207,7 +275,7 @@ export class SyncEngine {
     up: UpTransaction,
     existing: Map<string, ActualTransaction>,
     transferPayees: Map<string, ActualPayee>,
-    report: SyncReport,
+    report: SyncCounts,
     dryRun: boolean,
   ): Promise<void> {
     report.inspected += 1;
@@ -231,10 +299,30 @@ export class SyncEngine {
     );
 
     if (dryRun) {
-      const action = current ? "would-update" : "would-import";
+      const category = up.relationships.category?.data?.id;
+      const categoryChange =
+        current &&
+        !current.category &&
+        category &&
+        this.config.categoryMappings[category] &&
+        !transferPayee;
+      const changed =
+        !current ||
+        current.amount !== converted.amount ||
+        current.date !== converted.date ||
+        current.cleared !== converted.cleared ||
+        current.imported_payee !== converted.imported_payee ||
+        (converted.payee !== undefined && current.payee !== converted.payee) ||
+        Boolean(categoryChange);
+      const action = !current
+        ? "would-import"
+        : changed
+          ? "would-update"
+          : "unchanged";
       this.metrics.transactions.inc({ account: mapping.alias, action });
-      if (current) report.updated += 1;
-      else report.imported += 1;
+      if (!current) report.imported += 1;
+      else if (changed) report.updated += 1;
+      else report.unchanged += 1;
       return;
     }
 
@@ -245,10 +333,16 @@ export class SyncEngine {
     if (result.errors.length > 0) {
       throw new Error("Actual transaction import failed");
     }
-    const action = result.added.length > 0 ? "imported" : "updated";
+    const action =
+      result.added.length > 0
+        ? "imported"
+        : result.updated.length > 0
+          ? "updated"
+          : "unchanged";
     this.metrics.transactions.inc({ account: mapping.alias, action });
     if (result.added.length > 0) report.imported += 1;
-    else report.updated += 1;
+    else if (result.updated.length > 0) report.updated += 1;
+    else report.unchanged += 1;
 
     const refreshed = await this.findImported(mapping, id, converted.date);
     if (refreshed) existing.set(id, refreshed);
@@ -266,6 +360,10 @@ export class SyncEngine {
         category: actualCategoryId,
       });
       refreshed.category = actualCategoryId;
+      if (action === "unchanged") {
+        report.unchanged -= 1;
+        report.updated += 1;
+      }
       this.metrics.transactions.inc({
         account: mapping.alias,
         action: "categorised",
@@ -285,7 +383,16 @@ export class SyncEngine {
       );
       if (transaction) {
         await this.mirrorDeletion(mapping, transaction, report, false);
-        await this.actual.sync();
+        report.accounts.push({
+          ...reportCounts(report),
+          account: mapping.alias,
+        });
+        try {
+          await this.actual.sync();
+          report.publication = "published";
+        } catch {
+          report.publication = "failed";
+        }
         return report;
       }
     }
@@ -295,7 +402,7 @@ export class SyncEngine {
   private async mirrorDeletion(
     mapping: AccountMapping,
     transaction: ActualTransaction,
-    report: SyncReport,
+    report: SyncCounts,
     dryRun: boolean,
   ): Promise<void> {
     const safe = isSafeToDelete(transaction);
@@ -305,12 +412,14 @@ export class SyncEngine {
         account: mapping.alias,
         action: "delete-conflict",
       });
-      await this.alerts.send({
-        account: mapping.alias,
-        detail: "Up deleted a transaction that has protected Actual edits",
-        severity: "warning",
-        type: "delete-conflict",
-      });
+      await this.alerts
+        .send({
+          account: mapping.alias,
+          detail: "Up deleted a transaction that has protected Actual edits",
+          severity: "warning",
+          type: "delete-conflict",
+        })
+        .catch(() => this.logger.warn("Alert delivery failed"));
       return;
     }
     if (!dryRun) await this.actual.deleteTransaction(transaction.id);
@@ -496,13 +605,44 @@ function dateDaysBefore(value: string, days: number): string {
     .slice(0, 10);
 }
 
-function emptyReport(): SyncReport {
+function emptyCounts(): SyncCounts {
   return {
     conflicts: 0,
     deleted: 0,
     failed: 0,
     imported: 0,
     inspected: 0,
+    unchanged: 0,
     updated: 0,
+  };
+}
+
+function emptyReport(): SyncReport {
+  return {
+    ...emptyCounts(),
+    accounts: [],
+    preview: false,
+    publication: "not-required",
+  };
+}
+
+function reportCounts(report: SyncReport): SyncCounts {
+  const {
+    conflicts,
+    deleted,
+    failed,
+    imported,
+    inspected,
+    unchanged,
+    updated,
+  } = report;
+  return {
+    conflicts,
+    deleted,
+    failed,
+    imported,
+    inspected,
+    unchanged,
+    updated,
   };
 }

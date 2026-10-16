@@ -43,6 +43,24 @@ describe("operation queue", () => {
     expect(queue.enqueue("c", "manual", async () => {})).toBe(false);
   });
 
+  it("distinguishes conflicts and publication failures from success", async () => {
+    const queue = runner();
+    queue.enqueue("conflict", "manual", async () => ({
+      conflicts: 1,
+      failed: 0,
+    }));
+    queue.enqueue("publish", "manual", async () => ({
+      conflicts: 0,
+      failed: 0,
+      publication: "failed",
+    }));
+    await queue.drain();
+    expect(queue.history.map(({ state }) => state)).toEqual([
+      "failure",
+      "warning",
+    ]);
+  });
+
   it("bounds the queue and recent history", async () => {
     const queue = runner();
     for (let i = 0; i < 32; i++)

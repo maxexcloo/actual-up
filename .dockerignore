@@ -1,11 +1,10 @@
 .actual-cache
 .actual-up
+.env*
 .git
 .github
+config.local.yaml
 coverage
 dist
 node_modules
 test
-
-.env*
-config.local.yaml

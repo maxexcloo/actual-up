@@ -214,6 +214,84 @@ describe("sync engine", () => {
     expect(actual.transactions[0]?.imported_id).toContain("22222222");
   });
 
+  it("previews unchanged bank fields without counting protected Actual edits as updates", async () => {
+    const actual = new MemoryActual();
+    const up = new StubUp([transaction()]);
+    const { value } = engine(actual, up);
+    await value.reconcile();
+    actual.transactions[0]!.notes = "edited locally";
+    actual.transactions[0]!.category = "household";
+    const write = vi.spyOn(actual, "importTransaction");
+    const preview = await value.reconcile({ dryRun: true });
+    expect(preview).toMatchObject({
+      imported: 0,
+      updated: 0,
+      unchanged: 1,
+      preview: true,
+      publication: "not-required",
+    });
+    expect(write).not.toHaveBeenCalled();
+    up.transactions[0] = transaction("SETTLED");
+    expect(await value.reconcile({ dryRun: true })).toMatchObject({
+      updated: 1,
+      unchanged: 0,
+    });
+    expect(actual.transactions[0]!.cleared).toBe(false);
+  });
+
+  it("publishes partial imports, identifies the failed account safely and continues after alert failure", async () => {
+    const actual = new MemoryActual();
+    const app = config();
+    app.mappings.push({
+      actualAccountId: "other",
+      alias: "other",
+      upAccountId: "33333333-3333-4333-8333-333333333333",
+      connections: ["missing"],
+    });
+    const alerts = new MemoryAlerts();
+    vi.spyOn(alerts, "send").mockRejectedValue(new Error("sensitive response"));
+    const value = new SyncEngine(
+      app,
+      actual,
+      new Map([["first", new StubUp([transaction()])]]),
+      alerts,
+      new Metrics(),
+      pino({ enabled: false }),
+    );
+    const progress = vi.fn();
+    const result = await value.reconcile({ progress });
+    expect(result).toMatchObject({
+      imported: 1,
+      failed: 1,
+      publication: "published",
+    });
+    expect(result.accounts[1]).toMatchObject({
+      account: "other",
+      failed: 1,
+      issue: "up-unavailable",
+    });
+    expect(actual.syncs).toBe(1);
+    expect(JSON.stringify(result)).not.toContain("sensitive");
+    expect(progress).toHaveBeenLastCalledWith({
+      completed: 2,
+      stage: "Publish to Actual",
+      total: 2,
+    });
+  });
+
+  it("retains account results when publishing fails", async () => {
+    const actual = new MemoryActual();
+    vi.spyOn(actual, "sync").mockRejectedValue(new Error("sensitive response"));
+    const { value } = engine(actual, new StubUp([transaction()]));
+    expect(await value.reconcile()).toMatchObject({
+      imported: 1,
+      publication: "failed",
+      accounts: [
+        expect.objectContaining({ account: "joint-spending", imported: 1 }),
+      ],
+    });
+  });
+
   it("validates shared accounts when one partner's key is unavailable", async () => {
     for (const firstFails of [true, false]) {
       const { value } = engine(

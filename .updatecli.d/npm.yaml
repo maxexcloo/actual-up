@@ -1,11 +1,10 @@
 # yaml-language-server: $schema=https://www.updatecli.io/schema/latest/policy/manifest/config.json
-name: Update Standard Dependencies
-pipelineid: update-standard-dependencies
+name: Update npm
+pipelineid: update-npm
 autodiscovery:
   crawlers:
-    dockerfile: {}
     npm:
       age:
         minimum: 1d
 labels:
-  group: standard
+  group: npm

@@ -46,7 +46,10 @@ describe("automatic reconciliation", () => {
   it("backfills on startup and nightly, and syncs recent transactions every 15 minutes", async () => {
     const { actual, engine, runner } = fixture();
     await runner.drain();
-    expect(engine.reconcile).toHaveBeenCalledWith({ since: "1970-01-01" });
+    expect(engine.reconcile).toHaveBeenCalledWith({
+      since: "1970-01-01",
+      progress: expect.any(Function),
+    });
     expect(actual.sync.mock.invocationCallOrder[0]).toBeLessThan(
       engine.reconcile.mock.invocationCallOrder[0]!,
     );
@@ -54,12 +57,17 @@ describe("automatic reconciliation", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     await runner.drain();
     expect(engine.reconcile.mock.calls).toEqual(
-      expect.arrayContaining([[{}], [{ since: "1970-01-01" }]]),
+      expect.arrayContaining([
+        [{ progress: expect.any(Function) }],
+        [{ since: "1970-01-01", progress: expect.any(Function) }],
+      ]),
     );
     engine.reconcile.mockClear();
     await vi.advanceTimersByTimeAsync(15 * 60_000);
     await runner.drain();
-    expect(engine.reconcile).toHaveBeenCalledExactlyOnceWith({});
+    expect(engine.reconcile).toHaveBeenCalledExactlyOnceWith({
+      progress: expect.any(Function),
+    });
     stop();
     await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
     expect(engine.reconcile).toHaveBeenCalledTimes(1);

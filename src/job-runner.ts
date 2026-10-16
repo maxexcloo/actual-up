@@ -2,13 +2,29 @@ import { randomUUID } from "node:crypto";
 import type { Logger } from "pino";
 import type { Metrics } from "./metrics.js";
 
+export type JobProgress = {
+  account?: string;
+  completed?: number;
+  stage: string;
+  total?: number;
+};
+
+export type JobScope = {
+  account?: string;
+  connection?: string;
+  mode?: "dry-run" | "live";
+  since?: string;
+};
+
 export type Job = {
   id: string;
   trigger: string;
-  state: "queued" | "running" | "success" | "failure";
+  state: "queued" | "running" | "success" | "warning" | "failure";
   startedAt?: string;
   finishedAt?: string;
   result?: unknown;
+  progress?: JobProgress;
+  scope?: JobScope;
 };
 
 /** One queue owns complete operations, including reads and manual actions. */
@@ -33,12 +49,13 @@ export class JobRunner {
   enqueue(
     key: string,
     trigger: string,
-    operation: () => Promise<unknown>,
+    operation: (progress: (value: JobProgress) => void) => Promise<unknown>,
+    scope?: JobScope,
   ): boolean {
     if (this.stopping || this.keys.has(key) || this.keys.size >= 32)
       return false;
     this.keys.add(key);
-    const job: Job = { id: randomUUID(), trigger, state: "queued" };
+    const job: Job = { id: randomUUID(), trigger, scope, state: "queued" };
     this.jobs.unshift(job);
     this.metrics.queueDepth.set(this.depth);
     this.chain = this.chain.then(async () => {
@@ -46,8 +63,14 @@ export class JobRunner {
       job.startedAt = new Date().toISOString();
       const stopTimer = this.metrics.jobDuration.startTimer({ trigger });
       try {
-        job.result = await operation();
-        job.state = hasFailures(job.result) ? "failure" : "success";
+        job.result = await operation((value) => {
+          job.progress = value;
+        });
+        job.state = hasFailures(job.result)
+          ? "failure"
+          : hasConflicts(job.result)
+            ? "warning"
+            : "success";
       } catch {
         job.state = "failure";
         this.logger.error(
@@ -87,8 +110,19 @@ function hasFailures(value: unknown): boolean {
   return (
     typeof value === "object" &&
     value !== null &&
-    "failed" in value &&
-    typeof value.failed === "number" &&
-    value.failed > 0
+    (("failed" in value &&
+      typeof value.failed === "number" &&
+      value.failed > 0) ||
+      ("publication" in value && value.publication === "failed"))
+  );
+}
+
+function hasConflicts(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "conflicts" in value &&
+    typeof value.conflicts === "number" &&
+    value.conflicts > 0
   );
 }

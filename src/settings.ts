@@ -460,6 +460,11 @@ export function registerSettings(
               "Account names must be unique, and each Up and Actual account can only be mapped once.",
             );
           }
+          const newMapping =
+            command.action === "mapping" &&
+            !config.mappings.some(
+              ({ upAccountId }) => upAccountId === command.upAccountId,
+            );
           await saveSettings(next);
           config.up = next.up;
           config.mappings = next.mappings;
@@ -471,21 +476,28 @@ export function registerSettings(
             runtime.clients.delete(command.id);
           if (!accountId) discovery = await discover();
           operationMessage = "Settings saved.";
-          if (command.action === "mapping" && config.schedule.enabled) {
+          if (
+            command.action === "mapping" &&
+            config.schedule.enabled &&
+            newMapping
+          ) {
             const queued = runner.enqueue(
               `backfill:${command.upAccountId}`,
               "automatic-backfill",
-              async () => {
+              async (progress) => {
                 const mapping = config.mappings.find(
                   ({ upAccountId }) => upAccountId === command.upAccountId,
                 );
                 if (!mapping) return { ok: true };
+                progress({ stage: "Refresh Actual" });
                 await runtime.actual.sync();
                 return engine.reconcile({
                   since: "1970-01-01",
                   mappingAliases: [mapping.alias],
+                  progress,
                 });
               },
+              { account: command.alias, mode: "live", since: "1970-01-01" },
             );
             operationMessage = queued
               ? "Saved. History backfill queued; you can continue with other accounts."
