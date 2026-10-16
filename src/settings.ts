@@ -26,6 +26,17 @@ import type { UpClientLike } from "./types.js";
 class SettingsError extends Error {}
 
 const fields = { revision: z.string() };
+const accountFields = {
+  upAccountId: z.string().uuid(),
+  viewConnection: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]*$/)
+    .optional(),
+};
+const accountContextSchema = z.object({
+  action: z.enum(["mapping", "remove-mapping"]),
+  ...accountFields,
+});
 const commandSchema = z.discriminatedUnion("action", [
   z
     .object({
@@ -65,13 +76,9 @@ const commandSchema = z.discriminatedUnion("action", [
   z
     .object({
       ...fields,
+      ...accountFields,
       action: z.literal("mapping"),
       alias: z.string().trim().min(1).max(80),
-      upAccountId: z.string().uuid(),
-      viewConnection: z
-        .string()
-        .regex(/^[a-z][a-z0-9-]*$/)
-        .optional(),
       actualAccountId: z.string().min(1),
       connections: z
         .union([z.string(), z.array(z.string())])
@@ -81,12 +88,8 @@ const commandSchema = z.discriminatedUnion("action", [
   z
     .object({
       ...fields,
+      ...accountFields,
       action: z.literal("remove-mapping"),
-      upAccountId: z.string().uuid(),
-      viewConnection: z
-        .string()
-        .regex(/^[a-z][a-z0-9-]*$/)
-        .optional(),
     })
     .strict(),
 ]);
@@ -222,14 +225,12 @@ export function registerSettings(
   );
   server.post("/settings", async (request, reply) => {
     const parsed = commandSchema.safeParse(request.body);
-    const accountId =
-      parsed.success && "upAccountId" in parsed.data
-        ? parsed.data.upAccountId
-        : undefined;
-    const viewConnection =
-      parsed.success && "viewConnection" in parsed.data
-        ? parsed.data.viewConnection
-        : undefined;
+    // Invalid account fields still need an error fragment for the submitted row.
+    const context = accountContextSchema.safeParse(request.body);
+    const accountId = context.success ? context.data.upAccountId : undefined;
+    const viewConnection = context.success
+      ? context.data.viewConnection
+      : undefined;
     const revision = () => settingsVersion(config, accountId);
     const reject = (code: number, explanation: string) =>
       reply

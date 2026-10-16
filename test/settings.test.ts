@@ -125,6 +125,34 @@ async function fixture() {
 }
 
 describe("browser setup", () => {
+  it("keeps invalid shared-account submissions within their account rows", async () => {
+    const f = await fixture();
+    await f.post({
+      action: "connection",
+      id: "partner",
+      token: "test-partner",
+    });
+    await f.post({ ...f.mapping, connections: ["max", "partner"] });
+    const { connections: _connections, ...mapping } = f.mapping;
+    const response = await f.server.inject({
+      method: "POST",
+      url: "/settings",
+      headers: { "hx-request": "true" },
+      payload: {
+        ...mapping,
+        revision: settingsVersion(f.config, upId),
+        viewConnection: "max",
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toContain(`id="account-max-${upId}"`);
+    expect(response.body).toContain(`id="account-partner-${upId}"`);
+    expect(response.body).toContain("Invalid settings.");
+    expect(response.body).not.toContain("<!doctype html>");
+    expect(response.body).not.toContain('id="setup"');
+    expect(f.config.mappings[0]?.connections).toEqual(["max", "partner"]);
+  });
+
   it("discovers accounts without balances, escapes names and never exposes keys", async () => {
     const f = await fixture();
     await f.post({ action: "discover" });
