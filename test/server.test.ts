@@ -119,7 +119,7 @@ describe("operator app", () => {
       payload: `username=operator&password=${password}`,
     });
     expect(login.statusCode).toBe(303);
-    expect(login.headers["set-cookie"]).toContain("; Secure");
+    expect(String(login.headers["set-cookie"])).toContain("; Secure");
     const rejected = await server.inject({
       method: "POST",
       url: "/login",
@@ -196,6 +196,32 @@ describe("operator app", () => {
       (await server.inject({ url: "/", headers: { cookie: headers.cookie } }))
         .statusCode,
     ).toBe(303);
+  });
+
+  it("expires opaque sessions after eight hours and rejects forged cookies", async () => {
+    const { server } = await fixture();
+    expect(headers.cookie).not.toContain("operator");
+    expect(headers.cookie).not.toContain(password);
+    expect(
+      (
+        await server.inject({
+          url: "/",
+          headers: { cookie: "actual_up_session=forged" },
+        })
+      ).statusCode,
+    ).toBe(303);
+    const now = Date.now();
+    const clock = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(now + 8 * 60 * 60 * 1000 + 1);
+    try {
+      expect(
+        (await server.inject({ url: "/", headers: { cookie: headers.cookie } }))
+          .statusCode,
+      ).toBe(303);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("leaves an unchanged status panel intact and detects background runs", async () => {

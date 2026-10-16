@@ -1,12 +1,9 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
-const lifetime = 8 * 60 * 60 * 1000;
-const cookieName = "actual_up_session";
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-/** Opaque, server-side sessions expire on restart; no credentials enter cookies. */
-export class Sessions {
-  private readonly sessions = new Map<string, number>();
+/** Credential verification and bounded login throttling. */
+export class LoginAttempts {
   private readonly attempts = new Map<
     string,
     { count: number; until: number }
@@ -15,32 +12,13 @@ export class Sessions {
   constructor(
     private readonly username: string,
     private readonly password: string,
-    private readonly secure: boolean,
   ) {}
-
-  private token(cookie: string | undefined): string | undefined {
-    return cookie
-      ?.split(";")
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(`${cookieName}=`))
-      ?.slice(cookieName.length + 1);
-  }
-
-  valid(cookie: string | undefined): boolean {
-    const token = this.token(cookie);
-    if (!token) return false;
-    const hash = digest(token).toString("hex");
-    const expires = this.sessions.get(hash);
-    if (expires && expires > Date.now()) return true;
-    this.sessions.delete(hash);
-    return false;
-  }
 
   login(
     username: string,
     password: string,
     address: string,
-  ): { cookie?: string; limited?: boolean } {
+  ): { valid?: boolean; limited?: boolean } {
     const now = Date.now();
     for (const [key, value] of this.attempts)
       if (value.until <= now) this.attempts.delete(key);
@@ -68,22 +46,6 @@ export class Sessions {
       return {};
     }
     this.attempts.delete(address);
-    for (const [key, expires] of this.sessions)
-      if (expires <= now) this.sessions.delete(key);
-    if (this.sessions.size >= 100)
-      this.sessions.delete(this.sessions.keys().next().value!);
-    const token = randomBytes(32).toString("base64url");
-    this.sessions.set(digest(token).toString("hex"), now + lifetime);
-    return { cookie: this.cookie(token, lifetime / 1000) };
-  }
-
-  logout(cookie: string | undefined): string {
-    const token = this.token(cookie);
-    if (token) this.sessions.delete(digest(token).toString("hex"));
-    return this.cookie("", 0);
-  }
-
-  private cookie(token: string, age: number): string {
-    return `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${this.secure ? "; Secure" : ""}`;
+    return { valid: true };
   }
 }

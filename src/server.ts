@@ -1,10 +1,14 @@
+import cookie from "@fastify/cookie";
+import session from "@fastify/session";
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import Fastify, { LogController } from "fastify";
+import { LRUCache } from "lru-cache";
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import { Sessions } from "./auth.js";
+import { LoginAttempts } from "./auth.js";
 import { environmentValue, type AppConfig } from "./config.js";
 import type { JobRunner } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
@@ -16,6 +20,12 @@ import type { SyncEngine } from "./sync-engine.js";
 import { loginPage } from "./login-ui.js";
 import { connectionTestStatus, status, statusVersion } from "./ui.js";
 import { parseWebhook, verifyWebhookSignature } from "./webhook.js";
+
+declare module "fastify" {
+  interface Session {
+    authenticated?: boolean;
+  }
+}
 
 export type Service = {
   close(): Promise<void>;
@@ -61,11 +71,7 @@ export async function createServer(
   checkEncryptionKey(config);
   const username = environmentValue(config.auth.usernameEnv);
   const password = environmentValue(config.auth.passwordEnv);
-  const sessions = new Sessions(
-    username,
-    password,
-    config.server.publicUrl?.startsWith("https://") ?? false,
-  );
+  const attempts = new LoginAttempts(username, password);
   const htmx = await readFile(
     createRequire(import.meta.url).resolve("htmx.org/dist/htmx.min.js"),
     "utf8",
@@ -86,6 +92,35 @@ export async function createServer(
     bodyLimit: 65_536,
     logController: new LogController({ disableRequestLogging: true }),
     loggerInstance: logger,
+  });
+
+  const sessionData = new LRUCache<string, import("fastify").Session>({
+    max: 100,
+    ttl: 8 * 60 * 60 * 1000,
+  });
+  await server.register(cookie);
+  await server.register(session, {
+    cookie: {
+      httpOnly: true,
+      path: "/",
+      sameSite: "strict",
+      secure: config.server.publicUrl?.startsWith("https://") ?? false,
+    },
+    cookieName: "actual_up_session",
+    rolling: false,
+    saveUninitialized: false,
+    secret: randomBytes(32).toString("hex"),
+    store: {
+      destroy: (id, done) => {
+        sessionData.delete(id);
+        done();
+      },
+      get: (id, done) => done(null, sessionData.get(id)),
+      set: (id, value, done) => {
+        sessionData.set(id, value);
+        done();
+      },
+    },
   });
 
   server.addContentTypeParser(
@@ -209,7 +244,7 @@ export async function createServer(
       ].includes(path!)
     )
       return;
-    if (!sessions.valid(request.headers.cookie)) {
+    if (request.session.authenticated !== true) {
       if (request.headers["hx-request"] === "true")
         return reply.header("HX-Redirect", "/login").code(200).send();
       return reply.redirect("/login", 303);
@@ -217,7 +252,7 @@ export async function createServer(
   });
 
   server.get("/login", async (request, reply) =>
-    sessions.valid(request.headers.cookie)
+    request.session.authenticated === true
       ? reply.redirect("/", 303)
       : reply.type("text/html").send(loginPage()),
   );
@@ -231,12 +266,12 @@ export async function createServer(
         .code(400)
         .type("text/html")
         .send(loginPage("Enter your username and password."));
-    const result = sessions.login(
+    const result = attempts.login(
       parsed.data.username,
       parsed.data.password,
       request.ip,
     );
-    if (!result.cookie)
+    if (!result.valid)
       return reply
         .code(result.limited ? 429 : 401)
         .type("text/html")
@@ -247,14 +282,20 @@ export async function createServer(
               : "Incorrect username or password.",
           ),
         );
-    sessions.logout(request.headers.cookie);
-    return reply.header("Set-Cookie", result.cookie).redirect("/", 303);
+    const now = Date.now();
+    await request.session.regenerate();
+    request.session.options({ expires: new Date(now + 8 * 60 * 60 * 1000) });
+    request.session.authenticated = true;
+    // Save explicitly so HTTPS cookies also work behind the configured TLS proxy.
+    await request.session.save();
+    return reply.redirect("/", 303);
   });
-  server.post("/logout", async (request, reply) =>
-    reply
-      .header("Set-Cookie", sessions.logout(request.headers.cookie))
-      .redirect("/login", 303),
-  );
+  server.post("/logout", async (request, reply) => {
+    await request.session.destroy();
+    return reply
+      .clearCookie("actual_up_session", { path: "/" })
+      .redirect("/login", 303);
+  });
 
   registerSettings(
     server,
