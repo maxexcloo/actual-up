@@ -31,4 +31,4 @@ run = "vitest run"
 
 # Setup
 [tasks.setup]
-depends = ["setup:node"]
+run = "npm ci"
