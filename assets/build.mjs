@@ -27,13 +27,7 @@ const licences = [];
 for (const path of packages) {
   const metadata = JSON.parse(await readFile(`${path}/package.json`, "utf8"));
   let licence;
-  for (const file of [
-    "LICENSE",
-    "LICENSE.md",
-    "LICENSE.txt",
-    "license",
-    "license.md",
-  ]) {
+  for (const file of ["LICENSE", "LICENSE.md", "LICENSE.txt", "license", "license.md"]) {
     try {
       licence = await readFile(`${path}/${file}`, "utf8");
       break;

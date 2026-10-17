@@ -22,8 +22,9 @@ run results to diagnose upstream failures.
 
 ## Runs & Recovery
 
-The queue serialises whole operations, including discovery and validation. Only
-one manual action can be queued at a time; duplicate scheduled runs coalesce.
+The queue serialises whole operations, including discovery and validation.
+Manual syncs with different scopes can queue together; identical scopes and
+duplicate scheduled runs coalesce.
 It holds at most 32 operations and retains the latest 20 completed results in
 memory. Exceptions are reported without their potentially sensitive contents.
 An account failure makes the run fail even if other accounts succeeded.
@@ -33,7 +34,8 @@ browser settings and the Actual cache. Back up `settings.json`; only the Actual
 cache can be rebuilt. The chart creates a 1Gi claim by default, or accepts
 `persistence.existingClaim` and `persistence.storageClass`. Import identities make reconciliation repeatable.
 Startup and nightly full-history backfills recover gaps after an extended outage
-or interrupted run. Manual backfill remains available. Do not run a
+or interrupted run and confirm deletions. Partial syncs retain transactions absent
+from their Up window. Manual backfill remains available. Do not run a
 standalone CLI writer alongside the service, or deploy a second instance for the
 same budget. Graceful shutdown stops scheduling, closes HTTP and drains the queue;
 Kubernetes can still terminate work at the configured grace-period limit.

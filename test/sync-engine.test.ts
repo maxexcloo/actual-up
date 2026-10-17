@@ -1,15 +1,10 @@
 import pino from "pino";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Alert, AlertSink } from "../src/alerts.js";
 import { parseConfig, type AppConfig } from "../src/config.js";
 import { Metrics } from "../src/metrics.js";
-import {
-  SyncEngine,
-  actualDate,
-  convertTransaction,
-  isSafeToDelete,
-} from "../src/sync-engine.js";
+import { SyncEngine, actualDate, convertTransaction, isSafeToDelete } from "../src/sync-engine.js";
 import type {
   ActualAccount,
   ActualCategory,
@@ -25,6 +20,11 @@ import type {
 } from "../src/types.js";
 
 const upAccountId = "11111111-1111-4111-8111-111111111111";
+
+beforeEach(() => {
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-08-22T12:00:00Z"));
+});
+afterEach(() => vi.restoreAllMocks());
 
 function config(overrides: Partial<AppConfig> = {}): AppConfig {
   const value = parseConfig({
@@ -95,16 +95,18 @@ class MemoryActual implements ActualClient {
   async getPayees() {
     return this.payees;
   }
-  async getTransactions(accountId: string) {
-    return this.transactions.filter(({ account }) => account === accountId);
+  async getTransactions(accountId: string, startDate: string, endDate: string) {
+    return structuredClone(
+      this.transactions.filter(
+        ({ account, date }) => account === accountId && date >= startDate && date <= endDate,
+      ),
+    );
   }
   async importTransaction(
     _accountId: string,
     value: ActualImportTransaction,
   ): Promise<ActualImportResult> {
-    const existing = this.transactions.find(
-      ({ imported_id }) => imported_id === value.imported_id,
-    );
+    const existing = this.transactions.find(({ imported_id }) => imported_id === value.imported_id);
     if (existing) {
       existing.amount = value.amount;
       existing.cleared = value.cleared;
@@ -152,10 +154,12 @@ class StubUp implements UpClientLike {
       },
     ];
   }
-  async listTransactions(accountId: string) {
+  async listTransactions(accountId: string, since: string) {
     if (this.fails) throw new Error("unavailable");
     return this.transactions.filter(
-      (value) => value.relationships.account.data.id === accountId,
+      (value) =>
+        value.relationships.account.data.id === accountId &&
+        Date.parse(value.attributes.createdAt) >= Date.parse(since),
     );
   }
   async getTransaction() {
@@ -203,11 +207,7 @@ function engine(
 describe("sync engine", () => {
   it("falls back between joint-account tokens and remains idempotent", async () => {
     const actual = new MemoryActual();
-    const { value } = engine(
-      actual,
-      new StubUp([], true),
-      new StubUp([transaction()]),
-    );
+    const { value } = engine(actual, new StubUp([], true), new StubUp([transaction()]));
     expect((await value.reconcile()).imported).toBe(1);
     expect((await value.reconcile()).updated).toBe(1);
     expect(actual.transactions).toHaveLength(1);
@@ -286,9 +286,7 @@ describe("sync engine", () => {
     expect(await value.reconcile()).toMatchObject({
       imported: 1,
       publication: "failed",
-      accounts: [
-        expect.objectContaining({ account: "joint-spending", imported: 1 }),
-      ],
+      accounts: [expect.objectContaining({ account: "joint-spending", imported: 1 })],
     });
   });
 
@@ -367,7 +365,7 @@ describe("sync engine", () => {
       imported_id: "up:gone",
     });
     const { alerts, value } = engine(actual, new StubUp([]));
-    const report = await value.reconcile({ since: "2026-01-01" });
+    const report = await value.reconcile({ since: "1970-01-01" });
     expect(report.conflicts).toBe(1);
     expect(actual.transactions).toHaveLength(1);
     expect(alerts.values[0]?.type).toBe("delete-conflict");
@@ -379,15 +377,104 @@ describe("sync engine", () => {
     await value.reconcile();
     expect(actual.transactions[0]?.category).toBe("actual-food");
   });
+
+  it.each([false, true])(
+    "retains transactions excluded by partial Up windows (preview: %s)",
+    async (dryRun) => {
+      const actual = new MemoryActual();
+      const up = new StubUp([transaction("SETTLED")]);
+      const { value } = engine(actual, up);
+      await value.reconcile({ since: "1970-01-01" });
+      // A hold is deletable even with notes or a category, so deletion guards cannot hide the bug.
+      actual.transactions[0]!.cleared = false;
+      for (const since of ["2026-08-20T03:00:00Z", "2026-08-21"]) {
+        const report = await value.reconcile({ dryRun, since });
+        expect(report).toMatchObject({ conflicts: 0, deleted: 0, failed: 0, inspected: 0 });
+        expect(actual.transactions).toHaveLength(1);
+      }
+    },
+  );
+
+  it.each([false, true])(
+    "handles confirmed full-history absence safely (preview: %s)",
+    async (dryRun) => {
+      const actual = new MemoryActual();
+      actual.transactions.push({
+        account: "actual-spending",
+        amount: -1250,
+        cleared: false,
+        date: "2026-08-20",
+        id: "cancelled",
+        imported_id: "up:cancelled",
+      });
+      const { value } = engine(actual, new StubUp([]));
+      expect(await value.reconcile({ dryRun, since: "1970-01-01" })).toMatchObject({
+        conflicts: 0,
+        deleted: 1,
+        failed: 0,
+      });
+      expect(actual.transactions).toHaveLength(dryRun ? 1 : 0);
+    },
+  );
+
+  it("reads account history a constant number of times and preserves import-rule categories", async () => {
+    const actual = new MemoryActual();
+    const transactions = Array.from({ length: 100 }, (_, index) => ({
+      ...transaction(),
+      id: `bank-${index}`,
+    }));
+    const { value } = engine(actual, new StubUp(transactions));
+    const originalImport = actual.importTransaction.bind(actual);
+    vi.spyOn(actual, "importTransaction").mockImplementation(async (account, converted) => {
+      const result = await originalImport(account, converted);
+      if (converted.imported_id === "up:bank-0") {
+        actual.transactions[0]!.category = "rule-category";
+        actual.transactions[0]!.date = "2026-01-01";
+      }
+      return result;
+    });
+    const read = vi.spyOn(actual, "getTransactions");
+    expect(await value.reconcile({ since: "1970-01-01" })).toMatchObject({
+      failed: 0,
+      imported: 100,
+    });
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(actual.transactions[0]?.category).toBe("rule-category");
+    expect(actual.transactions.slice(1).every(({ category }) => category === "actual-food")).toBe(
+      true,
+    );
+
+    read.mockClear();
+    vi.mocked(actual.importTransaction).mockResolvedValue({ added: [], errors: [], updated: [] });
+    expect(await value.reconcile({ since: "1970-01-01" })).toMatchObject({
+      failed: 0,
+      unchanged: 100,
+    });
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves categories for mapped transfers and applies webhook category mappings", async () => {
+    const actual = new MemoryActual();
+    const transfer = transaction();
+    transfer.relationships.transferAccount = { data: { id: upAccountId, type: "accounts" } };
+    actual.payees.push({
+      id: "transfer-payee",
+      name: "Spending",
+      transfer_acct: "actual-spending",
+    });
+    const up = new StubUp([transfer]);
+    const { value } = engine(actual, up);
+    await value.reconcile({ since: "1970-01-01" });
+    expect(actual.transactions[0]?.category).toBeUndefined();
+    up.transactions[0] = transaction();
+    await value.reconcileWebhook("first", "TRANSACTION_SETTLED", transfer.id);
+    expect(actual.transactions[0]?.category).toBe("actual-food");
+  });
 });
 
 describe("transaction conversion", () => {
   it("uses Sydney dates and create-only joint-account context", () => {
-    const converted = convertTransaction(
-      transaction(),
-      config().mappings[0]!,
-      config(),
-    );
+    const converted = convertTransaction(transaction(), config().mappings[0]!, config());
     expect(converted).toMatchObject({
       amount: -1250,
       cleared: false,
@@ -397,17 +484,12 @@ describe("transaction conversion", () => {
   });
 
   it("does not overwrite notes on subsequent imports", () => {
-    const converted = convertTransaction(
-      transaction("SETTLED"),
-      config().mappings[0]!,
-      config(),
-      {
-        account: "actual-spending",
-        amount: -1250,
-        date: "2026-08-20",
-        id: "1",
-      },
-    );
+    const converted = convertTransaction(transaction("SETTLED"), config().mappings[0]!, config(), {
+      account: "actual-spending",
+      amount: -1250,
+      date: "2026-08-20",
+      id: "1",
+    });
     expect(converted.notes).toBeUndefined();
   });
 
@@ -435,8 +517,6 @@ describe("transaction conversion", () => {
   });
 
   it("formats an instant in the configured timezone", () => {
-    expect(actualDate("2026-08-19T15:00:00Z", "Australia/Sydney")).toBe(
-      "2026-08-20",
-    );
+    expect(actualDate("2026-08-19T15:00:00Z", "Australia/Sydney")).toBe("2026-08-20");
   });
 });

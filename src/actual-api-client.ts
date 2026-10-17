@@ -35,11 +35,8 @@ export class ActualApiClient implements ActualClient {
     const credentials = getActualCredentials(this.app);
     const syncId =
       this.config.syncId ??
-      (this.config.syncIdEnv
-        ? environmentValue(this.config.syncIdEnv)
-        : undefined);
-    if (!credentials || !syncId)
-      throw new Error("Configure Actual in the app first");
+      (this.config.syncIdEnv ? environmentValue(this.config.syncIdEnv) : undefined);
+    if (!credentials || !syncId) throw new Error("Configure Actual in the app first");
     try {
       await api.init({
         ...base,
@@ -69,8 +66,7 @@ export class ActualApiClient implements ActualClient {
   async getServerVersion(): Promise<string> {
     await this.open();
     const result = await api.getServerVersion();
-    if ("error" in result)
-      throw new Error(`Actual server check failed: ${result.error}`);
+    if ("error" in result) throw new Error(`Actual server check failed: ${result.error}`);
     return result.version;
   }
 
@@ -114,10 +110,7 @@ export class ActualApiClient implements ActualClient {
     };
   }
 
-  async updateTransaction(
-    id: string,
-    fields: Partial<ActualTransaction>,
-  ): Promise<void> {
+  async updateTransaction(id: string, fields: Partial<ActualTransaction>): Promise<void> {
     await this.open();
     await api.updateTransaction(id, fields);
   }

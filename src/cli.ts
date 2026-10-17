@@ -48,9 +48,7 @@ program
     try {
       const validation = await runtime.engine.validate();
       assertActualCompatibility(validation.actualVersion);
-      process.stdout.write(
-        `${JSON.stringify({ ok: true, ...validation }, null, 2)}\n`,
-      );
+      process.stdout.write(`${JSON.stringify({ ok: true, ...validation }, null, 2)}\n`);
     } finally {
       await runtime.actual.close();
     }
@@ -65,10 +63,7 @@ program
     try {
       const up = Object.fromEntries(
         await Promise.all(
-          [...runtime.clients].map(async ([id, client]) => [
-            id,
-            await client.listAccounts(),
-          ]),
+          [...runtime.clients].map(async ([id, client]) => [id, await client.listAccounts()]),
         ),
       );
       process.stdout.write(
@@ -94,33 +89,22 @@ program
   .description("run reconciliation or an explicit backfill")
   .option("--account <alias...>", "limit reconciliation to account aliases")
   .option("--dry-run", "report intended changes without writing", false)
-  .option(
-    "--since <date>",
-    "fetch transactions since an RFC 3339 timestamp or YYYY-MM-DD",
-  )
-  .action(
-    async (options: {
-      account?: string[];
-      dryRun: boolean;
-      since?: string;
-    }) => {
-      const config = await loadConfig(
-        program.opts<{ config: string }>().config,
-      );
-      const runtime = await createRuntime(config);
-      try {
-        const report = await runtime.engine.reconcile({
-          dryRun: options.dryRun,
-          mappingAliases: options.account,
-          since: options.since,
-        });
-        process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-        if (report.failed > 0) process.exitCode = 1;
-      } finally {
-        await runtime.actual.close();
-      }
-    },
-  );
+  .option("--since <date>", "fetch transactions since an RFC 3339 timestamp or YYYY-MM-DD")
+  .action(async (options: { account?: string[]; dryRun: boolean; since?: string }) => {
+    const config = await loadConfig(program.opts<{ config: string }>().config);
+    const runtime = await createRuntime(config);
+    try {
+      const report = await runtime.engine.reconcile({
+        dryRun: options.dryRun,
+        mappingAliases: options.account,
+        since: options.since,
+      });
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+      if (report.failed > 0 || report.publication === "failed") process.exitCode = 1;
+    } finally {
+      await runtime.actual.close();
+    }
+  });
 
 const webhook = program.command("webhook").description("manage Up webhooks");
 
@@ -129,16 +113,12 @@ webhook
   .description("create a webhook and print its one-time secret")
   .action(async (connectionId: string) => {
     const config = await loadConfig(program.opts<{ config: string }>().config);
-    if (!config.server.publicUrl)
-      throw new Error("server.publicUrl is required");
+    if (!config.server.publicUrl) throw new Error("server.publicUrl is required");
     const runtime = await createRuntime(config);
     try {
       const client = requiredClient(runtime.clients, connectionId);
       const target = `${config.server.publicUrl.replace(/\/$/, "")}/webhooks/up/${connectionId}`;
-      const created = await client.createWebhook(
-        target,
-        `actual-up:${connectionId}`,
-      );
+      const created = await client.createWebhook(target, `actual-up:${connectionId}`);
       process.stdout.write(`${JSON.stringify(created, null, 2)}\n`);
     } finally {
       await runtime.actual.close();
@@ -150,9 +130,7 @@ webhook
   .description("delete the configured or supplied webhook")
   .action(async (connectionId: string, webhookId?: string) => {
     const config = await loadConfig(program.opts<{ config: string }>().config);
-    const connection = config.up.connections.find(
-      ({ id }) => id === connectionId,
-    );
+    const connection = config.up.connections.find(({ id }) => id === connectionId);
     const id = webhookId ?? connection?.webhook?.id;
     if (!id) throw new Error("No webhook ID was supplied or configured");
     const runtime = await createRuntime(config);
@@ -168,9 +146,7 @@ webhook
   .description("send a test event to the configured or supplied webhook")
   .action(async (connectionId: string, webhookId?: string) => {
     const config = await loadConfig(program.opts<{ config: string }>().config);
-    const connection = config.up.connections.find(
-      ({ id }) => id === connectionId,
-    );
+    const connection = config.up.connections.find(({ id }) => id === connectionId);
     const id = webhookId ?? connection?.webhook?.id;
     if (!id) throw new Error("No webhook ID was supplied or configured");
     const runtime = await createRuntime(config);
@@ -188,10 +164,7 @@ webhook
     const config = await loadConfig(program.opts<{ config: string }>().config);
     const runtime = await createRuntime(config);
     try {
-      const values = await requiredClient(
-        runtime.clients,
-        connectionId,
-      ).listWebhooks();
+      const values = await requiredClient(runtime.clients, connectionId).listWebhooks();
       process.stdout.write(`${JSON.stringify(values, null, 2)}\n`);
     } finally {
       await runtime.actual.close();

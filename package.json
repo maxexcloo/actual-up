@@ -1,17 +1,20 @@
 {
-  "description": "Synchronise Up transactions into Actual Budget.",
-  "exports": "./dist/index.js",
-  "license": "AGPL-3.0-only",
   "name": "actual-up",
-  "type": "module",
   "version": "0.2.5",
-  "allowScripts": {
-    "@parcel/watcher": false,
-    "better-sqlite3": true,
-    "esbuild": true
-  },
+  "description": "Synchronise Up transactions into Actual Budget.",
+  "license": "AGPL-3.0-only",
   "bin": {
     "actual-up": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && npm run build:ui",
+    "build:ui": "node assets/build.mjs",
+    "start": "node dist/cli.js serve"
   },
   "dependencies": {
     "@actual-app/api": "26.10.0",
@@ -38,12 +41,9 @@
   "engines": {
     "node": ">=22"
   },
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsc -p tsconfig.build.json && npm run build:ui",
-    "build:ui": "node assets/build.mjs",
-    "start": "node dist/cli.js serve"
+  "allowScripts": {
+    "@parcel/watcher": false,
+    "better-sqlite3": true,
+    "esbuild": true
   }
 }

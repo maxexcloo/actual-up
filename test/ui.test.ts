@@ -35,7 +35,5 @@ it("shows the active job while a newer job waits, and refreshes intermediate pro
   expect(html).toContain(">Completed</wa-badge>");
   expect(html).not.toContain(">Success</wa-badge>");
   expect(html).not.toContain("Last Successful Sync: None in recent activity");
-  expect(html.indexOf("Manual Sync")).toBeLessThan(
-    html.indexOf('id="activity"'),
-  );
+  expect(html.indexOf("Manual Sync")).toBeLessThan(html.indexOf('id="activity"'));
 });

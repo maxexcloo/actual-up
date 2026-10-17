@@ -1,10 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-  randomUUID,
-} from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
@@ -26,9 +20,7 @@ const actualCredentialsSchema = z
   .strict();
 export type ActualCredentials = z.infer<typeof actualCredentialsSchema>;
 
-export function getActualCredentials(
-  config: AppConfig,
-): ActualCredentials | undefined {
+export function getActualCredentials(config: AppConfig): ActualCredentials | undefined {
   const saved = actualSecrets.get(config);
   if (saved) return saved;
   const name = config.actual.sessionTokenEnv ?? config.actual.passwordEnv;
@@ -42,10 +34,7 @@ export function getActualCredentials(
   };
 }
 
-export function setActualCredentials(
-  config: AppConfig,
-  value: ActualCredentials,
-): void {
+export function setActualCredentials(config: AppConfig, value: ActualCredentials): void {
   actualSecrets.set(config, value);
 }
 
@@ -80,8 +69,7 @@ function settings(config: AppConfig) {
 
 function encryptionKey(config: AppConfig): Buffer {
   const secret = environmentValue(config.encryptionKeyEnv);
-  if (secret.length < 32)
-    throw new Error("Encryption key must contain at least 32 characters");
+  if (secret.length < 32) throw new Error("Encryption key must contain at least 32 characters");
   return createHash("sha256").update(secret).digest();
 }
 
@@ -96,21 +84,14 @@ export function copyCredentials(source: AppConfig, target: AppConfig): void {
   else actualSecrets.delete(target);
 }
 
-export function setConnectionToken(
-  config: AppConfig,
-  id: string,
-  token?: string,
-): void {
+export function setConnectionToken(config: AppConfig, id: string, token?: string): void {
   const tokens = { ...credentials.get(config) };
   if (token === undefined) delete tokens[id];
   else tokens[id] = token;
   credentials.set(config, tokens);
 }
 
-export function connectionToken(
-  config: AppConfig,
-  connection: UpConnectionConfig,
-): string {
+export function connectionToken(config: AppConfig, connection: UpConnectionConfig): string {
   const saved = credentials.get(config)?.[connection.id];
   if (saved) return saved;
   if (connection.tokenEnv) return environmentValue(connection.tokenEnv);
@@ -120,9 +101,7 @@ export function connectionToken(
 export function settingsVersion(config: AppConfig, accountId?: string): string {
   const value = settings(config);
   // Unrelated account saves do not invalidate this form; validate uniqueness on save.
-  value.mappings = value.mappings.filter(
-    ({ upAccountId }) => upAccountId === accountId,
-  );
+  value.mappings = value.mappings.filter(({ upAccountId }) => upAccountId === accountId);
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
@@ -137,8 +116,7 @@ export async function loadSettings(config: AppConfig): Promise<AppConfig> {
   const envelope = envelopeSchema.parse(JSON.parse(source));
   const iv = Buffer.from(envelope.iv, "base64");
   const tag = Buffer.from(envelope.tag, "base64");
-  if (iv.length !== 12 || tag.length !== 16)
-    throw new Error("Invalid encrypted settings");
+  if (iv.length !== 12 || tag.length !== 16) throw new Error("Invalid encrypted settings");
   const decipher = createDecipheriv("aes-256-gcm", encryptionKey(config), iv);
   decipher.setAAD(context);
   decipher.setAuthTag(tag);
@@ -155,10 +133,8 @@ export async function loadSettings(config: AppConfig): Promise<AppConfig> {
   });
   loaded.actual.cacheDirectory = config.actual.cacheDirectory;
   credentials.set(loaded, saved.tokens);
-  if (saved.actualCredentials)
-    actualSecrets.set(loaded, saved.actualCredentials);
-  for (const connection of loaded.up.connections)
-    connectionToken(loaded, connection);
+  if (saved.actualCredentials) actualSecrets.set(loaded, saved.actualCredentials);
+  for (const connection of loaded.up.connections) connectionToken(loaded, connection);
   return loaded;
 }
 

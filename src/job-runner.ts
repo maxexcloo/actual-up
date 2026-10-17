@@ -14,6 +14,7 @@ export type JobScope = {
   connection?: string;
   mode?: "dry-run" | "live";
   since?: string;
+  target?: string;
 };
 
 export type Job = {
@@ -52,8 +53,7 @@ export class JobRunner {
     operation: (progress: (value: JobProgress) => void) => Promise<unknown>,
     scope?: JobScope,
   ): boolean {
-    if (this.stopping || this.keys.has(key) || this.keys.size >= 32)
-      return false;
+    if (this.stopping || this.keys.has(key) || this.keys.size >= 32) return false;
     this.keys.add(key);
     const job: Job = { id: randomUUID(), trigger, scope, state: "queued" };
     this.jobs.unshift(job);
@@ -81,13 +81,11 @@ export class JobRunner {
         stopTimer();
         job.finishedAt = new Date().toISOString();
         this.metrics.jobs.inc({ outcome: job.state, trigger });
-        if (job.state === "success")
-          this.metrics.lastSuccess.set({ trigger }, Date.now() / 1000);
+        if (job.state === "success") this.metrics.lastSuccess.set({ trigger }, Date.now() / 1000);
         this.keys.delete(key);
         this.metrics.queueDepth.set(this.depth);
         const completed = this.jobs.filter((entry) => entry.finishedAt);
-        for (const old of completed.slice(20))
-          this.jobs.splice(this.jobs.indexOf(old), 1);
+        for (const old of completed.slice(20)) this.jobs.splice(this.jobs.indexOf(old), 1);
       }
     });
     return true;
@@ -110,9 +108,7 @@ function hasFailures(value: unknown): boolean {
   return (
     typeof value === "object" &&
     value !== null &&
-    (("failed" in value &&
-      typeof value.failed === "number" &&
-      value.failed > 0) ||
+    (("failed" in value && typeof value.failed === "number" && value.failed > 0) ||
       ("publication" in value && value.publication === "failed"))
   );
 }

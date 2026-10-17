@@ -51,12 +51,8 @@ describe("Actual worker isolation", () => {
       method: "password",
     });
     try {
-      await expect(client.getPayees()).rejects.toThrow(
-        "Actual operation failed",
-      );
-      await expect(client.deleteTransaction("test-id")).rejects.toThrow(
-        "Actual worker stopped",
-      );
+      await expect(client.getPayees()).rejects.toThrow("Actual operation failed");
+      await expect(client.deleteTransaction("test-id")).rejects.toThrow("Actual worker stopped");
       expect(await client.getServerVersion()).toBe("password");
     } finally {
       await client.close();

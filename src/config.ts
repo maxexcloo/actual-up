@@ -138,8 +138,7 @@ export async function loadConfig(path: string): Promise<AppConfig> {
 export function parseConfig(value: unknown): AppConfig {
   const config = configSchema.parse(value);
   const publicUrl = process.env.ACTUAL_UP_PUBLIC_URL;
-  if (publicUrl !== undefined)
-    config.server.publicUrl = httpUrl.parse(publicUrl);
+  if (publicUrl !== undefined) config.server.publicUrl = httpUrl.parse(publicUrl);
   validateConfig(config);
   return config;
 }
@@ -155,26 +154,19 @@ function validateConfig(config: AppConfig): void {
   const actualAccountIds = new Set<string>();
   for (const mapping of config.mappings) {
     if (upAccountIds.has(mapping.upAccountId)) {
-      throw new Error(
-        `Up account ${mapping.upAccountId} is mapped more than once`,
-      );
+      throw new Error(`Up account ${mapping.upAccountId} is mapped more than once`);
     }
     if (actualAccountIds.has(mapping.actualAccountId)) {
-      throw new Error(
-        `Actual account ${mapping.actualAccountId} is mapped more than once`,
-      );
+      throw new Error(`Actual account ${mapping.actualAccountId} is mapped more than once`);
     }
-    if (aliases.has(mapping.alias))
-      throw new Error("Mapping aliases must be unique");
+    if (aliases.has(mapping.alias)) throw new Error("Mapping aliases must be unique");
     aliases.add(mapping.alias);
     upAccountIds.add(mapping.upAccountId);
     actualAccountIds.add(mapping.actualAccountId);
 
     for (const id of mapping.connections) {
       if (!connectionIds.has(id)) {
-        throw new Error(
-          `Mapping ${mapping.alias} references unknown connection ${id}`,
-        );
+        throw new Error(`Mapping ${mapping.alias} references unknown connection ${id}`);
       }
     }
   }

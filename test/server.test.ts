@@ -26,10 +26,7 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  vi.stubEnv(
-    "ACTUAL_UP_ENCRYPTION_KEY",
-    "test-encryption-key-at-least-32-characters",
-  );
+  vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "test-encryption-key-at-least-32-characters");
   vi.stubEnv("ACTUAL_UP_USERNAME", "operator");
   vi.stubEnv("ACTUAL_UP_PASSWORD", password);
   const config = parseConfig({
@@ -58,9 +55,7 @@ async function fixture() {
   const actual = {
     getServerVersion: vi.fn().mockResolvedValue("26.10.0"),
     sync: vi.fn(),
-    getAccounts: vi
-      .fn()
-      .mockResolvedValue([{ id: "actual-id", name: "Spending" }]),
+    getAccounts: vi.fn().mockResolvedValue([{ id: "actual-id", name: "Spending" }]),
     getCategories: vi.fn().mockResolvedValue([]),
   };
   const client = {
@@ -193,8 +188,7 @@ describe("operator app", () => {
     expect(expired.statusCode).toBe(200);
     expect(expired.headers["hx-redirect"]).toBe("/login");
     expect(
-      (await server.inject({ url: "/", headers: { cookie: headers.cookie } }))
-        .statusCode,
+      (await server.inject({ url: "/", headers: { cookie: headers.cookie } })).statusCode,
     ).toBe(303);
   });
 
@@ -211,13 +205,10 @@ describe("operator app", () => {
       ).statusCode,
     ).toBe(303);
     const now = Date.now();
-    const clock = vi
-      .spyOn(Date, "now")
-      .mockReturnValue(now + 8 * 60 * 60 * 1000 + 1);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now + 8 * 60 * 60 * 1000 + 1);
     try {
       expect(
-        (await server.inject({ url: "/", headers: { cookie: headers.cookie } }))
-          .statusCode,
+        (await server.inject({ url: "/", headers: { cookie: headers.cookie } })).statusCode,
       ).toBe(303);
     } finally {
       clock.mockRestore();
@@ -328,10 +319,7 @@ describe("operator app", () => {
         since: undefined,
       });
     }
-    for (const scope of [
-      "connection=missing",
-      "connection=max&account=spending",
-    ])
+    for (const scope of ["connection=missing", "connection=max&account=spending"])
       expect(
         (
           await server.inject({
@@ -404,5 +392,50 @@ describe("operator app", () => {
     expect(response.body).not.toContain("sensitive-balance");
     expect(response.body).not.toContain("<script>alert");
     expect(response.body).toContain("&lt;script&gt;");
+  });
+
+  it("derives connection-test progress from the queue and coalesces duplicate requests", async () => {
+    const { server, runner, client } = await fixture();
+    let releaseQueue!: () => void;
+    let releaseTest!: () => void;
+    const queueGate = new Promise<void>((resolve) => {
+      releaseQueue = resolve;
+    });
+    const testGate = new Promise<void>((resolve) => {
+      releaseTest = resolve;
+    });
+    runner.enqueue("block", "manual", () => queueGate);
+    client.ping.mockReturnValue(testGate);
+    const request = () =>
+      server.inject({
+        headers,
+        method: "POST",
+        payload: "target=up&connection=max",
+        url: "/actions/test",
+      });
+    try {
+      expect((await request()).body).toContain("Testing Connection");
+      expect(runner.history[0]).toMatchObject({ state: "queued", scope: { target: "up-max" } });
+      await request();
+      expect(runner.depth).toBe(2);
+      releaseQueue();
+      await vi.waitFor(() => expect(client.ping).toHaveBeenCalledOnce());
+      expect(runner.history[0]?.state).toBe("running");
+      expect((await server.inject({ headers, url: "/connection-tests/up-max" })).body).toContain(
+        "Testing Connection",
+      );
+      releaseTest();
+      await runner.drain();
+      expect((await server.inject({ headers, url: "/connection-tests/up-max" })).body).toContain(
+        "Connection Working",
+      );
+      expect((await server.inject({ headers, url: "/connection-tests/unknown" })).statusCode).toBe(
+        404,
+      );
+    } finally {
+      releaseQueue();
+      releaseTest();
+      await runner.drain();
+    }
   });
 });

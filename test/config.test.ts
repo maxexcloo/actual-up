@@ -37,8 +37,7 @@ describe("configuration", () => {
   it("uses the environment public URL instead of the configured URL", () => {
     vi.stubEnv("ACTUAL_UP_PUBLIC_URL", "https://private.example.com");
     expect(
-      parseConfig({ ...base, server: { publicUrl: "http://localhost:3000" } })
-        .server.publicUrl,
+      parseConfig({ ...base, server: { publicUrl: "http://localhost:3000" } }).server.publicUrl,
     ).toBe("https://private.example.com");
   });
 

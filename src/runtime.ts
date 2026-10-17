@@ -1,11 +1,7 @@
 import pino, { type Logger } from "pino";
 
 import { ActualBudgetClient } from "./actual-client.js";
-import {
-  LoggingAlertSink,
-  WebhookAlertSink,
-  type AlertSink,
-} from "./alerts.js";
+import { LoggingAlertSink, WebhookAlertSink, type AlertSink } from "./alerts.js";
 import { environmentValue, type AppConfig } from "./config.js";
 import { Metrics } from "./metrics.js";
 import { SyncEngine } from "./sync-engine.js";
@@ -64,14 +60,7 @@ export async function createRuntime(config: AppConfig): Promise<Runtime> {
   const alerts = config.alerts
     ? new WebhookAlertSink(config.alerts, logger)
     : new LoggingAlertSink(logger);
-  const engine = new SyncEngine(
-    config,
-    actual,
-    clients,
-    alerts,
-    metrics,
-    logger,
-  );
+  const engine = new SyncEngine(config, actual, clients, alerts, metrics, logger);
   return { actual, alerts, clients, engine, logger, metrics };
 }
 

@@ -27,10 +27,7 @@ afterEach(async () => {
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "actual-up-settings-"));
   cleanups.push(() => rm(directory, { force: true, recursive: true }));
-  vi.stubEnv(
-    "ACTUAL_UP_ENCRYPTION_KEY",
-    "test-encryption-key-at-least-32-characters",
-  );
+  vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "test-encryption-key-at-least-32-characters");
   vi.stubEnv("UP_TOKEN_MAX", "test-secret-never-render");
   vi.stubEnv("UP_TOKEN_PARTNER", "another-secret");
   const config = parseConfig({
@@ -58,17 +55,13 @@ async function fixture() {
     ping: vi.fn().mockResolvedValue(undefined),
     listAccounts: vi.fn().mockResolvedValue(accounts),
   };
-  const clients = new Map<string, UpClientLike>([
-    ["max", client as unknown as UpClientLike],
-  ]);
+  const clients = new Map<string, UpClientLike>([["max", client as unknown as UpClientLike]]);
   const actual = {
     open: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
     getServerVersion: vi.fn().mockResolvedValue("26.10.0"),
     sync: vi.fn().mockResolvedValue(undefined),
-    getAccounts: vi
-      .fn()
-      .mockResolvedValue([{ id: "actual-id", name: "Spending" }]),
+    getAccounts: vi.fn().mockResolvedValue([{ id: "actual-id", name: "Spending" }]),
   };
   const engine = {
     reconcile: vi.fn().mockResolvedValue({ failed: 0, imported: 1 }),
@@ -170,9 +163,7 @@ describe("browser setup", () => {
     expect(f.client.listAccounts).toHaveBeenCalledOnce();
     const page = await f.server.inject("/");
     expect(page.body).toContain('data-connection="max"');
-    expect(page.body).toContain(
-      'data-account="11111111-1111-4111-8111-111111111111"',
-    );
+    expect(page.body).toContain('data-account="11111111-1111-4111-8111-111111111111"');
     await f.post({
       action: "connection",
       id: "partner",
@@ -196,17 +187,12 @@ describe("browser setup", () => {
       progress: expect.any(Function),
       mappingAliases: ["spending"],
     });
-    const restored = await loadSettings(
-      parseConfig({ ...f.config, mappings: [] }),
-    );
+    const restored = await loadSettings(parseConfig({ ...f.config, mappings: [] }));
     expect(restored.mappings[0]?.upAccountId).toBe(upId);
     expect((await stat(f.config.settingsFile)).mode & 0o777).toBe(0o600);
-    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain(
-      "test-secret",
-    );
+    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("test-secret");
     expect(
-      (await f.post({ action: "remove-mapping", revision, upAccountId: upId }))
-        .statusCode,
+      (await f.post({ action: "remove-mapping", revision, upAccountId: upId })).statusCode,
     ).toBe(409);
     expect(f.config.mappings).toHaveLength(1);
   });
@@ -229,9 +215,7 @@ describe("browser setup", () => {
     });
     expect(f.makeClient).toHaveBeenCalledWith("another-secret", "partner");
     expect(f.clients.has("partner")).toBe(true);
-    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain(
-      "another-secret",
-    );
+    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("another-secret");
     const restored = await loadSettings(f.config);
     expect(
       connectionToken(
@@ -264,9 +248,7 @@ describe("browser setup", () => {
       method: "GET",
       url: `/accounts/${upId}?connection=max`,
     });
-    expect(rows.body).toContain(
-      `<div class="account-row wa-stack" id="account-max-${upId}"`,
-    );
+    expect(rows.body).toContain(`<div class="account-row wa-stack" id="account-max-${upId}"`);
     expect(rows.body).toContain(
       `<div hx-swap-oob="outerHTML" class="account-row wa-stack" id="account-partner-${upId}"`,
     );
@@ -329,21 +311,15 @@ describe("browser setup", () => {
     expect(getActualCredentials(await loadSettings(f.config))?.credential).toBe(
       "actual-secret-token",
     );
-    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain(
-      "actual-secret-token",
-    );
+    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("actual-secret-token");
     const page = await f.server.inject("/");
     expect(page.body).not.toContain("actual-secret-token");
     await f.post({ ...command, credential: "" });
-    expect(getActualCredentials(f.config)?.credential).toBe(
-      "actual-secret-token",
-    );
+    expect(getActualCredentials(f.config)?.credential).toBe("actual-secret-token");
     f.actual.open.mockRejectedValueOnce(new Error("upstream contains secret"));
     await f.post({ ...command, credential: "replacement-secret" });
     expect(f.runner.history[0]?.state).toBe("failure");
-    expect(getActualCredentials(f.config)?.credential).toBe(
-      "actual-secret-token",
-    );
+    expect(getActualCredentials(f.config)?.credential).toBe("actual-secret-token");
     expect(getActualCredentials(await loadSettings(f.config))?.credential).toBe(
       "actual-secret-token",
     );
@@ -401,25 +377,19 @@ describe("browser setup", () => {
       expect(first.body).not.toContain('id="setup"');
       expect(first.body).not.toContain(secondId);
       expect((await submit(upId, "actual-id")).statusCode).toBe(409);
-      expect((await f.server.inject(`/accounts/${secondId}`)).statusCode).toBe(
-        204,
-      );
+      expect((await f.server.inject(`/accounts/${secondId}`)).statusCode).toBe(204);
     } finally {
       release();
     }
     await f.runner.drain();
     expect(f.config.mappings).toHaveLength(2);
     expect(f.engine.reconcile).toHaveBeenCalledTimes(2);
-    expect((await f.server.inject(`/accounts/${secondId}`)).body).toContain(
-      "Saved.",
-    );
+    expect((await f.server.inject(`/accounts/${secondId}`)).body).toContain("Saved.");
     await f.post({ action: "remove-mapping", upAccountId: secondId });
     await submit(secondId, "actual-id");
     await f.runner.drain();
     expect(f.config.mappings).toHaveLength(1);
-    expect((await f.server.inject(`/accounts/${secondId}`)).body).toContain(
-      "only be mapped once",
-    );
+    expect((await f.server.inject(`/accounts/${secondId}`)).body).toContain("only be mapped once");
   });
 
   it("keeps other account saves available while history backfills", async () => {
@@ -478,15 +448,9 @@ describe("browser setup", () => {
   it("fails closed on corrupt persisted settings", async () => {
     const f = await fixture();
     await f.post(f.mapping);
-    vi.stubEnv(
-      "ACTUAL_UP_ENCRYPTION_KEY",
-      "wrong-encryption-key-at-least-32-characters",
-    );
+    vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "wrong-encryption-key-at-least-32-characters");
     await expect(loadSettings(f.config)).rejects.toThrow();
-    vi.stubEnv(
-      "ACTUAL_UP_ENCRYPTION_KEY",
-      "test-encryption-key-at-least-32-characters",
-    );
+    vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "test-encryption-key-at-least-32-characters");
     const envelope = JSON.parse(await readFile(f.config.settingsFile, "utf8"));
     const data = Buffer.from(envelope.data, "base64");
     data[0] = data[0]! ^ 1;

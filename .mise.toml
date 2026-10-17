@@ -6,12 +6,8 @@ _.path = ["node_modules/.bin"]
 run = "npm run build"
 
 [tasks.check]
-depends = ["build", "check:actions", "check:chart", "check:prettier", "check:updates"]
-run = [
-  "oxlint --deny-warnings src test",
-  { task = "check:typescript" },
-  { task = "test" },
-]
+depends = ["build", "check:actions", "check:chart", "check:oxfmt", "check:updates"]
+run = ["oxlint --deny-warnings src test", { task = "check:typescript" }, { task = "test" }]
 
 [tasks."check:chart"]
 run = """
@@ -24,7 +20,7 @@ depends = ["build"]
 run = "node dist/cli.js serve"
 
 [tasks.fmt]
-depends = ["fmt:prettier"]
+depends = ["fmt:oxfmt"]
 
 [tasks.test]
 run = "vitest run"

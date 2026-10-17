@@ -30,12 +30,8 @@ export function startSchedule(
     );
   };
   const options = { paused: true, timezone: config.schedule.timezone };
-  const recent = new Cron(config.schedule.cron, options, () =>
-    reconcile(false),
-  );
-  const backfill = new Cron(config.schedule.backfillCron, options, () =>
-    reconcile(true),
-  );
+  const recent = new Cron(config.schedule.cron, options, () => reconcile(false));
+  const backfill = new Cron(config.schedule.backfillCron, options, () => reconcile(true));
   reconcile(true);
   recent.resume();
   backfill.resume();

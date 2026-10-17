@@ -94,11 +94,9 @@ describe("automatic reconciliation", () => {
     expect(runner.history[0]?.state).toBe("failure");
     await vi.advanceTimersByTimeAsync(10_000);
     await runner.drain();
-    expect(
-      engine.reconcile.mock.calls.filter(([options]) => options.since),
-    ).toHaveLength(2);
-    expect(
-      runner.history.find((job) => job.trigger === "automatic-backfill")?.state,
-    ).toBe("success");
+    expect(engine.reconcile.mock.calls.filter(([options]) => options.since)).toHaveLength(2);
+    expect(runner.history.find((job) => job.trigger === "automatic-backfill")?.state).toBe(
+      "success",
+    );
   });
 });

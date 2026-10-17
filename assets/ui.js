@@ -2,10 +2,7 @@
 const dirtyControls = new WeakSet();
 for (const type of ["change", "input"]) {
   document.addEventListener(type, (event) => {
-    if (
-      event.target.matches("input:not([type=hidden]), select, textarea") &&
-      event.target.form?.id
-    )
+    if (event.target.matches("input:not([type=hidden]), select, textarea") && event.target.form?.id)
       dirtyControls.add(event.target);
   });
 }
@@ -17,10 +14,7 @@ document.addEventListener("htmx:beforeSwap", (event) => {
     const replacement = template.content.getElementById(element.id);
     if (replacement) replacement.open = true;
   });
-  const submitted =
-    requestConfig?.verb === "post"
-      ? requestConfig.elt?.closest("form")
-      : undefined;
+  const submitted = requestConfig?.verb === "post" ? requestConfig.elt?.closest("form") : undefined;
   target.querySelectorAll("form[id]").forEach((form) => {
     if (form === submitted) return;
     const replacement = template.content.getElementById(form.id);
@@ -41,9 +35,7 @@ document.addEventListener("htmx:beforeSwap", (event) => {
         for (const option of next.options)
           option.toggleAttribute(
             "selected",
-            [...control.selectedOptions].some(
-              (selected) => selected.value === option.value,
-            ),
+            [...control.selectedOptions].some((selected) => selected.value === option.value),
           );
       } else if (next.tagName === "TEXTAREA") {
         next.textContent = control.value;

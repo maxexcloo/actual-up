@@ -39,10 +39,7 @@ export class WebhookAlertSink implements AlertSink {
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) {
-      this.logger.warn(
-        { alertType: alert.type, status: response.status },
-        "Alert webhook failed",
-      );
+      this.logger.warn({ alertType: alert.type, status: response.status }, "Alert webhook failed");
       return;
     }
     this.lastSent.set(key, now);

@@ -3,30 +3,41 @@
 @import "./shell.css";
 
 .account-row {
-  padding-top: var(--wa-space-m);
+  padding-top: var(--wa-space-l);
   border-top: var(--wa-border-width-s) solid var(--wa-color-surface-border);
 }
+.account-fields {
+  --min-column-size: 28ch;
+}
+.account-save {
+  justify-self: start;
+  align-self: end;
+}
 .results {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
-  gap: var(--wa-space-xs);
+  --min-column-size: 10ch;
 }
 .results dd {
   margin: 0;
-  font-size: var(--wa-font-size-l);
+  font-size: var(--wa-font-size-xl);
   font-variant-numeric: tabular-nums;
 }
+.results dt {
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-s);
+}
 pre {
-  max-height: 24rem;
+  max-height: 40ch;
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .login {
-  max-width: 28rem;
+  max-width: 48ch;
 }
 .action-progress,
-#feedback:empty {
+#feedback:empty,
+[id^="test-"]:empty,
+#runs [role="status"]:empty {
   display: none;
 }
 form.htmx-request .action-label {
@@ -38,29 +49,12 @@ form.htmx-request .action-progress {
 form.htmx-request button {
   cursor: wait;
 }
-
 #setup fieldset {
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
-  min-width: 0;
 }
-[id^="test-"]:empty,
-#runs > [role="status"]:empty {
-  display: none;
-}
-@media (max-width: 680px) {
-  #setup section > .wa-split:has(.section-intro) {
-    align-items: start;
-  }
-  #setup section > .wa-split > .section-actions {
-    margin-left: auto;
-  }
-}
-
-.results dt {
-  font-size: var(--wa-font-size-s);
-}
-#automation-tools .wa-cluster {
-  gap: var(--wa-space-2xs);
+#setup fieldset > button {
+  align-self: start;
 }

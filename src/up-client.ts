@@ -1,12 +1,7 @@
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import type {
-  UpAccount,
-  UpClientLike,
-  UpTransaction,
-  UpWebhook,
-} from "./types.js";
+import type { UpAccount, UpClientLike, UpTransaction, UpWebhook } from "./types.js";
 
 const API_BASE_URL = "https://api.up.com.au/api/v1";
 
@@ -48,10 +43,7 @@ export class UpClient implements UpClientLike {
     return (await this.paginate("/accounts?page%5Bsize%5D=100")) as UpAccount[];
   }
 
-  async listTransactions(
-    accountId: string,
-    since: string,
-  ): Promise<UpTransaction[]> {
+  async listTransactions(accountId: string, since: string): Promise<UpTransaction[]> {
     const query = new URLSearchParams({
       "filter[since]": since,
       "page[size]": "100",
@@ -62,9 +54,7 @@ export class UpClient implements UpClientLike {
   }
 
   async getTransaction(id: string): Promise<UpTransaction> {
-    const value = singleSchema.parse(
-      await this.request(`/transactions/${encodeURIComponent(id)}`),
-    );
+    const value = singleSchema.parse(await this.request(`/transactions/${encodeURIComponent(id)}`));
     return value.data as unknown as UpTransaction;
   }
 
@@ -96,9 +86,7 @@ export class UpClient implements UpClientLike {
     });
   }
 
-  private async paginate(
-    path: string,
-  ): Promise<Array<Record<string, unknown>>> {
+  private async paginate(path: string): Promise<Array<Record<string, unknown>>> {
     const output: Array<Record<string, unknown>> = [];
     let next: string | null = this.url(path).toString();
     while (next) {
@@ -113,10 +101,7 @@ export class UpClient implements UpClientLike {
     return output;
   }
 
-  private async request(
-    path: string,
-    init: RequestInit = {},
-  ): Promise<unknown> {
+  private async request(path: string, init: RequestInit = {}): Promise<unknown> {
     const url = this.url(path);
     for (let attempt = 0; attempt < 5; attempt += 1) {
       let response: Response;
@@ -142,17 +127,11 @@ export class UpClient implements UpClientLike {
 
       await response.body?.cancel();
       if ((response.status === 429 || response.status >= 500) && attempt < 4) {
-        this.logger.warn(
-          { attempt: attempt + 1, status: response.status },
-          "Retrying Up API",
-        );
+        this.logger.warn({ attempt: attempt + 1, status: response.status }, "Retrying Up API");
         await this.backoff(attempt, response.headers.get("retry-after"));
         continue;
       }
-      throw new UpApiError(
-        `Up API returned ${response.status}`,
-        response.status,
-      );
+      throw new UpApiError(`Up API returned ${response.status}`, response.status);
     }
     throw new Error("Up API retry loop ended unexpectedly");
   }
@@ -162,13 +141,8 @@ export class UpClient implements UpClientLike {
     return new URL(`${API_BASE_URL}${path}`);
   }
 
-  private async backoff(
-    attempt: number,
-    retryAfter: string | null = null,
-  ): Promise<void> {
-    const retrySeconds = retryAfter
-      ? Number.parseInt(retryAfter, 10)
-      : Number.NaN;
+  private async backoff(attempt: number, retryAfter: string | null = null): Promise<void> {
+    const retrySeconds = retryAfter ? Number.parseInt(retryAfter, 10) : Number.NaN;
     const delay = Number.isFinite(retrySeconds)
       ? retrySeconds * 1000
       : Math.min(10_000, 250 * 2 ** attempt) + Math.floor(Math.random() * 200);

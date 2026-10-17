@@ -40,14 +40,7 @@ export async function startService(
   logger: Logger,
   runtime: Pick<Runtime, "actual" | "clients">,
 ): Promise<Service> {
-  const server = await createServer(
-    config,
-    engine,
-    runner,
-    metrics,
-    logger,
-    runtime,
-  );
+  const server = await createServer(config, engine, runner, metrics, logger, runtime);
   await server.listen({ host: config.server.host, port: config.server.port });
   const stopSchedule = startSchedule(config, engine, runner, runtime.actual);
   logger.info({ port: config.server.port }, "Service started");
@@ -77,18 +70,9 @@ export async function createServer(
     createRequire(import.meta.url).resolve("htmx.org/dist/htmx.min.js"),
     "utf8",
   );
-  const stylesheet = await readFile(
-    new URL("../dist/style.css", import.meta.url),
-    "utf8",
-  );
-  const themeScript = await readFile(
-    new URL("../dist/theme.js", import.meta.url),
-    "utf8",
-  );
-  const components = await readFile(
-    new URL("../dist/components.js", import.meta.url),
-    "utf8",
-  );
+  const stylesheet = await readFile(new URL("../dist/style.css", import.meta.url), "utf8");
+  const themeScript = await readFile(new URL("../dist/theme.js", import.meta.url), "utf8");
+  const components = await readFile(new URL("../dist/components.js", import.meta.url), "utf8");
   const server = Fastify({
     bodyLimit: 65_536,
     logController: new LogController({ disableRequestLogging: true }),
@@ -141,10 +125,8 @@ export async function createServer(
     },
   );
 
-  server.addContentTypeParser(
-    "application/json",
-    { parseAs: "buffer" },
-    (_request, body, done) => done(null, body),
+  server.addContentTypeParser("application/json", { parseAs: "buffer" }, (_request, body, done) =>
+    done(null, body),
   );
 
   server.get("/livez", async () => ({ status: "ok" }));
@@ -159,22 +141,14 @@ export async function createServer(
   server.post<{ Params: { connectionId: string } }>(
     "/webhooks/up/:connectionId",
     async (request, reply) => {
-      const connection = config.up.connections.find(
-        ({ id }) => id === request.params.connectionId,
-      );
-      if (!connection?.webhook)
-        return reply.code(404).send({ error: "unknown webhook" });
+      const connection = config.up.connections.find(({ id }) => id === request.params.connectionId);
+      if (!connection?.webhook) return reply.code(404).send({ error: "unknown webhook" });
       const body = request.body;
-      if (!Buffer.isBuffer(body))
-        return reply.code(400).send({ error: "invalid body" });
+      if (!Buffer.isBuffer(body)) return reply.code(400).send({ error: "invalid body" });
       const header = request.headers["x-up-authenticity-signature"];
       const signature = Array.isArray(header) ? header[0] : header;
       if (
-        !verifyWebhookSignature(
-          body,
-          signature,
-          environmentValue(connection.webhook.secretEnv),
-        )
+        !verifyWebhookSignature(body, signature, environmentValue(connection.webhook.secretEnv))
       ) {
         return reply.code(401).send({ error: "invalid signature" });
       }
@@ -204,8 +178,7 @@ export async function createServer(
         },
         { connection: connection.id, mode: "live" },
       );
-      if (!accepted)
-        return reply.code(503).send({ error: "queue busy; retry" });
+      if (!accepted) return reply.code(503).send({ error: "queue busy; retry" });
       return reply.code(200).send({ accepted: true });
     },
   );
@@ -219,30 +192,19 @@ export async function createServer(
       "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     );
     const path = request.url.split("?")[0];
-    if (
-      ["/livez", "/readyz", "/metrics"].includes(path!) ||
-      path?.startsWith("/webhooks/up/")
-    )
+    if (["/livez", "/readyz", "/metrics"].includes(path!) || path?.startsWith("/webhooks/up/"))
       return;
     if (request.method === "POST") {
       const origin = request.headers.origin;
       const expected = config.server.publicUrl
         ? new URL(config.server.publicUrl).origin
         : `${request.protocol}://${request.host}`;
-      if (
-        origin !== expected ||
-        request.headers["sec-fetch-site"] === "cross-site"
-      ) {
+      if (origin !== expected || request.headers["sec-fetch-site"] === "cross-site") {
         return reply.code(403).send("Request origin does not match this app");
       }
     }
     if (
-      [
-        "/login",
-        "/assets/components.js",
-        "/assets/style.css",
-        "/assets/theme.js",
-      ].includes(path!)
+      ["/login", "/assets/components.js", "/assets/style.css", "/assets/theme.js"].includes(path!)
     )
       return;
     if (request.session.authenticated !== true) {
@@ -263,15 +225,8 @@ export async function createServer(
       .strict()
       .safeParse(request.body);
     if (!parsed.success)
-      return reply
-        .code(400)
-        .type("text/html")
-        .send(loginPage("Enter your username and password."));
-    const result = attempts.login(
-      parsed.data.username,
-      parsed.data.password,
-      request.ip,
-    );
+      return reply.code(400).type("text/html").send(loginPage("Enter your username and password."));
+    const result = attempts.login(parsed.data.username, parsed.data.password, request.ip);
     if (!result.valid)
       return reply
         .code(result.limited ? 429 : 401)
@@ -293,31 +248,15 @@ export async function createServer(
   });
   server.post("/logout", async (request, reply) => {
     await request.session.destroy();
-    return reply
-      .clearCookie("actual_up_session", { path: "/" })
-      .redirect("/login", 303);
+    return reply.clearCookie("actual_up_session", { path: "/" }).redirect("/login", 303);
   });
 
-  registerSettings(
-    server,
-    config,
-    runner,
-    engine,
-    runtime,
-    logger,
-    makeUpClient,
-  );
+  registerSettings(server, config, runner, engine, runtime, logger, makeUpClient);
 
-  server.get<{ Querystring: { version?: string } }>(
-    "/runs",
-    async (request, reply) => {
-      if (request.query.version === statusVersion(runner))
-        return reply.code(204).send();
-      return reply
-        .type("text/html")
-        .send(status(runner, config.schedule.timezone, config.schedule));
-    },
-  );
+  server.get<{ Querystring: { version?: string } }>("/runs", async (request, reply) => {
+    if (request.query.version === statusVersion(runner)) return reply.code(204).send();
+    return reply.type("text/html").send(status(runner, config.schedule.timezone, config.schedule));
+  });
   server.get("/assets/style.css", async (_request, reply) =>
     reply.type("text/css").send(stylesheet),
   );
@@ -333,23 +272,14 @@ export async function createServer(
     reply.type("application/javascript").send(components),
   );
 
-  const connectionTests = new Map<
-    string,
-    "queued" | "running" | "success" | "failure"
-  >();
+  const connectionTest = (target: string) =>
+    runner.history.find((job) => job.trigger === "test-connection" && job.scope?.target === target);
   server.get<{ Params: { target: string } }>(
     "/connection-tests/:target",
     async (request, reply) => {
-      if (!connectionTests.has(request.params.target))
-        return reply.code(404).send("Unknown connection test");
-      return reply
-        .type("text/html")
-        .send(
-          connectionTestStatus(
-            request.params.target,
-            connectionTests.get(request.params.target),
-          ),
-        );
+      const job = connectionTest(request.params.target);
+      if (!job) return reply.code(404).send("Unknown connection test");
+      return reply.type("text/html").send(connectionTestStatus(request.params.target, job.state));
     },
   );
   server.post("/actions/test", async (request, reply) => {
@@ -372,140 +302,117 @@ export async function createServer(
       `test:${id}`,
       "test-connection",
       async () => {
-        connectionTests.set(id, "running");
-        try {
-          if (target === "actual")
-            assertActualCompatibility(await runtime.actual.getServerVersion());
-          else await runtime.clients.get(connection)!.ping();
-          connectionTests.set(id, "success");
-          return { ok: true };
-        } catch {
-          connectionTests.set(id, "failure");
-          throw new Error("Connection test failed");
-        }
+        if (target === "actual") assertActualCompatibility(await runtime.actual.getServerVersion());
+        else await runtime.clients.get(connection)!.ping();
+        return { ok: true };
       },
+      { target: id },
     );
-    if (accepted) connectionTests.set(id, "queued");
-    if (request.headers["hx-request"] !== "true")
-      return reply.redirect("/", 303);
+    const state = connectionTest(id)?.state;
+    if (request.headers["hx-request"] !== "true") return reply.redirect("/", 303);
     return reply
       .header("HX-Trigger", "refresh-status")
       .type("text/html")
       .send(
         connectionTestStatus(
           id,
-          accepted ||
-            ["queued", "running"].includes(connectionTests.get(id) ?? "")
-            ? connectionTests.get(id)
-            : "busy",
+          accepted || state === "queued" || state === "running" ? state : "busy",
         ),
       );
   });
 
-  server.post<{ Params: { action: string } }>(
-    "/actions/:action",
-    async (request, reply) => {
-      const action = request.params.action;
-      let operation: Parameters<JobRunner["enqueue"]>[2];
-      let scope: Parameters<JobRunner["enqueue"]>[3];
-      let queueKey = "manual";
-      let trigger = action;
-      if (action === "sync") {
-        const parsed = z
-          .object({
-            mode: z.enum(["dry-run", "live"]),
-            account: z.string().default(""),
-            connection: z.string().default(""),
-            since: z.string().default(""),
-          })
-          .strict()
-          .safeParse(request.body);
-        if (!parsed.success) return reply.code(400).send("Invalid action");
-        const { account, connection, since, mode } = parsed.data;
-        if (
-          (account && connection) ||
-          (connection &&
-            !config.up.connections.some(({ id }) => id === connection))
-        )
-          return reply.code(400).send("Unknown connection or ambiguous scope");
-        if (
-          account &&
-          !config.mappings.some((mapping) => mapping.alias === account)
-        )
-          return reply.code(400).send("Unknown account");
-        if (
-          since &&
-          (!/^\d{4}-\d{2}-\d{2}$/.test(since) ||
-            !Number.isFinite(Date.parse(since)) ||
-            new Date(since).toISOString().slice(0, 10) !== since ||
-            since > new Date().toISOString().slice(0, 10))
-        )
-          return reply.code(400).send("Choose a valid date in the past");
-        trigger =
-          mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual";
-        scope = { account, connection, mode, since };
-        queueKey = `manual:${JSON.stringify(scope)}`;
-        operation = async (progress) => {
-          progress({ stage: "Refresh Actual" });
-          await runtime.actual.sync();
-          return engine.reconcile({
-            dryRun: mode === "dry-run",
-            mappingAliases: account
-              ? [account]
-              : connection
-                ? config.mappings
-                    .filter(({ connections }) =>
-                      connections.includes(connection),
-                    )
-                    .map(({ alias }) => alias)
-                : undefined,
-            since: since || undefined,
-            progress,
+  server.post<{ Params: { action: string } }>("/actions/:action", async (request, reply) => {
+    const action = request.params.action;
+    let operation: Parameters<JobRunner["enqueue"]>[2];
+    let scope: Parameters<JobRunner["enqueue"]>[3];
+    let queueKey = "manual";
+    let trigger = action;
+    if (action === "sync") {
+      const parsed = z
+        .object({
+          mode: z.enum(["dry-run", "live"]),
+          account: z.string().default(""),
+          connection: z.string().default(""),
+          since: z.string().default(""),
+        })
+        .strict()
+        .safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send("Invalid action");
+      const { account, connection, since, mode } = parsed.data;
+      if (
+        (account && connection) ||
+        (connection && !config.up.connections.some(({ id }) => id === connection))
+      )
+        return reply.code(400).send("Unknown connection or ambiguous scope");
+      if (account && !config.mappings.some((mapping) => mapping.alias === account))
+        return reply.code(400).send("Unknown account");
+      if (
+        since &&
+        (!/^\d{4}-\d{2}-\d{2}$/.test(since) ||
+          !Number.isFinite(Date.parse(since)) ||
+          new Date(since).toISOString().slice(0, 10) !== since ||
+          since > new Date().toISOString().slice(0, 10))
+      )
+        return reply.code(400).send("Choose a valid date in the past");
+      trigger = mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual";
+      scope = { account, connection, mode, since };
+      queueKey = `manual:${JSON.stringify(scope)}`;
+      operation = async (progress) => {
+        progress({ stage: "Refresh Actual" });
+        await runtime.actual.sync();
+        return engine.reconcile({
+          dryRun: mode === "dry-run",
+          mappingAliases: account
+            ? [account]
+            : connection
+              ? config.mappings
+                  .filter(({ connections }) => connections.includes(connection))
+                  .map(({ alias }) => alias)
+              : undefined,
+          since: since || undefined,
+          progress,
+        });
+      };
+    } else if (action === "validate") {
+      operation = async () => {
+        for (const client of runtime.clients.values()) await client.ping();
+        const result = await engine.validate();
+        assertActualCompatibility(result.actualVersion);
+        return { ok: true, ...result };
+      };
+    } else if (action === "discover") {
+      operation = async () => {
+        const up = [];
+        for (const [connection, client] of runtime.clients) {
+          up.push({
+            connection,
+            accounts: await discoverUpAccounts(client),
           });
-        };
-      } else if (action === "validate") {
-        operation = async () => {
-          for (const client of runtime.clients.values()) await client.ping();
-          const result = await engine.validate();
-          assertActualCompatibility(result.actualVersion);
-          return { ok: true, ...result };
-        };
-      } else if (action === "discover") {
-        operation = async () => {
-          const up = [];
-          for (const [connection, client] of runtime.clients) {
-            up.push({
-              connection,
-              accounts: await discoverUpAccounts(client),
-            });
-          }
-          const accounts = await discoverActualAccounts(runtime.actual);
-          const categories = (await runtime.actual.getCategories()).map(
-            ({ id, name }) => ({ id, name }),
-          );
-          return { up, actual: { accounts, categories } };
-        };
-      } else {
-        return reply.code(404).send("Unknown action");
-      }
-      const accepted = runner.enqueue(queueKey, trigger, operation, scope);
-      if (request.headers["hx-request"] !== "true")
-        return reply.redirect("/", 303);
-      return reply
-        .header("HX-Trigger", "refresh-status")
-        .type("text/html")
-        .send(
-          accepted
-            ? "Queued. Follow progress in Sync Status."
-            : "An action is already queued, or the queue is full. Please wait.",
-        );
-    },
-  );
+        }
+        const accounts = await discoverActualAccounts(runtime.actual);
+        const categories = (await runtime.actual.getCategories()).map(({ id, name }) => ({
+          id,
+          name,
+        }));
+        return { up, actual: { accounts, categories } };
+      };
+    } else {
+      return reply.code(404).send("Unknown action");
+    }
+    const accepted = runner.enqueue(queueKey, trigger, operation, scope);
+    if (request.headers["hx-request"] !== "true") return reply.redirect("/", 303);
+    return reply
+      .header("HX-Trigger", "refresh-status")
+      .type("text/html")
+      .send(
+        accepted
+          ? "Queued. Follow progress in Sync Status."
+          : "An action is already queued, or the queue is full. Please wait.",
+      );
+  });
   server.setErrorHandler((_error, _request, reply) => {
     logger.error("Request failed");
-    return reply
-      .code(500)
-      .send("Request failed; check configuration and connectivity");
+    return reply.code(500).send("Request failed; check configuration and connectivity");
   });
   return server;
 }

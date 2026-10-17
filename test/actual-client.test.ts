@@ -55,9 +55,7 @@ describe("Actual connection lifecycle", () => {
       method: "password",
     });
     await client.open();
-    expect(api.init).toHaveBeenLastCalledWith(
-      expect.objectContaining({ password: "replacement" }),
-    );
+    expect(api.init).toHaveBeenLastCalledWith(expect.objectContaining({ password: "replacement" }));
     expect(api.downloadBudget).toHaveBeenLastCalledWith("budget", {
       password: "budget-encryption",
     });

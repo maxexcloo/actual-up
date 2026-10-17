@@ -31,13 +31,8 @@ describe("operation queue", () => {
     release();
     await queue.drain();
     expect(calls).toEqual(["read", "write", "next"]);
-    expect(queue.history.map((job) => job.state)).toEqual([
-      "failure",
-      "failure",
-    ]);
-    expect(JSON.stringify(queue.history)).not.toContain(
-      "sensitive upstream response",
-    );
+    expect(queue.history.map((job) => job.state)).toEqual(["failure", "failure"]);
+    expect(JSON.stringify(queue.history)).not.toContain("sensitive upstream response");
     expect(queue.depth).toBe(0);
     await queue.close();
     expect(queue.enqueue("c", "manual", async () => {})).toBe(false);
@@ -55,10 +50,7 @@ describe("operation queue", () => {
       publication: "failed",
     }));
     await queue.drain();
-    expect(queue.history.map(({ state }) => state)).toEqual([
-      "failure",
-      "warning",
-    ]);
+    expect(queue.history.map(({ state }) => state)).toEqual(["failure", "warning"]);
   });
 
   it("bounds the queue and recent history", async () => {

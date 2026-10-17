@@ -42,11 +42,7 @@ export type UpWebhookEvent = {
   data: {
     attributes: {
       createdAt: string;
-      eventType:
-        | "PING"
-        | "TRANSACTION_CREATED"
-        | "TRANSACTION_DELETED"
-        | "TRANSACTION_SETTLED";
+      eventType: "PING" | "TRANSACTION_CREATED" | "TRANSACTION_DELETED" | "TRANSACTION_SETTLED";
     };
     id: string;
     relationships: {
@@ -131,10 +127,7 @@ export interface ActualClient {
   ): Promise<ActualImportResult>;
   open(): Promise<void>;
   sync(): Promise<void>;
-  updateTransaction(
-    id: string,
-    fields: Partial<ActualTransaction>,
-  ): Promise<void>;
+  updateTransaction(id: string, fields: Partial<ActualTransaction>): Promise<void>;
 }
 
 export interface UpClientLike {

@@ -32,9 +32,7 @@ describe("Up client", () => {
   it("does not expose upstream response bodies in errors", async () => {
     const fetcher = vi
       .fn()
-      .mockResolvedValue(
-        new Response("private transaction details", { status: 400 }),
-      );
+      .mockResolvedValue(new Response("private transaction details", { status: 400 }));
     const client = new UpClient("token", pino({ level: "silent" }), fetcher);
     await expect(client.ping()).rejects.toMatchObject({
       message: "Up API returned 400",
@@ -46,15 +44,10 @@ describe("Up client", () => {
   it("follows opaque pagination links on the trusted origin", async () => {
     const fetcher = vi
       .fn()
-      .mockResolvedValueOnce(
-        page("one", "https://api.up.com.au/api/v1/accounts?page[after]=x"),
-      )
+      .mockResolvedValueOnce(page("one", "https://api.up.com.au/api/v1/accounts?page[after]=x"))
       .mockResolvedValueOnce(page("two", null));
     const client = new UpClient("token", pino({ level: "silent" }), fetcher);
-    expect((await client.listAccounts()).map(({ id }) => id)).toEqual([
-      "one",
-      "two",
-    ]);
+    expect((await client.listAccounts()).map(({ id }) => id)).toEqual(["one", "two"]);
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({
       Authorization: "Bearer token",
@@ -62,9 +55,7 @@ describe("Up client", () => {
   });
 
   it("rejects pagination links outside the Up API origin", async () => {
-    const fetcher = vi
-      .fn()
-      .mockResolvedValue(page("one", "https://attacker.example/next"));
+    const fetcher = vi.fn().mockResolvedValue(page("one", "https://attacker.example/next"));
     const client = new UpClient("token", pino({ level: "silent" }), fetcher);
     await expect(client.listAccounts()).rejects.toThrow("untrusted origin");
     expect(fetcher).toHaveBeenCalledTimes(1);

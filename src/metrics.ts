@@ -1,10 +1,4 @@
-import {
-  Counter,
-  Gauge,
-  Histogram,
-  Registry,
-  collectDefaultMetrics,
-} from "prom-client";
+import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "prom-client";
 
 export class Metrics {
   readonly registry = new Registry();

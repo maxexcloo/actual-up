@@ -1,11 +1,7 @@
 import { Worker } from "node:worker_threads";
 import { environmentValue, type AppConfig } from "./config.js";
 import { getActualCredentials } from "./settings-store.js";
-import type {
-  ActualClient,
-  ActualImportTransaction,
-  ActualTransaction,
-} from "./types.js";
+import type { ActualClient, ActualImportTransaction, ActualTransaction } from "./types.js";
 
 export { assertActualCompatibility } from "./actual-version.js";
 
@@ -28,11 +24,8 @@ export class ActualBudgetClient implements ActualClient {
     const credentials = getActualCredentials(this.app);
     const syncId =
       this.app.actual.syncId ??
-      (this.app.actual.syncIdEnv
-        ? environmentValue(this.app.actual.syncIdEnv)
-        : undefined);
-    if (!credentials || !syncId)
-      throw new Error("Configure Actual in the app first");
+      (this.app.actual.syncIdEnv ? environmentValue(this.app.actual.syncIdEnv) : undefined);
+    if (!credentials || !syncId) throw new Error("Configure Actual in the app first");
     const worker = new Worker(this.workerUrl, {
       stderr: true,
       stdout: true,
@@ -45,16 +38,13 @@ export class ActualBudgetClient implements ActualClient {
     worker.stdout.resume();
     worker.stderr.resume();
     this.worker = worker;
-    worker.on(
-      "message",
-      (message: { id: number; ok: boolean; value?: unknown }) => {
-        const pending = this.pending.get(message.id);
-        if (!pending) return;
-        this.pending.delete(message.id);
-        if (message.ok) pending.resolve(message.value);
-        else pending.reject(new Error("Actual operation failed"));
-      },
-    );
+    worker.on("message", (message: { id: number; ok: boolean; value?: unknown }) => {
+      const pending = this.pending.get(message.id);
+      if (!pending) return;
+      this.pending.delete(message.id);
+      if (message.ok) pending.resolve(message.value);
+      else pending.reject(new Error("Actual operation failed"));
+    });
     const failed = () => {
       if (this.worker !== worker) return;
       this.worker = undefined;
@@ -72,22 +62,19 @@ export class ActualBudgetClient implements ActualClient {
     ...args: Parameters<ActualClient[K]>
   ): Promise<Awaited<ReturnType<ActualClient[K]>>> {
     const id = ++this.nextId;
-    return new Promise<Awaited<ReturnType<ActualClient[K]>>>(
-      (resolve, reject) => {
-        const worker = this.getWorker();
-        this.pending.set(id, {
-          resolve: (value) =>
-            resolve(value as Awaited<ReturnType<ActualClient[K]>>),
-          reject,
-        });
-        try {
-          worker.postMessage({ args, id, method });
-        } catch {
-          this.pending.delete(id);
-          reject(new Error("Actual operation could not be queued"));
-        }
-      },
-    );
+    return new Promise<Awaited<ReturnType<ActualClient[K]>>>((resolve, reject) => {
+      const worker = this.getWorker();
+      this.pending.set(id, {
+        resolve: (value) => resolve(value as Awaited<ReturnType<ActualClient[K]>>),
+        reject,
+      });
+      try {
+        worker.postMessage({ args, id, method });
+      } catch {
+        this.pending.delete(id);
+        reject(new Error("Actual operation could not be queued"));
+      }
+    });
   }
 
   open() {

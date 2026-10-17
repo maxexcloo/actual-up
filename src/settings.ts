@@ -43,11 +43,7 @@ const commandSchema = z.discriminatedUnion("action", [
     .object({
       ...fields,
       action: z.literal("actual"),
-      serverUrl: z
-        .url()
-        .refine((value) =>
-          ["http:", "https:"].includes(new URL(value).protocol),
-        ),
+      serverUrl: z.url().refine((value) => ["http:", "https:"].includes(new URL(value).protocol)),
       syncId: z.string().trim().min(1),
       method: z.enum(["session", "password"]),
       credential: z.string().max(8192).default(""),
@@ -110,35 +106,20 @@ export function registerSettings(
   let message = "";
   let discoveryAttempted = false;
   const accountUpdates = new Map<string, AccountUpdate>();
-  const accountRow = (
-    id: string,
-    update = accountUpdates.get(id),
-    viewConnection?: string,
-  ) => {
-    const mapping = config.mappings.find(
-      ({ upAccountId }) => upAccountId === id,
-    );
+  const accountRow = (id: string, update = accountUpdates.get(id), viewConnection?: string) => {
+    const mapping = config.mappings.find(({ upAccountId }) => upAccountId === id);
     const account = discovery?.up.find((account) => account.id === id) ?? {
       connections: mapping?.connections ?? [],
       id,
       name: mapping?.alias ?? "Account",
     };
     const primary = viewConnection ?? account.connections[0] ?? "";
-    const others = account.connections.filter(
-      (connection) => connection !== primary,
-    );
+    const others = account.connections.filter((connection) => connection !== primary);
     return (
       accountSettingsRow(config, discovery, account, update, primary) +
       others
         .map((connection) =>
-          accountSettingsRow(
-            config,
-            discovery,
-            account,
-            update,
-            connection,
-            true,
-          ),
+          accountSettingsRow(config, discovery, account, update, connection, true),
         )
         .join("")
     );
@@ -191,44 +172,30 @@ export function registerSettings(
   };
 
   server.get("/settings", async (_request, reply) => reply.redirect("/", 303));
-  server.get<{ Querystring: { pending?: string } }>(
-    "/",
-    async (request, reply) => {
-      if (request.query.pending === "1" && busy) return reply.code(204).send();
-      if (!discoveryAttempted && !busy && config.up.connections.length) {
-        busy = true;
-        const accepted = runner.enqueue("settings", "settings", async () => {
-          try {
-            discovery = await discover();
-            return { ok: true };
-          } finally {
-            busy = false;
-          }
-        });
-        if (!accepted) busy = false;
-      }
-      return reply
-        .type("text/html")
-        .send(
-          settingsPage(
-            config,
-            discovery,
-            busy,
-            message,
-            runner,
-            accountUpdates,
-          ),
-        );
-    },
-  );
+  server.get<{ Querystring: { pending?: string } }>("/", async (request, reply) => {
+    if (request.query.pending === "1" && busy) return reply.code(204).send();
+    if (!discoveryAttempted && !busy && config.up.connections.length) {
+      busy = true;
+      const accepted = runner.enqueue("settings", "settings", async () => {
+        try {
+          discovery = await discover();
+          return { ok: true };
+        } finally {
+          busy = false;
+        }
+      });
+      if (!accepted) busy = false;
+    }
+    return reply
+      .type("text/html")
+      .send(settingsPage(config, discovery, busy, message, runner, accountUpdates));
+  });
   server.post("/settings", async (request, reply) => {
     const parsed = commandSchema.safeParse(request.body);
     // Invalid account fields still need an error fragment for the submitted row.
     const context = accountContextSchema.safeParse(request.body);
     const accountId = context.success ? context.data.upAccountId : undefined;
-    const viewConnection = context.success
-      ? context.data.viewConnection
-      : undefined;
+    const viewConnection = context.success ? context.data.viewConnection : undefined;
     const revision = () => settingsVersion(config, accountId);
     const reject = (code: number, explanation: string) =>
       reply
@@ -245,20 +212,10 @@ export function registerSettings(
                 },
                 viewConnection,
               )
-            : settingsPage(
-                config,
-                discovery,
-                busy,
-                explanation,
-                runner,
-                accountUpdates,
-              ),
+            : settingsPage(config, discovery, busy, explanation, runner, accountUpdates),
         );
     if (!parsed.success)
-      return reject(
-        400,
-        "Invalid settings. Reload the setup page and try again.",
-      );
+      return reject(400, "Invalid settings. Reload the setup page and try again.");
     const command = parsed.data;
     if (
       busy ||
@@ -300,13 +257,10 @@ export function registerSettings(
           if (command.action === "actual") {
             const oldSyncId =
               config.actual.syncId ??
-              (config.actual.syncIdEnv
-                ? environmentValue(config.actual.syncIdEnv)
-                : undefined);
+              (config.actual.syncIdEnv ? environmentValue(config.actual.syncIdEnv) : undefined);
             if (
               config.mappings.length &&
-              (command.syncId !== oldSyncId ||
-                command.serverUrl !== config.actual.serverUrl)
+              (command.syncId !== oldSyncId || command.serverUrl !== config.actual.serverUrl)
             )
               throw new SettingsError(
                 "Disconnect account mappings before switching Actual servers or budgets. Existing transactions remain in the previous budget.",
@@ -317,10 +271,7 @@ export function registerSettings(
               (previousCredentials?.method === command.method
                 ? previousCredentials.credential
                 : "");
-            if (!credential)
-              throw new SettingsError(
-                "Enter the Actual session token or password.",
-              );
+            if (!credential) throw new SettingsError("Enter the Actual session token or password.");
             next.actual = {
               cacheDirectory: config.actual.cacheDirectory,
               serverUrl: command.serverUrl,
@@ -331,8 +282,7 @@ export function registerSettings(
               method: command.method,
               encryptionPassword: command.clearEncryption
                 ? undefined
-                : command.encryptionPassword ||
-                  previousCredentials?.encryptionPassword,
+                : command.encryptionPassword || previousCredentials?.encryptionPassword,
             });
             const previous = parseConfig(config);
             copyCredentials(config, previous);
@@ -341,9 +291,7 @@ export function registerSettings(
             copyCredentials(next, config);
             try {
               await runtime.actual.open();
-              assertActualCompatibility(
-                await runtime.actual.getServerVersion(),
-              );
+              assertActualCompatibility(await runtime.actual.getServerVersion());
               await saveSettings(next);
             } catch {
               await runtime.actual.close();
@@ -365,45 +313,30 @@ export function registerSettings(
               connections.includes(command.id),
             );
             if (assigned.length) {
-              const accessible = new Set(
-                (await newClient.listAccounts()).map(({ id }) => id),
-              );
-              if (
-                assigned.some(({ upAccountId }) => !accessible.has(upAccountId))
-              )
+              const accessible = new Set((await newClient.listAccounts()).map(({ id }) => id));
+              if (assigned.some(({ upAccountId }) => !accessible.has(upAccountId)))
                 throw new SettingsError(
                   "This key cannot access all its mapped accounts. Update those mappings before replacing the key.",
                 );
             }
-            const existing = next.up.connections.find(
-              ({ id }) => id === command.id,
-            );
+            const existing = next.up.connections.find(({ id }) => id === command.id);
             if (existing) delete existing.tokenEnv;
             else next.up.connections.push({ id: command.id });
             setConnectionToken(next, command.id, command.token);
           } else if (command.action === "remove-connection") {
-            if (
-              next.mappings.some(({ connections }) =>
-                connections.includes(command.id),
-              )
-            )
+            if (next.mappings.some(({ connections }) => connections.includes(command.id)))
               throw new SettingsError(
                 "This key is still in use. Update or disconnect its mappings first.",
               );
             setConnectionToken(next, command.id);
-            next.up.connections = next.up.connections.filter(
-              ({ id }) => id !== command.id,
-            );
+            next.up.connections = next.up.connections.filter(({ id }) => id !== command.id);
           } else if (command.action === "mapping") {
             discovery = await discover();
-            const account = discovery.up.find(
-              ({ id }) => id === command.upAccountId,
-            );
+            const account = discovery.up.find(({ id }) => id === command.upAccountId);
             if (
               !account ||
               !command.connections.length ||
-              new Set(command.connections).size !==
-                command.connections.length ||
+              new Set(command.connections).size !== command.connections.length ||
               !command.connections.every(
                 (id) =>
                   account.connections.includes(id) ||
@@ -414,9 +347,7 @@ export function registerSettings(
                         mapping.connections.includes(id),
                     )),
               ) ||
-              !command.connections.some((id) =>
-                account.connections.includes(id),
-              ) ||
+              !command.connections.some((id) => account.connections.includes(id)) ||
               !discovery.actual.some(({ id }) => id === command.actualAccountId)
             )
               throw new SettingsError(
@@ -425,10 +356,7 @@ export function registerSettings(
             const existing = next.mappings.find(
               ({ upAccountId }) => upAccountId === command.upAccountId,
             );
-            if (
-              existing &&
-              existing.actualAccountId !== command.actualAccountId
-            )
+            if (existing && existing.actualAccountId !== command.actualAccountId)
               throw new SettingsError(
                 "Disconnect the mapping before changing its Actual destination. Existing transactions will remain in the old account.",
               );
@@ -439,9 +367,7 @@ export function registerSettings(
               upAccountId: command.upAccountId,
             };
             next.mappings = [
-              ...next.mappings.filter(
-                ({ upAccountId }) => upAccountId !== command.upAccountId,
-              ),
+              ...next.mappings.filter(({ upAccountId }) => upAccountId !== command.upAccountId),
               mapping,
             ];
           } else {
@@ -459,9 +385,7 @@ export function registerSettings(
           }
           const newMapping =
             command.action === "mapping" &&
-            !config.mappings.some(
-              ({ upAccountId }) => upAccountId === command.upAccountId,
-            );
+            !config.mappings.some(({ upAccountId }) => upAccountId === command.upAccountId);
           await saveSettings(next);
           config.up = next.up;
           config.mappings = next.mappings;
@@ -469,15 +393,10 @@ export function registerSettings(
           saved = true;
           if (command.action === "connection" && newClient)
             runtime.clients.set(command.id, newClient);
-          if (command.action === "remove-connection")
-            runtime.clients.delete(command.id);
+          if (command.action === "remove-connection") runtime.clients.delete(command.id);
           if (!accountId) discovery = await discover();
           operationMessage = "Settings saved.";
-          if (
-            command.action === "mapping" &&
-            config.schedule.enabled &&
-            newMapping
-          ) {
+          if (command.action === "mapping" && config.schedule.enabled && newMapping) {
             const queued = runner.enqueue(
               `backfill:${command.upAccountId}`,
               "automatic-backfill",
@@ -540,9 +459,7 @@ export function registerSettings(
       return reply
         .header("HX-Trigger", "refresh-status")
         .type("text/html")
-        .send(
-          accountRow(accountId, accountUpdates.get(accountId), viewConnection),
-        );
+        .send(accountRow(accountId, accountUpdates.get(accountId), viewConnection));
     return reply.redirect("/", 303);
   });
 }

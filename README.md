@@ -82,7 +82,7 @@ Install the [shared Mise configuration](https://github.com/maxexcloo/dotfiles#sh
 before running local Mise tasks.
 
 The UI keeps Web Awesome’s default theme and controls. [Shell styles](assets/shell.css)
-own the shared page layout and `--app-content-width`; [app styles](assets/style.css)
+own the shared page layout; [app styles](assets/style.css)
 contain the removable account and sync layouts. Use Web Awesome’s `--wa-*` tokens
 for theme changes rather than overriding individual components.
 

@@ -26,11 +26,7 @@ describe("Up webhooks", () => {
     const signature = createHmac("sha256", "secret").update(body).digest("hex");
     expect(verifyWebhookSignature(body, signature, "secret")).toBe(true);
     expect(
-      verifyWebhookSignature(
-        Buffer.concat([body, Buffer.from(" ")]),
-        signature,
-        "secret",
-      ),
+      verifyWebhookSignature(Buffer.concat([body, Buffer.from(" ")]), signature, "secret"),
     ).toBe(false);
   });
 
@@ -40,8 +36,6 @@ describe("Up webhooks", () => {
   });
 
   it("parses supported event payloads", () => {
-    expect(parseWebhook(body).data.attributes.eventType).toBe(
-      "TRANSACTION_CREATED",
-    );
+    expect(parseWebhook(body).data.attributes.eventType).toBe("TRANSACTION_CREATED");
   });
 });

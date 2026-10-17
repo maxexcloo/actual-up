@@ -19,9 +19,7 @@ const webhookEventSchema = z.object({
     relationships: z.object({
       transaction: z
         .object({
-          data: z
-            .object({ id: z.string(), type: z.literal("transactions") })
-            .nullable(),
+          data: z.object({ id: z.string(), type: z.literal("transactions") }).nullable(),
         })
         .optional(),
       webhook: z.object({
@@ -40,13 +38,9 @@ export function verifyWebhookSignature(
   if (!signature || !/^[a-f\d]{64}$/i.test(signature)) return false;
   const expected = createHmac("sha256", secret).update(body).digest();
   const received = Buffer.from(signature, "hex");
-  return (
-    expected.length === received.length && timingSafeEqual(expected, received)
-  );
+  return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
 export function parseWebhook(body: Buffer): UpWebhookEvent {
-  return webhookEventSchema.parse(
-    JSON.parse(body.toString("utf8")),
-  ) as UpWebhookEvent;
+  return webhookEventSchema.parse(JSON.parse(body.toString("utf8"))) as UpWebhookEvent;
 }
