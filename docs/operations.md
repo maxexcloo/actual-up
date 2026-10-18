@@ -9,7 +9,7 @@
    encryption key.
 3. Unsuspend the Kubelab Helm release when ready to configure it. Mappings
    start empty, so no accounts are imported until they are configured.
-4. Open the private HTTPS app with the login from 1Password. Use **Connections** to enter Actual credentials, add Up keys and save mappings.
+4. Open the private HTTPS app with the login from 1Password. Use **Accounts & Sync** to enter Actual credentials, add Up keys and save mappings.
 5. Saving a mapping automatically backfills it. The app syncs recent
    changes every 15 minutes and backfills nightly. Set `schedule.enabled: false`
    before adding mappings if you want to preview changes first.
@@ -44,14 +44,6 @@ Metrics are exposed at `/metrics`. `actual_up_jobs_total` records outcomes and
 `actual_up_last_success_timestamp_seconds` records successful operations by
 trigger. Monitor `schedule` and `automatic-backfill` for unattended imports; a successful
 validation or dry run does not prove a scheduled import succeeded.
-
-## Windmill Migration
-
-The duplicate Windmill scripts and bridge have been removed from this repository.
-This does not delete deployed Windmill resources. Before enabling this app's
-writer, disable any existing Windmill schedule and webhook trigger and stop its
-bridge. Validate, preview, import and observe a scheduled run before deleting the
-old deployment. Leave Windmill available for other workloads.
 
 ## CLI
 
