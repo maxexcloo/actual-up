@@ -95,6 +95,8 @@ program
     const config = await loadConfig(program.opts<{ config: string }>().config);
     const runtime = await createRuntime(config);
     try {
+      // Match the service: read the latest budget before reconciling against it.
+      await runtime.actual.sync();
       const report = await runtime.engine.reconcile({
         dryRun: options.dryRun,
         mappingAliases: options.account,

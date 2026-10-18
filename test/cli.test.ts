@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const runtime = vi.hoisted(() => ({
-  actual: { close: vi.fn() },
+  actual: { close: vi.fn(), sync: vi.fn() },
   engine: { reconcile: vi.fn() },
 }));
 vi.mock("../src/config.js", () => ({ loadConfig: vi.fn().mockResolvedValue({}) }));
@@ -37,6 +37,9 @@ describe("sync command", () => {
       await import("../src/cli.js");
       await vi.waitFor(() => expect(runtime.actual.close).toHaveBeenCalledOnce());
       expect(process.exitCode).toBe(exitCode);
+      expect(runtime.actual.sync.mock.invocationCallOrder[0]).toBeLessThan(
+        runtime.engine.reconcile.mock.invocationCallOrder[0]!,
+      );
       expect(JSON.parse(String(output.mock.calls[0]?.[0]))).toEqual(report);
     },
   );
