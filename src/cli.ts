@@ -106,83 +106,12 @@ program
     }
   });
 
-const webhook = program.command("webhook").description("manage Up webhooks");
-
-webhook
-  .command("create <connection>")
-  .description("create a webhook and print its one-time secret")
-  .action(async (connectionId: string) => {
-    const config = await loadConfig(program.opts<{ config: string }>().config);
-    if (!config.server.publicUrl) throw new Error("server.publicUrl is required");
-    const runtime = await createRuntime(config);
-    try {
-      const client = requiredClient(runtime.clients, connectionId);
-      const target = `${config.server.publicUrl.replace(/\/$/, "")}/webhooks/up/${connectionId}`;
-      const created = await client.createWebhook(target, `actual-up:${connectionId}`);
-      process.stdout.write(`${JSON.stringify(created, null, 2)}\n`);
-    } finally {
-      await runtime.actual.close();
-    }
-  });
-
-webhook
-  .command("delete <connection> [webhookId]")
-  .description("delete the configured or supplied webhook")
-  .action(async (connectionId: string, webhookId?: string) => {
-    const config = await loadConfig(program.opts<{ config: string }>().config);
-    const connection = config.up.connections.find(({ id }) => id === connectionId);
-    const id = webhookId ?? connection?.webhook?.id;
-    if (!id) throw new Error("No webhook ID was supplied or configured");
-    const runtime = await createRuntime(config);
-    try {
-      await requiredClient(runtime.clients, connectionId).deleteWebhook(id);
-    } finally {
-      await runtime.actual.close();
-    }
-  });
-
-webhook
-  .command("ping <connection> [webhookId]")
-  .description("send a test event to the configured or supplied webhook")
-  .action(async (connectionId: string, webhookId?: string) => {
-    const config = await loadConfig(program.opts<{ config: string }>().config);
-    const connection = config.up.connections.find(({ id }) => id === connectionId);
-    const id = webhookId ?? connection?.webhook?.id;
-    if (!id) throw new Error("No webhook ID was supplied or configured");
-    const runtime = await createRuntime(config);
-    try {
-      await requiredClient(runtime.clients, connectionId).pingWebhook(id);
-    } finally {
-      await runtime.actual.close();
-    }
-  });
-
-webhook
-  .command("status <connection>")
-  .description("list the connection's Up webhooks")
-  .action(async (connectionId: string) => {
-    const config = await loadConfig(program.opts<{ config: string }>().config);
-    const runtime = await createRuntime(config);
-    try {
-      const values = await requiredClient(runtime.clients, connectionId).listWebhooks();
-      process.stdout.write(`${JSON.stringify(values, null, 2)}\n`);
-    } finally {
-      await runtime.actual.close();
-    }
-  });
-
 program.parseAsync().catch((error: unknown) => {
   process.stderr.write(
     `actual-up: ${error instanceof Error ? error.name : "Error"}; check configuration and connectivity\n`,
   );
   process.exitCode = 1;
 });
-
-function requiredClient<T>(clients: Map<string, T>, id: string): T {
-  const client = clients.get(id);
-  if (!client) throw new Error(`Unknown Up connection ${id}`);
-  return client;
-}
 
 async function waitForSignal(): Promise<void> {
   await new Promise<void>((resolvePromise) => {

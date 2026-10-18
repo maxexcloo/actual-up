@@ -20,7 +20,6 @@ import { startSchedule } from "./schedule.js";
 import type { SyncEngine } from "./sync-engine.js";
 import { loginPage } from "./login-ui.js";
 import { connectionTestStatus, status, statusVersion } from "./ui.js";
-import { parseWebhook, verifyWebhookSignature } from "./webhook.js";
 
 declare module "fastify" {
   interface Session {
@@ -108,6 +107,8 @@ export async function createServer(
     },
   });
 
+  // The app only accepts HTML form posts; other bodies are rejected as unsupported.
+  server.removeAllContentTypeParsers();
   server.addContentTypeParser(
     "application/x-www-form-urlencoded",
     { parseAs: "string" },
@@ -125,10 +126,6 @@ export async function createServer(
     },
   );
 
-  server.addContentTypeParser("application/json", { parseAs: "buffer" }, (_request, body, done) =>
-    done(null, body),
-  );
-
   server.get("/livez", async () => ({ status: "ok" }));
   server.get("/readyz", async () => {
     return { status: "ready" };
@@ -137,51 +134,6 @@ export async function createServer(
     reply.header("Content-Type", metrics.registry.contentType);
     return metrics.registry.metrics();
   });
-
-  server.post<{ Params: { connectionId: string } }>(
-    "/webhooks/up/:connectionId",
-    async (request, reply) => {
-      const connection = config.up.connections.find(({ id }) => id === request.params.connectionId);
-      if (!connection?.webhook) return reply.code(404).send({ error: "unknown webhook" });
-      const body = request.body;
-      if (!Buffer.isBuffer(body)) return reply.code(400).send({ error: "invalid body" });
-      const header = request.headers["x-up-authenticity-signature"];
-      const signature = Array.isArray(header) ? header[0] : header;
-      if (
-        !verifyWebhookSignature(body, signature, environmentValue(connection.webhook.secretEnv))
-      ) {
-        return reply.code(401).send({ error: "invalid signature" });
-      }
-      let event: ReturnType<typeof parseWebhook>;
-      try {
-        event = parseWebhook(body);
-      } catch {
-        return reply.code(400).send({ error: "invalid event" });
-      }
-      if (event.data.relationships.webhook.data.id !== connection.webhook.id) {
-        return reply.code(401).send({ error: "webhook mismatch" });
-      }
-      const transactionId = event.data.relationships.transaction?.data?.id;
-      const key = transactionId ?? event.data.id;
-      const accepted = runner.enqueue(
-        `webhook:${key}:${event.data.attributes.eventType}`,
-        "webhook",
-        async (progress) => {
-          progress({ stage: "Refresh Actual" });
-          await runtime.actual.sync();
-          progress({ stage: "Process Up Webhook" });
-          return engine.reconcileWebhook(
-            connection.id,
-            event.data.attributes.eventType,
-            transactionId,
-          );
-        },
-        { connection: connection.id, mode: "live" },
-      );
-      if (!accepted) return reply.code(503).send({ error: "queue busy; retry" });
-      return reply.code(200).send({ accepted: true });
-    },
-  );
 
   server.addHook("onRequest", async (request, reply) => {
     reply.header("Cache-Control", "no-store");
@@ -192,8 +144,7 @@ export async function createServer(
       "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     );
     const path = request.url.split("?")[0];
-    if (["/livez", "/readyz", "/metrics"].includes(path!) || path?.startsWith("/webhooks/up/"))
-      return;
+    if (["/livez", "/readyz", "/metrics"].includes(path!)) return;
     if (request.method === "POST") {
       const origin = request.headers.origin;
       const expected = config.server.publicUrl

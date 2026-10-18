@@ -39,12 +39,6 @@ const actualSchema = z
 const connectionSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9-]*$/),
   tokenEnv: environmentName.optional(),
-  webhook: z
-    .object({
-      id: z.string().uuid(),
-      secretEnv: environmentName,
-    })
-    .optional(),
 });
 
 const mappingSchema = z.object({

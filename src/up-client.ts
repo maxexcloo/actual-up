@@ -1,7 +1,7 @@
 import type { Logger } from "pino";
 import { z } from "zod";
 
-import type { UpAccount, UpClientLike, UpTransaction, UpWebhook } from "./types.js";
+import type { UpAccount, UpClientLike, UpTransaction } from "./types.js";
 
 const API_BASE_URL = "https://api.up.com.au/api/v1";
 
@@ -16,8 +16,6 @@ const collectionSchema = z.object({
   data: z.array(resourceSchema),
   links: z.object({ next: z.string().nullable(), prev: z.string().nullable() }),
 });
-
-const singleSchema = z.object({ data: resourceSchema });
 
 export class UpApiError extends Error {
   constructor(
@@ -51,39 +49,6 @@ export class UpClient implements UpClientLike {
     return (await this.paginate(
       `/accounts/${encodeURIComponent(accountId)}/transactions?${query.toString()}`,
     )) as UpTransaction[];
-  }
-
-  async getTransaction(id: string): Promise<UpTransaction> {
-    const value = singleSchema.parse(await this.request(`/transactions/${encodeURIComponent(id)}`));
-    return value.data as unknown as UpTransaction;
-  }
-
-  async listWebhooks(): Promise<UpWebhook[]> {
-    return (await this.paginate("/webhooks?page%5Bsize%5D=100")) as UpWebhook[];
-  }
-
-  async createWebhook(url: string, description: string): Promise<UpWebhook> {
-    const value = singleSchema.parse(
-      await this.request("/webhooks", {
-        body: JSON.stringify({
-          data: { type: "webhooks", attributes: { description, url } },
-        }),
-        method: "POST",
-      }),
-    );
-    return value.data as unknown as UpWebhook;
-  }
-
-  async deleteWebhook(id: string): Promise<void> {
-    await this.request(`/webhooks/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-  }
-
-  async pingWebhook(id: string): Promise<void> {
-    await this.request(`/webhooks/${encodeURIComponent(id)}/ping`, {
-      method: "POST",
-    });
   }
 
   private async paginate(path: string): Promise<Array<Record<string, unknown>>> {

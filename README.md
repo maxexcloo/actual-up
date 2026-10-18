@@ -1,8 +1,7 @@
 # Actual Up
 
 A small private web app that synchronises Up transactions into Actual Budget.
-One Node service owns the UI, polling, optional signed webhooks and a serial
-operation queue. No separate application database or workflow platform.
+One Node service owns the UI, polling and a serial operation queue. No separate application database or workflow platform.
 
 ## Features
 

@@ -101,7 +101,7 @@ appear in only one mapping. Shared connections follow the displayed fallback ord
 first; a mapping applies only if a transaction remains uncategorised. The `notes`
 flags control create-only enrichment. Existing notes are never overwritten.
 
-## Schedule & Webhooks
+## Schedule
 
 `schedule.enabled` defaults to `true`. Mapped accounts are backfilled on startup,
 with recent syncs every 15 minutes (`schedule.cron`) and full-history backfills
@@ -111,10 +111,8 @@ scheduled until at least one account is mapped. Stable import IDs prevent duplic
 Set `schedule.enabled: false` to disable automatic writes while retaining manual
 preview and sync. Restart after changing deployment configuration.
 
-Polling requires no public endpoint. Optional signed webhooks use
-`/webhooks/up/:connectionId`, with `webhook.id` and `webhook.secretEnv` configured
-on the connection. Keep the UI private. Webhook deliveries and in-memory jobs
-are not durable, so retain periodic reconciliation.
+Polling requires no public endpoint; keep the UI private. Queued jobs live in
+memory and are not durable, so periodic reconciliation recovers missed work.
 
 Keep `actual.cacheDirectory` on local pod storage, not NFS. Actual rebuilds this
 cache from the server; encrypted app settings remain on persistent storage.

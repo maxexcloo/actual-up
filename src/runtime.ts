@@ -23,14 +23,7 @@ export function createLogger(): Logger {
     level: process.env.LOG_LEVEL ?? "info",
     redact: {
       remove: true,
-      paths: [
-        "req.headers.authorization",
-        "req.headers.x-up-authenticity-signature",
-        "token",
-        "password",
-        "sessionToken",
-        "secret",
-      ],
+      paths: ["req.headers.authorization", "token", "password", "sessionToken", "secret"],
     },
   });
 }
@@ -38,9 +31,6 @@ export function createLogger(): Logger {
 export async function createRuntime(config: AppConfig): Promise<Runtime> {
   const logger = createLogger();
   const metrics = new Metrics();
-  for (const connection of config.up.connections) {
-    if (connection.webhook) environmentValue(connection.webhook.secretEnv);
-  }
   if (config.alerts) {
     const alertUrl = new URL(environmentValue(config.alerts.urlEnv));
     if (!["http:", "https:"].includes(alertUrl.protocol)) {

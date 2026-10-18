@@ -34,6 +34,17 @@ describe("configuration", () => {
     ).toBe("http://app.example.com:3000");
   });
 
+  it("ignores retired webhook settings on existing connections", () => {
+    const connection = {
+      id: "max",
+      tokenEnv: "UP_TOKEN_MAX",
+      webhook: { id: "11111111-1111-4111-8111-111111111111", secretEnv: "UP_WEBHOOK_SECRET" },
+    };
+    expect(parseConfig({ ...base, up: { connections: [connection] } }).up.connections).toEqual([
+      { id: "max", tokenEnv: "UP_TOKEN_MAX" },
+    ]);
+  });
+
   it("uses the environment public URL instead of the configured URL", () => {
     vi.stubEnv("ACTUAL_UP_PUBLIC_URL", "https://private.example.com");
     expect(

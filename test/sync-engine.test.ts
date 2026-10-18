@@ -16,7 +16,6 @@ import type {
   UpAccount,
   UpClientLike,
   UpTransaction,
-  UpWebhook,
 } from "../src/types.js";
 
 const upAccountId = "11111111-1111-4111-8111-111111111111";
@@ -162,17 +161,6 @@ class StubUp implements UpClientLike {
         Date.parse(value.attributes.createdAt) >= Date.parse(since),
     );
   }
-  async getTransaction() {
-    return this.transactions[0]!;
-  }
-  async createWebhook(): Promise<UpWebhook> {
-    throw new Error("not used");
-  }
-  async deleteWebhook() {}
-  async listWebhooks(): Promise<UpWebhook[]> {
-    return [];
-  }
-  async pingWebhook() {}
 }
 
 class MemoryAlerts implements AlertSink {
@@ -453,7 +441,7 @@ describe("sync engine", () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
-  it("preserves categories for mapped transfers and applies webhook category mappings", async () => {
+  it("preserves categories for mapped transfers and applies category mappings once no longer a transfer", async () => {
     const actual = new MemoryActual();
     const transfer = transaction();
     transfer.relationships.transferAccount = { data: { id: upAccountId, type: "accounts" } };
@@ -467,7 +455,7 @@ describe("sync engine", () => {
     await value.reconcile({ since: "1970-01-01" });
     expect(actual.transactions[0]?.category).toBeUndefined();
     up.transactions[0] = transaction();
-    await value.reconcileWebhook("first", "TRANSACTION_SETTLED", transfer.id);
+    await value.reconcile({ since: "1970-01-01" });
     expect(actual.transactions[0]?.category).toBe("actual-food");
   });
 });

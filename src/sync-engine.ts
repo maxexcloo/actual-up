@@ -169,50 +169,6 @@ export class SyncEngine {
     return report;
   }
 
-  async reconcileWebhook(
-    connectionId: string,
-    eventType: string,
-    transactionId?: string,
-  ): Promise<SyncReport> {
-    if (eventType === "PING") return emptyReport();
-    if (!transactionId) throw new Error(`${eventType} webhook omitted its transaction`);
-    if (eventType === "TRANSACTION_DELETED") {
-      return this.deleteByImportedId(transactionId);
-    }
-
-    const transaction = await this.client(connectionId).getTransaction(transactionId);
-    const mapping = this.config.mappings.find(
-      ({ upAccountId }) => upAccountId === transaction.relationships.account.data.id,
-    );
-    if (!mapping) {
-      this.logger.info({ connection: connectionId }, "Ignoring webhook for an unmapped account");
-      return emptyReport();
-    }
-    if (!mapping.connections.includes(connectionId)) {
-      throw new Error(`Connection ${connectionId} is not permitted for mapping ${mapping.alias}`);
-    }
-
-    const report = emptyReport();
-    const existing = await this.existingTransactions(mapping, HISTORY_START);
-    const categoryUpdate = await this.importOne(
-      mapping,
-      transaction,
-      existing,
-      await this.transferPayees(),
-      report,
-      false,
-    );
-    await this.applyCategories(mapping, categoryUpdate ? [categoryUpdate] : [], report);
-    report.accounts.push({ ...reportCounts(report), account: mapping.alias });
-    try {
-      await this.actual.sync();
-      report.publication = "published";
-    } catch {
-      report.publication = "failed";
-    }
-    return report;
-  }
-
   private async reconcileMapping(
     mapping: AccountMapping,
     since: string,
@@ -352,32 +308,6 @@ export class SyncEngine {
     }
   }
 
-  private async deleteByImportedId(upTransactionId: string): Promise<SyncReport> {
-    const report = emptyReport();
-    for (const mapping of this.config.mappings) {
-      const transaction = await this.findImported(
-        mapping,
-        importedId(upTransactionId),
-        "1900-01-01",
-      );
-      if (transaction) {
-        await this.mirrorDeletion(mapping, transaction, report, false);
-        report.accounts.push({
-          ...reportCounts(report),
-          account: mapping.alias,
-        });
-        try {
-          await this.actual.sync();
-          report.publication = "published";
-        } catch {
-          report.publication = "failed";
-        }
-        return report;
-      }
-    }
-    return report;
-  }
-
   private async mirrorDeletion(
     mapping: AccountMapping,
     transaction: ActualTransaction,
@@ -419,15 +349,6 @@ export class SyncEngine {
         .filter(({ imported_id }) => imported_id?.startsWith(IMPORT_PREFIX))
         .map((transaction) => [transaction.imported_id!, transaction]),
     );
-  }
-
-  private async findImported(
-    mapping: AccountMapping,
-    id: string,
-    startDate: string,
-  ): Promise<ActualTransaction | undefined> {
-    const values = await this.actual.getTransactions(mapping.actualAccountId, startDate, END_DATE);
-    return values.find(({ imported_id }) => imported_id === id);
   }
 
   private async transferPayees(): Promise<Map<string, ActualPayee>> {
@@ -567,18 +488,5 @@ function emptyReport(): SyncReport {
     accounts: [],
     preview: false,
     publication: "not-required",
-  };
-}
-
-function reportCounts(report: SyncReport): SyncCounts {
-  const { conflicts, deleted, failed, imported, inspected, unchanged, updated } = report;
-  return {
-    conflicts,
-    deleted,
-    failed,
-    imported,
-    inspected,
-    unchanged,
-    updated,
   };
 }

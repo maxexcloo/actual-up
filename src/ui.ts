@@ -25,30 +25,13 @@ export function statusVersion(runner: JobRunner): string {
   );
 }
 
-const syncTriggers = new Set([
-  "automatic-backfill",
-  "backfill",
-  "dry-run",
-  "manual",
-  "schedule",
-  "webhook",
-]);
+const syncTriggers = new Set(["automatic-backfill", "backfill", "dry-run", "manual", "schedule"]);
 export function status(
   runner: JobRunner,
   timezone = "Australia/Sydney",
   schedule?: AppConfig["schedule"],
 ): string {
-  const syncs = runner.history.filter(
-    (job) =>
-      syncTriggers.has(job.trigger) &&
-      !(
-        job.trigger === "webhook" &&
-        typeof job.result === "object" &&
-        job.result !== null &&
-        "publication" in job.result &&
-        job.result.publication === "not-required"
-      ),
-  );
+  const syncs = runner.history.filter((job) => syncTriggers.has(job.trigger));
   const active = runner.history.find((job) => job.state === "running");
   const latest = syncs[0];
   const lastSuccess = syncs.find(
@@ -135,7 +118,6 @@ function triggerLabel(trigger: string): string {
         settings: "Account Setup",
         "test-connection": "Connection Test",
         validate: "Connection Check",
-        webhook: "Up Webhook",
       } as Record<string, string>
     )[trigger] ?? trigger
   );
@@ -158,12 +140,7 @@ function runTime(job: Job, timezone: string): string {
   return value ? formatTime(new Date(value), timezone) : "Queued";
 }
 function retry(job: Job): string {
-  if (
-    !syncTriggers.has(job.trigger) ||
-    job.trigger === "webhook" ||
-    !["failure", "warning"].includes(job.state)
-  )
-    return "";
+  if (!syncTriggers.has(job.trigger) || !["failure", "warning"].includes(job.state)) return "";
   const scope = job.scope ?? {};
   return `<form method="post" action="/actions/sync" hx-post="/actions/sync" hx-target="#feedback" hx-disabled-elt="find button">${Object.entries(
     {

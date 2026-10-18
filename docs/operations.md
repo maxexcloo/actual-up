@@ -62,7 +62,3 @@ node dist/cli.js --config config.yaml discover
 node dist/cli.js --config config.yaml sync --dry-run --since 2026-01-01
 node dist/cli.js --config config.yaml sync --since 2026-01-01
 ```
-
-Optional webhook management is available through `webhook create`, `delete`,
-`ping` and `status`. Creation prints a one-time secret for secure storage; do not
-capture that output in CI or shared logs.
