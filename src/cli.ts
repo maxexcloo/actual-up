@@ -3,6 +3,7 @@
 import { Command } from "commander";
 
 import { loadConfig } from "./config.js";
+import { ConfigError } from "./errors.js";
 import { JobRunner } from "./job-runner.js";
 import { assertActualCompatibility, createRuntime } from "./runtime.js";
 import { startService } from "./server.js";
@@ -107,8 +108,9 @@ program
   });
 
 program.parseAsync().catch((error: unknown) => {
+  // Upstream SDK errors can contain bank data; only the app's own messages are printed.
   process.stderr.write(
-    `actual-up: ${error instanceof Error ? error.name : "Error"}; check configuration and connectivity\n`,
+    `actual-up: ${error instanceof ConfigError ? error.message : `${error instanceof Error ? error.name : "Error"}; check configuration and connectivity`}\n`,
   );
   process.exitCode = 1;
 });

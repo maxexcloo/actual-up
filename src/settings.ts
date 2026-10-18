@@ -4,6 +4,7 @@ import type { Logger } from "pino";
 import { z } from "zod";
 import { environmentValue, parseConfig, type AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
+import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
 import { assertActualCompatibility, type Runtime } from "./runtime.js";
 import {
@@ -22,7 +23,7 @@ import type { SyncEngine } from "./sync-engine.js";
 import { UpClient } from "./up-client.js";
 import type { UpClientLike } from "./types.js";
 
-class SettingsError extends Error {}
+class SettingsError extends ConfigError {}
 
 const fields = { revision: z.string() };
 const accountFields = {
@@ -291,9 +292,11 @@ export function registerSettings(
               assertActualCompatibility(await runtime.actual.getServerVersion());
               await saveSettings(next);
               changeSettingsVersion();
-            } catch {
+            } catch (error) {
               await runtime.actual.close();
               Object.assign(config, previous);
+              // Version mismatches and missing setup explain themselves; upstream errors stay hidden.
+              if (error instanceof ConfigError) throw error;
               throw new SettingsError(
                 "Could not connect to Actual or save settings. Check the server, budget ID, credentials and storage. Previous settings were retained.",
               );
@@ -421,12 +424,12 @@ export function registerSettings(
         } catch (error) {
           failed = true;
           operationMessage =
-            error instanceof SettingsError
+            error instanceof ConfigError
               ? error.message
               : saved
-                ? "Settings saved. Backfill could not complete; automatic sync will retry."
+                ? "Settings saved, but accounts could not refresh. Reload the page to retry."
                 : "Setup could not complete. Check the API key, Actual connection and writable storage, then retry.";
-          throw new Error("Account setup failed");
+          throw new ConfigError(operationMessage);
         } finally {
           if (accountId)
             accountUpdates.set(accountId, {

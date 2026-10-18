@@ -5,6 +5,7 @@ import { Cron } from "croner";
 import { parse } from "yaml";
 import { z } from "zod";
 
+import { ConfigError } from "./errors.js";
 import { loadSettings, type ActualCredentials } from "./settings-store.js";
 
 const environmentName = z
@@ -119,22 +120,33 @@ export type UpConnectionConfig = AppConfig["up"]["connections"][number];
 export function environmentValue(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`Environment variable ${name} is required`);
+    throw new ConfigError(`Environment variable ${name} is required`);
   }
   return value;
 }
 
 export async function loadConfig(path: string): Promise<AppConfig> {
   const absolutePath = resolve(path);
-  const source = await readFile(absolutePath, "utf8");
-  const parsed: unknown = parse(source);
+  let parsed: unknown;
+  try {
+    parsed = parse(await readFile(absolutePath, "utf8"));
+  } catch {
+    throw new ConfigError(`Could not read YAML configuration ${absolutePath}`);
+  }
   return loadSettings(parseConfig(parsed));
 }
 
 export function parseConfig(value: unknown): AppConfig {
-  const config: AppConfig = { ...configSchema.parse(value), secrets: { tokens: {} } };
-  const publicUrl = process.env.ACTUAL_UP_PUBLIC_URL;
-  if (publicUrl !== undefined) config.server.publicUrl = httpUrl.parse(publicUrl);
+  let config: AppConfig;
+  try {
+    config = { ...configSchema.parse(value), secrets: { tokens: {} } };
+    const publicUrl = process.env.ACTUAL_UP_PUBLIC_URL;
+    if (publicUrl !== undefined) config.server.publicUrl = httpUrl.parse(publicUrl);
+  } catch (error) {
+    if (error instanceof z.ZodError)
+      throw new ConfigError(`Invalid configuration\n${z.prettifyError(error)}`);
+    throw error;
+  }
   validateConfig(config);
   return config;
 }
@@ -142,7 +154,7 @@ export function parseConfig(value: unknown): AppConfig {
 function validateConfig(config: AppConfig): void {
   const connectionIds = new Set(config.up.connections.map(({ id }) => id));
   if (connectionIds.size !== config.up.connections.length) {
-    throw new Error("Up connection IDs must be unique");
+    throw new ConfigError("Up connection IDs must be unique");
   }
 
   const aliases = new Set<string>();
@@ -150,34 +162,34 @@ function validateConfig(config: AppConfig): void {
   const actualAccountIds = new Set<string>();
   for (const mapping of config.mappings) {
     if (upAccountIds.has(mapping.upAccountId)) {
-      throw new Error(`Up account ${mapping.upAccountId} is mapped more than once`);
+      throw new ConfigError(`Up account ${mapping.upAccountId} is mapped more than once`);
     }
     if (actualAccountIds.has(mapping.actualAccountId)) {
-      throw new Error(`Actual account ${mapping.actualAccountId} is mapped more than once`);
+      throw new ConfigError(`Actual account ${mapping.actualAccountId} is mapped more than once`);
     }
-    if (aliases.has(mapping.alias)) throw new Error("Mapping aliases must be unique");
+    if (aliases.has(mapping.alias)) throw new ConfigError("Mapping aliases must be unique");
     aliases.add(mapping.alias);
     upAccountIds.add(mapping.upAccountId);
     actualAccountIds.add(mapping.actualAccountId);
 
     for (const id of mapping.connections) {
       if (!connectionIds.has(id)) {
-        throw new Error(`Mapping ${mapping.alias} references unknown connection ${id}`);
+        throw new ConfigError(`Mapping ${mapping.alias} references unknown connection ${id}`);
       }
     }
-  }
-
-  for (const pattern of [config.schedule.cron, config.schedule.backfillCron]) {
-    const cron = new Cron(pattern, {
-      paused: true,
-      timezone: config.schedule.timezone,
-    });
-    cron.stop();
   }
 
   try {
     new Intl.DateTimeFormat("en-AU", { timeZone: config.schedule.timezone });
   } catch {
-    throw new Error(`Invalid timezone ${config.schedule.timezone}`);
+    throw new ConfigError(`Invalid timezone ${config.schedule.timezone}`);
+  }
+
+  for (const pattern of [config.schedule.cron, config.schedule.backfillCron]) {
+    try {
+      new Cron(pattern, { paused: true, timezone: config.schedule.timezone }).stop();
+    } catch {
+      throw new ConfigError(`Invalid schedule ${pattern}`);
+    }
   }
 }

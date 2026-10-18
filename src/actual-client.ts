@@ -1,5 +1,6 @@
 import { Worker } from "node:worker_threads";
 import { environmentValue, type AppConfig } from "./config.js";
+import { ConfigError } from "./errors.js";
 import { getActualCredentials } from "./settings-store.js";
 import type { ActualClient, ActualImportTransaction, ActualTransaction } from "./types.js";
 
@@ -25,7 +26,7 @@ export class ActualBudgetClient implements ActualClient {
     const syncId =
       this.app.actual.syncId ??
       (this.app.actual.syncIdEnv ? environmentValue(this.app.actual.syncIdEnv) : undefined);
-    if (!credentials || !syncId) throw new Error("Configure Actual in the app first");
+    if (!credentials || !syncId) throw new ConfigError("Configure Actual in the app first");
     const worker = new Worker(this.workerUrl, {
       stderr: true,
       stdout: true,
@@ -40,13 +41,19 @@ export class ActualBudgetClient implements ActualClient {
     worker.stdout.resume();
     worker.stderr.resume();
     this.worker = worker;
-    worker.on("message", (message: { id: number; ok: boolean; value?: unknown }) => {
-      const pending = this.pending.get(message.id);
-      if (!pending) return;
-      this.pending.delete(message.id);
-      if (message.ok) pending.resolve(message.value);
-      else pending.reject(new Error("Actual operation failed"));
-    });
+    worker.on(
+      "message",
+      (message: { id: number; ok: boolean; reason?: string; value?: unknown }) => {
+        const pending = this.pending.get(message.id);
+        if (!pending) return;
+        this.pending.delete(message.id);
+        if (message.ok) pending.resolve(message.value);
+        else
+          pending.reject(
+            message.reason ? new ConfigError(message.reason) : new Error("Actual operation failed"),
+          );
+      },
+    );
     const failed = () => {
       if (this.worker !== worker) return;
       this.worker = undefined;

@@ -2,6 +2,7 @@ import type { Logger } from "pino";
 
 import type { AlertSink } from "./alerts.js";
 import type { AccountMapping, AppConfig } from "./config.js";
+import { ConfigError } from "./errors.js";
 import type { JobProgress } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
 import type {
@@ -72,7 +73,7 @@ export class SyncEngine {
 
     for (const mapping of this.config.mappings) {
       if (!accountIds.has(mapping.actualAccountId)) {
-        throw new Error(
+        throw new ConfigError(
           `Mapping ${mapping.alias} references missing Actual account ${mapping.actualAccountId}`,
         );
       }
@@ -80,13 +81,15 @@ export class SyncEngine {
         const accessible = (await client.listAccounts()).some(
           ({ id }) => id === mapping.upAccountId,
         );
-        if (!accessible) throw new Error("Connection cannot access the mapped Up account");
+        if (!accessible) throw new ConfigError("Connection cannot access the mapped Up account");
       });
     }
 
     for (const actualCategoryId of Object.values(this.config.categoryMappings)) {
       if (!categoryIds.has(actualCategoryId)) {
-        throw new Error(`Category mapping references missing Actual category ${actualCategoryId}`);
+        throw new ConfigError(
+          `Category mapping references missing Actual category ${actualCategoryId}`,
+        );
       }
     }
     return { actualVersion };
@@ -389,7 +392,7 @@ export class SyncEngine {
 
   private client(id: string): UpClientLike {
     const client = this.upClients.get(id);
-    if (!client) throw new Error(`Unknown Up connection ${id}`);
+    if (!client) throw new ConfigError(`Unknown Up connection ${id}`);
     return client;
   }
 }
@@ -478,7 +481,7 @@ function lookbackTimestamp(days: number): string {
 function normaliseSince(value: string): string {
   const candidate = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00.000Z` : value;
   const date = new Date(candidate);
-  if (Number.isNaN(date.getTime())) throw new Error(`Invalid since value ${value}`);
+  if (Number.isNaN(date.getTime())) throw new ConfigError(`Invalid since value ${value}`);
   return date.toISOString();
 }
 

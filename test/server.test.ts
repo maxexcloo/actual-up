@@ -104,6 +104,24 @@ const headers = {
 };
 
 describe("operator app", () => {
+  it("returns client errors for unsupported and oversized bodies", async () => {
+    const { server } = await fixture();
+    const json = await server.inject({
+      method: "POST",
+      url: "/actions/sync",
+      headers: { ...headers, "content-type": "application/json" },
+      payload: "{}",
+    });
+    expect(json.statusCode).toBe(415);
+    const large = await server.inject({
+      method: "POST",
+      url: "/actions/sync",
+      headers,
+      payload: `mode=live&since=${"x".repeat(70_000)}`,
+    });
+    expect(large.statusCode).toBe(413);
+  });
+
   it("uses the public URL override for Secure cookies and origin checks", async () => {
     vi.stubEnv("ACTUAL_UP_PUBLIC_URL", "https://private.example.com");
     const { server } = await fixture();

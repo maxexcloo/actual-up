@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { LoginAttempts } from "./auth.js";
 import { environmentValue, type AppConfig } from "./config.js";
+import { ConfigError } from "./errors.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import type { JobRunner } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
@@ -361,8 +362,11 @@ export async function createServer(
           : "An action is already queued, or the queue is full. Please wait.",
       );
   });
-  server.setErrorHandler((_error, _request, reply) => {
-    logger.error("Request failed");
+  server.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {
+    // Fastify's own client errors, such as 413 and 415, carry safe messages.
+    if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500)
+      return reply.code(error.statusCode).send(error.message);
+    logger.error(error instanceof ConfigError ? { reason: error.message } : {}, "Request failed");
     return reply.code(500).send("Request failed; check configuration and connectivity");
   });
   return server;

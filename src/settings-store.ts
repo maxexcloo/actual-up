@@ -8,6 +8,7 @@ import {
   type AppConfig,
   type UpConnectionConfig,
 } from "./config.js";
+import { ConfigError } from "./errors.js";
 
 const actualCredentialsSchema = z
   .object({
@@ -62,7 +63,8 @@ function settings(config: AppConfig) {
 
 function encryptionKey(config: AppConfig): Buffer {
   const secret = environmentValue(config.encryptionKeyEnv);
-  if (secret.length < 32) throw new Error("Encryption key must contain at least 32 characters");
+  if (secret.length < 32)
+    throw new ConfigError("Encryption key must contain at least 32 characters");
   return createHash("sha256").update(secret).digest();
 }
 
@@ -74,7 +76,7 @@ export function connectionToken(config: AppConfig, connection: UpConnectionConfi
   const saved = config.secrets.tokens[connection.id];
   if (saved) return saved;
   if (connection.tokenEnv) return environmentValue(connection.tokenEnv);
-  throw new Error("Connection has no saved API key");
+  throw new ConfigError("Connection has no saved API key");
 }
 
 // Random revisions detect stale forms without deriving anything from saved settings.
@@ -99,18 +101,26 @@ export async function loadSettings(config: AppConfig): Promise<AppConfig> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return config;
     throw error;
   }
-  const envelope = envelopeSchema.parse(JSON.parse(source));
-  const iv = Buffer.from(envelope.iv, "base64");
-  const tag = Buffer.from(envelope.tag, "base64");
-  if (iv.length !== 12 || tag.length !== 16) throw new Error("Invalid encrypted settings");
-  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(config), iv);
-  decipher.setAAD(context);
-  decipher.setAuthTag(tag);
-  const plaintext = Buffer.concat([
-    decipher.update(Buffer.from(envelope.data, "base64")),
-    decipher.final(),
-  ]);
-  const saved = storedSchema.parse(JSON.parse(plaintext.toString("utf8")));
+  const key = encryptionKey(config);
+  let saved: z.infer<typeof storedSchema>;
+  try {
+    const envelope = envelopeSchema.parse(JSON.parse(source));
+    const iv = Buffer.from(envelope.iv, "base64");
+    const tag = Buffer.from(envelope.tag, "base64");
+    if (iv.length !== 12 || tag.length !== 16) throw new Error("Invalid encrypted settings");
+    const decipher = createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAAD(context);
+    decipher.setAuthTag(tag);
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(envelope.data, "base64")),
+      decipher.final(),
+    ]);
+    saved = storedSchema.parse(JSON.parse(plaintext.toString("utf8")));
+  } catch {
+    throw new ConfigError(
+      `Could not decrypt ${config.settingsFile}; check the encryption key and settings file`,
+    );
+  }
   const loaded = parseConfig({
     ...config,
     actual: saved.actual,

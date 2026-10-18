@@ -5,6 +5,7 @@ import { mkdir } from "node:fs/promises";
 import * as api from "@actual-app/api";
 
 import { environmentValue, type AppConfig } from "./config.js";
+import { ConfigError } from "./errors.js";
 import type {
   ActualAccount,
   ActualCategory,
@@ -36,7 +37,7 @@ export class ActualApiClient implements ActualClient {
     const syncId =
       this.config.syncId ??
       (this.config.syncIdEnv ? environmentValue(this.config.syncIdEnv) : undefined);
-    if (!credentials || !syncId) throw new Error("Configure Actual in the app first");
+    if (!credentials || !syncId) throw new ConfigError("Configure Actual in the app first");
     try {
       await api.init({
         ...base,

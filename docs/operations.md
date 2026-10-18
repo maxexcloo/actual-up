@@ -26,7 +26,8 @@ The queue serialises whole operations, including discovery and validation.
 Manual syncs with different scopes can queue together; identical scopes and
 duplicate scheduled runs coalesce.
 It holds at most 32 operations and retains the latest 20 completed results in
-memory. Exceptions are reported without their potentially sensitive contents.
+memory. Configuration and setup errors are logged with their messages; upstream
+Up and Actual errors are reported without their potentially sensitive contents.
 An account failure makes the run fail even if other accounts succeeded.
 
 History and queued jobs reset on restart. `/data` uses a persistent volume for
