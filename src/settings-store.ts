@@ -77,11 +77,18 @@ export function connectionToken(config: AppConfig, connection: UpConnectionConfi
   throw new Error("Connection has no saved API key");
 }
 
-export function settingsVersion(config: AppConfig, accountId?: string): string {
-  const value = settings(config);
-  // Unrelated account saves do not invalidate this form; validate uniqueness on save.
-  value.mappings = value.mappings.filter(({ upAccountId }) => upAccountId === accountId);
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+// Random revisions detect stale forms without deriving anything from saved settings.
+let revision = randomUUID();
+const mappingRevisions = new Map<string, string>();
+
+/** Unrelated account saves do not invalidate an account form; uniqueness is validated on save. */
+export function settingsVersion(accountId?: string): string {
+  return accountId ? `${revision}:${mappingRevisions.get(accountId) ?? ""}` : revision;
+}
+
+export function changeSettingsVersion(accountId?: string): void {
+  if (accountId) mappingRevisions.set(accountId, randomUUID());
+  else revision = randomUUID();
 }
 
 export async function loadSettings(config: AppConfig): Promise<AppConfig> {

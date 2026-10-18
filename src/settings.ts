@@ -6,7 +6,12 @@ import { environmentValue, parseConfig, type AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import type { JobRunner } from "./job-runner.js";
 import { assertActualCompatibility, type Runtime } from "./runtime.js";
-import { getActualCredentials, saveSettings, settingsVersion } from "./settings-store.js";
+import {
+  changeSettingsVersion,
+  getActualCredentials,
+  saveSettings,
+  settingsVersion,
+} from "./settings-store.js";
 import {
   accountSettingsRow,
   settingsPage,
@@ -189,7 +194,7 @@ export function registerSettings(
     const context = accountContextSchema.safeParse(request.body);
     const accountId = context.success ? context.data.upAccountId : undefined;
     const viewConnection = context.success ? context.data.viewConnection : undefined;
-    const revision = () => settingsVersion(config, accountId);
+    const revision = () => settingsVersion(accountId);
     const reject = (code: number, explanation: string) =>
       reply
         .code(code)
@@ -285,6 +290,7 @@ export function registerSettings(
               await runtime.actual.open();
               assertActualCompatibility(await runtime.actual.getServerVersion());
               await saveSettings(next);
+              changeSettingsVersion();
             } catch {
               await runtime.actual.close();
               Object.assign(config, previous);
@@ -381,6 +387,7 @@ export function registerSettings(
           config.up = next.up;
           config.mappings = next.mappings;
           config.secrets = next.secrets;
+          changeSettingsVersion(accountId);
           saved = true;
           if (command.action === "connection" && newClient)
             runtime.clients.set(command.id, newClient);
