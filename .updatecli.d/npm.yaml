@@ -6,5 +6,25 @@ autodiscovery:
     npm:
       age:
         minimum: 1d
+      ignore:
+        - packages:
+            "@types/node": ""
+labels:
+  group: npm
+---
+# Node types follow the minimum supported Node major in package.json engines.
+name: Update Node Types
+pipelineid: update-node-types
+autodiscovery:
+  crawlers:
+    npm:
+      age:
+        minimum: 1d
+      only:
+        - packages:
+            "@types/node": ""
+      versionfilter:
+        kind: semver
+        pattern: ~22
 labels:
   group: npm

@@ -8,6 +8,6 @@ parentPort.on("message", ({ id, method }) => {
       ok: false,
       value: "private-upstream-error",
     });
-  const value = method === "getServerVersion" ? workerData.credentials.method : undefined;
+  const value = method === "getServerVersion" ? workerData.secrets.actual.method : undefined;
   parentPort.postMessage({ id, ok: true, value });
 });

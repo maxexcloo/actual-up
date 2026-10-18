@@ -34,7 +34,7 @@ export function settingsPage(
   runner: JobRunner,
   accountUpdates: ReadonlyMap<string, AccountUpdate> = new Map(),
 ): string {
-  const revision = settingsVersion(config);
+  const revision = settingsVersion();
   const actualCredentials = getActualCredentials(config);
   const form = (
     action: string,
@@ -115,7 +115,7 @@ export function accountSettingsRow(
   const connections = [...new Set([...(mapping?.connections ?? []), ...account.connections])];
   const destination = discovery?.actual.find(({ id }) => id === mapping?.actualAccountId)?.name;
   const form = (action: string, content: string, confirmation?: string) =>
-    `<form id="settings-${e(action)}-${e(viewConnection)}-${e(account.id)}" method="post" action="/settings" hx-post="/settings" hx-target="closest .account-row" hx-swap="outerHTML" hx-disabled-elt="find fieldset"${confirmation ? ` hx-confirm="${e(confirmation)}"` : ""}>${hidden("revision", settingsVersion(config, account.id))}${hidden("action", action)}${hidden("upAccountId", account.id)}${hidden("viewConnection", viewConnection)}<fieldset class="wa-stack" ${update?.pending ? "disabled" : ""}>${content}</fieldset></form>`;
+    `<form id="settings-${e(action)}-${e(viewConnection)}-${e(account.id)}" method="post" action="/settings" hx-post="/settings" hx-target="closest .account-row" hx-swap="outerHTML" hx-disabled-elt="find fieldset"${confirmation ? ` hx-confirm="${e(confirmation)}"` : ""}>${hidden("revision", settingsVersion(account.id))}${hidden("action", action)}${hidden("upAccountId", account.id)}${hidden("viewConnection", viewConnection)}<fieldset class="wa-stack" ${update?.pending ? "disabled" : ""}>${content}</fieldset></form>`;
   const editor =
     discovery && !discovery.actualUnavailable
       ? form(

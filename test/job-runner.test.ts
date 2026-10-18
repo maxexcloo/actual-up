@@ -56,8 +56,8 @@ describe("operation queue", () => {
   it("bounds the queue and recent history", async () => {
     const queue = runner();
     for (let i = 0; i < 32; i++)
-      expect(queue.enqueue(String(i), "webhook", async () => ({}))).toBe(true);
-    expect(queue.enqueue("overflow", "webhook", async () => ({}))).toBe(false);
+      expect(queue.enqueue(String(i), "schedule", async () => ({}))).toBe(true);
+    expect(queue.enqueue("overflow", "schedule", async () => ({}))).toBe(false);
     await queue.drain();
     expect(queue.history).toHaveLength(20);
   });

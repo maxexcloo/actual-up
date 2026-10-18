@@ -5,6 +5,7 @@ import { mkdir } from "node:fs/promises";
 import * as api from "@actual-app/api";
 
 import { environmentValue, type AppConfig } from "./config.js";
+import { ConfigError } from "./errors.js";
 import type {
   ActualAccount,
   ActualCategory,
@@ -36,7 +37,7 @@ export class ActualApiClient implements ActualClient {
     const syncId =
       this.config.syncId ??
       (this.config.syncIdEnv ? environmentValue(this.config.syncIdEnv) : undefined);
-    if (!credentials || !syncId) throw new Error("Configure Actual in the app first");
+    if (!credentials || !syncId) throw new ConfigError("Configure Actual in the app first");
     try {
       await api.init({
         ...base,
@@ -94,13 +95,13 @@ export class ActualApiClient implements ActualClient {
     return api.getTransactions(accountId, startDate, endDate);
   }
 
-  async importTransaction(
+  async importTransactions(
     accountId: string,
-    transaction: ActualImportTransaction,
+    transactions: ActualImportTransaction[],
   ): Promise<ActualImportResult> {
     await this.open();
-    const result = await api.importTransactions(accountId, [transaction], {
-      defaultCleared: transaction.cleared,
+    // Each transaction sets its own cleared state, so Actual's default does not apply.
+    const result = await api.importTransactions(accountId, transactions, {
       reimportDeleted: false,
     });
     return {

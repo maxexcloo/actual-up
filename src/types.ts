@@ -38,21 +38,6 @@ export type UpTransaction = {
   };
 };
 
-export type UpWebhookEvent = {
-  data: {
-    attributes: {
-      createdAt: string;
-      eventType: "PING" | "TRANSACTION_CREATED" | "TRANSACTION_DELETED" | "TRANSACTION_SETTLED";
-    };
-    id: string;
-    relationships: {
-      transaction?: { data: { id: string; type: "transactions" } | null };
-      webhook: { data: { id: string; type: "webhooks" } };
-    };
-    type: "webhook-events";
-  };
-};
-
 export type ActualAccount = {
   closed?: boolean;
   id: string;
@@ -121,9 +106,9 @@ export interface ActualClient {
     startDate: string,
     endDate: string,
   ): Promise<ActualTransaction[]>;
-  importTransaction(
+  importTransactions(
     accountId: string,
-    transaction: ActualImportTransaction,
+    transactions: ActualImportTransaction[],
   ): Promise<ActualImportResult>;
   open(): Promise<void>;
   sync(): Promise<void>;
@@ -131,22 +116,7 @@ export interface ActualClient {
 }
 
 export interface UpClientLike {
-  createWebhook(url: string, description: string): Promise<UpWebhook>;
-  deleteWebhook(id: string): Promise<void>;
-  getTransaction(id: string): Promise<UpTransaction>;
   listAccounts(): Promise<UpAccount[]>;
   listTransactions(accountId: string, since: string): Promise<UpTransaction[]>;
-  listWebhooks(): Promise<UpWebhook[]>;
   ping(): Promise<void>;
-  pingWebhook(id: string): Promise<void>;
 }
-
-export type UpWebhook = {
-  id: string;
-  attributes: {
-    createdAt: string;
-    description?: string | null;
-    secretKey?: string;
-    url: string;
-  };
-};

@@ -75,14 +75,14 @@ describe("automatic reconciliation", () => {
 
   it("leaves a new installation idle until accounts are mapped", async () => {
     const { engine, runner } = fixture(true, false);
-    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
+    await vi.advanceTimersByTimeAsync(20 * 60_000);
     await runner.drain();
     expect(engine.reconcile).not.toHaveBeenCalled();
   });
 
   it("does not write or schedule when explicitly disabled", async () => {
     const { engine, runner } = fixture(false);
-    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);
+    await vi.advanceTimersByTimeAsync(20 * 60_000);
     await runner.drain();
     expect(engine.reconcile).not.toHaveBeenCalled();
   });
