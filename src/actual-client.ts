@@ -29,9 +29,11 @@ export class ActualBudgetClient implements ActualClient {
     const worker = new Worker(this.workerUrl, {
       stderr: true,
       stdout: true,
+      // The worker only needs Actual credentials, not Up keys.
       workerData: {
-        credentials,
-        config: { ...this.app, actual: { ...this.app.actual, syncId } },
+        ...this.app,
+        actual: { ...this.app.actual, syncId },
+        secrets: { actual: credentials, tokens: {} },
       },
     });
     // SDK output can contain bank data. Only the app emits sanitised diagnostics.

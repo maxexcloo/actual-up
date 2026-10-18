@@ -9,8 +9,6 @@ import {
   type UpConnectionConfig,
 } from "./config.js";
 
-const credentials = new WeakMap<AppConfig, Record<string, string>>();
-const actualSecrets = new WeakMap<AppConfig, ActualCredentials>();
 const actualCredentialsSchema = z
   .object({
     method: z.enum(["session", "password"]),
@@ -21,8 +19,7 @@ const actualCredentialsSchema = z
 export type ActualCredentials = z.infer<typeof actualCredentialsSchema>;
 
 export function getActualCredentials(config: AppConfig): ActualCredentials | undefined {
-  const saved = actualSecrets.get(config);
-  if (saved) return saved;
+  if (config.secrets.actual) return config.secrets.actual;
   const name = config.actual.sessionTokenEnv ?? config.actual.passwordEnv;
   if (!name || !process.env[name]) return undefined;
   return {
@@ -32,10 +29,6 @@ export function getActualCredentials(config: AppConfig): ActualCredentials | und
       ? environmentValue(config.actual.encryptionPasswordEnv)
       : undefined,
   };
-}
-
-export function setActualCredentials(config: AppConfig, value: ActualCredentials): void {
-  actualSecrets.set(config, value);
 }
 
 const context = Buffer.from("actual-up/settings/v1");
@@ -60,10 +53,10 @@ const storedSchema = z
 function settings(config: AppConfig) {
   return {
     actual: config.actual,
-    actualCredentials: actualSecrets.get(config),
+    actualCredentials: config.secrets.actual,
     connections: config.up.connections,
     mappings: config.mappings,
-    tokens: credentials.get(config) ?? {},
+    tokens: config.secrets.tokens,
   };
 }
 
@@ -77,22 +70,8 @@ export function checkEncryptionKey(config: AppConfig): void {
   encryptionKey(config);
 }
 
-export function copyCredentials(source: AppConfig, target: AppConfig): void {
-  credentials.set(target, { ...credentials.get(source) });
-  const actual = actualSecrets.get(source);
-  if (actual) actualSecrets.set(target, { ...actual });
-  else actualSecrets.delete(target);
-}
-
-export function setConnectionToken(config: AppConfig, id: string, token?: string): void {
-  const tokens = { ...credentials.get(config) };
-  if (token === undefined) delete tokens[id];
-  else tokens[id] = token;
-  credentials.set(config, tokens);
-}
-
 export function connectionToken(config: AppConfig, connection: UpConnectionConfig): string {
-  const saved = credentials.get(config)?.[connection.id];
+  const saved = config.secrets.tokens[connection.id];
   if (saved) return saved;
   if (connection.tokenEnv) return environmentValue(connection.tokenEnv);
   throw new Error("Connection has no saved API key");
@@ -132,8 +111,7 @@ export async function loadSettings(config: AppConfig): Promise<AppConfig> {
     mappings: saved.mappings,
   });
   loaded.actual.cacheDirectory = config.actual.cacheDirectory;
-  credentials.set(loaded, saved.tokens);
-  if (saved.actualCredentials) actualSecrets.set(loaded, saved.actualCredentials);
+  loaded.secrets = { actual: saved.actualCredentials, tokens: saved.tokens };
   for (const connection of loaded.up.connections) connectionToken(loaded, connection);
   return loaded;
 }

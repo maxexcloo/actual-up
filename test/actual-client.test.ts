@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "@actual-app/api";
 import { ActualApiClient as ActualBudgetClient } from "../src/actual-api-client.js";
 import { parseConfig } from "../src/config.js";
-import { setActualCredentials } from "../src/settings-store.js";
 
 vi.mock("@actual-app/api", () => ({
   init: vi.fn(),
@@ -38,10 +37,10 @@ describe("Actual connection lifecycle", () => {
     const { config, client } = await fixture();
     expect(api.init).not.toHaveBeenCalled();
     await expect(client.open()).rejects.toThrow("Configure Actual");
-    setActualCredentials(config, {
+    config.secrets.actual = {
       credential: "first-secret",
       method: "session",
-    });
+    };
     await client.getAccounts();
     expect(api.init).toHaveBeenCalledWith(
       expect.objectContaining({ sessionToken: "first-secret", verbose: false }),
@@ -49,11 +48,11 @@ describe("Actual connection lifecycle", () => {
     await client.getAccounts();
     expect(api.init).toHaveBeenCalledTimes(1);
     await client.close();
-    setActualCredentials(config, {
+    config.secrets.actual = {
       credential: "replacement",
       encryptionPassword: "budget-encryption",
       method: "password",
-    });
+    };
     await client.open();
     expect(api.init).toHaveBeenLastCalledWith(expect.objectContaining({ password: "replacement" }));
     expect(api.downloadBudget).toHaveBeenLastCalledWith("budget", {
@@ -62,7 +61,7 @@ describe("Actual connection lifecycle", () => {
   });
   it("cleans up failed connections and refuses incompatible servers before downloading", async () => {
     const { config, client } = await fixture();
-    setActualCredentials(config, { credential: "secret", method: "session" });
+    config.secrets.actual = { credential: "secret", method: "session" };
     vi.mocked(api.getServerVersion).mockResolvedValueOnce({
       version: "25.1.0",
     });

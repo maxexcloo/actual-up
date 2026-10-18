@@ -6,14 +6,7 @@ import { environmentValue, parseConfig, type AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import type { JobRunner } from "./job-runner.js";
 import { assertActualCompatibility, type Runtime } from "./runtime.js";
-import {
-  saveSettings,
-  settingsVersion,
-  copyCredentials,
-  getActualCredentials,
-  setActualCredentials,
-  setConnectionToken,
-} from "./settings-store.js";
+import { getActualCredentials, saveSettings, settingsVersion } from "./settings-store.js";
 import {
   accountSettingsRow,
   settingsPage,
@@ -253,7 +246,7 @@ export function registerSettings(
             return { ok: true };
           }
           const next = parseConfig(config);
-          copyCredentials(config, next);
+          next.secrets = structuredClone(config.secrets);
           if (command.action === "actual") {
             const oldSyncId =
               config.actual.syncId ??
@@ -277,26 +270,24 @@ export function registerSettings(
               serverUrl: command.serverUrl,
               syncId: command.syncId,
             };
-            setActualCredentials(next, {
+            next.secrets.actual = {
               credential,
               method: command.method,
               encryptionPassword: command.clearEncryption
                 ? undefined
                 : command.encryptionPassword || previousCredentials?.encryptionPassword,
-            });
-            const previous = parseConfig(config);
-            copyCredentials(config, previous);
+            };
+            const previous = { actual: config.actual, secrets: config.secrets };
             await runtime.actual.close();
             config.actual = next.actual;
-            copyCredentials(next, config);
+            config.secrets = next.secrets;
             try {
               await runtime.actual.open();
               assertActualCompatibility(await runtime.actual.getServerVersion());
               await saveSettings(next);
             } catch {
               await runtime.actual.close();
-              config.actual = previous.actual;
-              copyCredentials(previous, config);
+              Object.assign(config, previous);
               throw new SettingsError(
                 "Could not connect to Actual or save settings. Check the server, budget ID, credentials and storage. Previous settings were retained.",
               );
@@ -322,13 +313,13 @@ export function registerSettings(
             const existing = next.up.connections.find(({ id }) => id === command.id);
             if (existing) delete existing.tokenEnv;
             else next.up.connections.push({ id: command.id });
-            setConnectionToken(next, command.id, command.token);
+            next.secrets.tokens[command.id] = command.token;
           } else if (command.action === "remove-connection") {
             if (next.mappings.some(({ connections }) => connections.includes(command.id)))
               throw new SettingsError(
                 "This key is still in use. Update or disconnect its mappings first.",
               );
-            setConnectionToken(next, command.id);
+            delete next.secrets.tokens[command.id];
             next.up.connections = next.up.connections.filter(({ id }) => id !== command.id);
           } else if (command.action === "mapping") {
             discovery = await discover();
@@ -389,7 +380,7 @@ export function registerSettings(
           await saveSettings(next);
           config.up = next.up;
           config.mappings = next.mappings;
-          copyCredentials(next, config);
+          config.secrets = next.secrets;
           saved = true;
           if (command.action === "connection" && newClient)
             runtime.clients.set(command.id, newClient);

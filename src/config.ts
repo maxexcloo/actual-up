@@ -5,7 +5,7 @@ import { Cron } from "croner";
 import { parse } from "yaml";
 import { z } from "zod";
 
-import { loadSettings } from "./settings-store.js";
+import { loadSettings, type ActualCredentials } from "./settings-store.js";
 
 const environmentName = z
   .string()
@@ -110,7 +110,9 @@ const configSchema = z.object({
   up: z.object({ connections: z.array(connectionSchema) }),
 });
 
-export type AppConfig = z.infer<typeof configSchema>;
+/** Browser-managed credentials travel beside the YAML settings, never inside them. */
+export type Secrets = { actual?: ActualCredentials; tokens: Record<string, string> };
+export type AppConfig = z.infer<typeof configSchema> & { secrets: Secrets };
 export type AccountMapping = AppConfig["mappings"][number];
 export type UpConnectionConfig = AppConfig["up"]["connections"][number];
 
@@ -130,7 +132,7 @@ export async function loadConfig(path: string): Promise<AppConfig> {
 }
 
 export function parseConfig(value: unknown): AppConfig {
-  const config = configSchema.parse(value);
+  const config: AppConfig = { ...configSchema.parse(value), secrets: { tokens: {} } };
   const publicUrl = process.env.ACTUAL_UP_PUBLIC_URL;
   if (publicUrl !== undefined) config.server.publicUrl = httpUrl.parse(publicUrl);
   validateConfig(config);
