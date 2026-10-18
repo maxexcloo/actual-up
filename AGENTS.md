@@ -21,6 +21,22 @@
 - Persist browser settings and credentials together as authenticated ciphertext; keep the encryption key in 1Password.
 - Serve UI assets locally; keep credentials on the server and require authentication and same-origin checks for actions.
 
+## Runtime Facts
+
+- The encrypted `settings.json` overrides `up`, `mappings` and `actual` from the
+  YAML configuration on startup, including for CLI commands.
+- Actual runs in a single worker thread; only the app's own `ConfigError` messages
+  cross that boundary or reach logs and the CLI.
+- `@actual-app/api` major.minor must match the Actual server, enforced by
+  `src/actual-version.ts`. Move it in lockstep with Kubelab's `actual-budget` version.
+- Kubelab owns the production deployment; this repository only publishes images.
+
+## Release
+
+1. Bump `version` in `package.json`.
+2. Tag the commit `v<version>` and push the tag to publish the image.
+3. Update the image reference in Kubelab (`apps/base/actual-up`).
+
 ## Verification
 
 Run `mise run check`.
