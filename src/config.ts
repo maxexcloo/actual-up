@@ -11,7 +11,8 @@ import { loadSettings, type ActualCredentials } from "./settings-store.js";
 const environmentName = z
   .string()
   .regex(/^[A-Z][A-Z0-9_]*$/, "must be an environment variable name");
-const httpUrl = z
+export const connectionId = z.string().regex(/^[a-z][a-z0-9-]*$/);
+export const httpUrl = z
   .url()
   .refine(
     (value) => ["http:", "https:"].includes(new URL(value).protocol),
@@ -38,7 +39,7 @@ const actualSchema = z
   );
 
 const connectionSchema = z.object({
-  id: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  id: connectionId,
   tokenEnv: environmentName.optional(),
 });
 
