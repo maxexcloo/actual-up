@@ -87,7 +87,6 @@ async function fixture() {
       url: "/settings",
       payload: {
         revision: settingsVersion(
-          config,
           typeof data.upAccountId === "string" ? data.upAccountId : undefined,
         ),
         ...data,
@@ -133,7 +132,7 @@ describe("browser setup", () => {
       headers: { "hx-request": "true" },
       payload: {
         ...mapping,
-        revision: settingsVersion(f.config, upId),
+        revision: settingsVersion(upId),
         viewConnection: "max",
       },
     });
@@ -176,7 +175,7 @@ describe("browser setup", () => {
 
   it("persists mappings before backfill, restores them on restart and rejects stale writes", async () => {
     const f = await fixture();
-    const revision = settingsVersion(f.config, upId);
+    const revision = settingsVersion(upId);
     f.engine.reconcile.mockImplementation(async () => {
       expect((await loadSettings(f.config)).mappings).toHaveLength(1);
       return { failed: 0, imported: 1 };
@@ -366,7 +365,7 @@ describe("browser setup", () => {
           alias: id === upId ? "Everyday" : "Savings",
           upAccountId: id,
           actualAccountId: destination,
-          revision: settingsVersion(f.config, id),
+          revision: settingsVersion(id),
         },
       });
     try {
@@ -409,7 +408,7 @@ describe("browser setup", () => {
       { id: "actual-id", name: "Spending" },
       { id: "actual-2", name: "Savings" },
     ]);
-    const revision = settingsVersion(f.config, secondId);
+    const revision = settingsVersion(secondId);
     let release!: () => void;
     f.engine.reconcile.mockImplementationOnce(
       () =>

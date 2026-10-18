@@ -1,8 +1,7 @@
 # Actual Up
 
 A small private web app that synchronises Up transactions into Actual Budget.
-One Node service owns the UI, polling, optional signed webhooks and a serial
-operation queue. No separate application database or workflow platform.
+One Node service owns the UI, polling and a serial operation queue. No separate application database or workflow platform.
 
 ## Features
 
@@ -21,7 +20,7 @@ operation queue. No separate application database or workflow platform.
 
 ## Run Locally
 
-Requires Node.js 22 or later. Install the pinned tools and dependencies:
+Requires Node.js 22.12 or later. Install the pinned tools and dependencies:
 
 ```sh
 mise run setup
@@ -45,34 +44,25 @@ while using discovery or dry runs.
 
 ## Deploy
 
+Kubelab owns the production deployment (`kubelab/apps/base/actual-up`) using
+`bjw-s/app-template`, a private route and External Secrets. Its `Actual Up`
+1Password item holds the app login and settings encryption key. Merging here
+publishes an image but does not deploy it: pin the published tag and digest in
+Kubelab to release.
+
 The image runs `serve`, listens on port 3000 and needs writable `/data` and `/tmp`
 directories. Persist `/data`: browser settings live in `/data/settings.json`.
-Use one replica with `Recreate`; only the Actual cache is rebuildable.
-Expose the app through private HTTPS. Use the normal sign-in page. The app login and settings encryption key come
-from environment variables; upstream credentials are managed in the browser.
+Use one replica with `Recreate`; only the Actual cache is rebuildable. Expose the
+app through one private HTTPS reverse proxy. The app login and settings
+encryption key come from environment variables; upstream credentials are managed
+in the browser.
 
 The GitHub Container workflow builds, smoke-tests and scans the image before publishing
 to `ghcr.io/maxexcloo/actual-up`. Runtime or build-input changes on `main` publish `latest` and
-`sha-<full-commit>`. Version tags such as `v0.1.0` publish `0.1.0` and `0.1`;
-Pull requests test and verify the image without publishing. Images include OCI labels, provenance and an SBOM. Kubelab owns
-its deployment using `bjw-s/app-template`, private routing and External Secrets.
-Its `Actual Up` 1Password item holds the app login and settings encryption key.
-Pin the published image tag and digest in kubelab before enabling the release.
-Publishing uses the repository’s `GITHUB_TOKEN`; no registry password is needed.
-
-The included Helm chart is available for installations outside kubelab:
-
-```sh
-helm upgrade --install actual-up ./chart/actual-up \
-  --set existingSecret=actual-up \
-  --set image.repository=ghcr.io/your-owner/actual-up \
-  --set image.tag=sha-your-published-commit \
-  --set-file configuration=./config.yaml
-```
-
-The chart ingress exposes `/webhooks/up` by default. For the private app, enable
-`ingress.enabled`, configure your private ingress class and host, and set
-`ingress.path: /`. Keep the default webhook path for public ingress.
+`sha-<full-commit>`. Version tags such as `v0.1.0` publish `0.1.0` and `0.1`.
+Pull requests test and verify the image without publishing. Images include OCI
+labels, provenance and an SBOM. Publishing uses the repository’s `GITHUB_TOKEN`;
+no registry password is needed.
 
 See [configuration](docs/configuration.md) and [operations](docs/operations.md).
 

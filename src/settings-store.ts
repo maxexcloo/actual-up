@@ -8,9 +8,8 @@ import {
   type AppConfig,
   type UpConnectionConfig,
 } from "./config.js";
+import { ConfigError } from "./errors.js";
 
-const credentials = new WeakMap<AppConfig, Record<string, string>>();
-const actualSecrets = new WeakMap<AppConfig, ActualCredentials>();
 const actualCredentialsSchema = z
   .object({
     method: z.enum(["session", "password"]),
@@ -21,8 +20,7 @@ const actualCredentialsSchema = z
 export type ActualCredentials = z.infer<typeof actualCredentialsSchema>;
 
 export function getActualCredentials(config: AppConfig): ActualCredentials | undefined {
-  const saved = actualSecrets.get(config);
-  if (saved) return saved;
+  if (config.secrets.actual) return config.secrets.actual;
   const name = config.actual.sessionTokenEnv ?? config.actual.passwordEnv;
   if (!name || !process.env[name]) return undefined;
   return {
@@ -32,10 +30,6 @@ export function getActualCredentials(config: AppConfig): ActualCredentials | und
       ? environmentValue(config.actual.encryptionPasswordEnv)
       : undefined,
   };
-}
-
-export function setActualCredentials(config: AppConfig, value: ActualCredentials): void {
-  actualSecrets.set(config, value);
 }
 
 const context = Buffer.from("actual-up/settings/v1");
@@ -60,16 +54,17 @@ const storedSchema = z
 function settings(config: AppConfig) {
   return {
     actual: config.actual,
-    actualCredentials: actualSecrets.get(config),
+    actualCredentials: config.secrets.actual,
     connections: config.up.connections,
     mappings: config.mappings,
-    tokens: credentials.get(config) ?? {},
+    tokens: config.secrets.tokens,
   };
 }
 
 function encryptionKey(config: AppConfig): Buffer {
   const secret = environmentValue(config.encryptionKeyEnv);
-  if (secret.length < 32) throw new Error("Encryption key must contain at least 32 characters");
+  if (secret.length < 32)
+    throw new ConfigError("Encryption key must contain at least 32 characters");
   return createHash("sha256").update(secret).digest();
 }
 
@@ -77,32 +72,25 @@ export function checkEncryptionKey(config: AppConfig): void {
   encryptionKey(config);
 }
 
-export function copyCredentials(source: AppConfig, target: AppConfig): void {
-  credentials.set(target, { ...credentials.get(source) });
-  const actual = actualSecrets.get(source);
-  if (actual) actualSecrets.set(target, { ...actual });
-  else actualSecrets.delete(target);
-}
-
-export function setConnectionToken(config: AppConfig, id: string, token?: string): void {
-  const tokens = { ...credentials.get(config) };
-  if (token === undefined) delete tokens[id];
-  else tokens[id] = token;
-  credentials.set(config, tokens);
-}
-
 export function connectionToken(config: AppConfig, connection: UpConnectionConfig): string {
-  const saved = credentials.get(config)?.[connection.id];
+  const saved = config.secrets.tokens[connection.id];
   if (saved) return saved;
   if (connection.tokenEnv) return environmentValue(connection.tokenEnv);
-  throw new Error("Connection has no saved API key");
+  throw new ConfigError("Connection has no saved API key");
 }
 
-export function settingsVersion(config: AppConfig, accountId?: string): string {
-  const value = settings(config);
-  // Unrelated account saves do not invalidate this form; validate uniqueness on save.
-  value.mappings = value.mappings.filter(({ upAccountId }) => upAccountId === accountId);
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+// Random revisions detect stale forms without deriving anything from saved settings.
+let revision = randomUUID();
+const mappingRevisions = new Map<string, string>();
+
+/** Unrelated account saves do not invalidate an account form; uniqueness is validated on save. */
+export function settingsVersion(accountId?: string): string {
+  return accountId ? `${revision}:${mappingRevisions.get(accountId) ?? ""}` : revision;
+}
+
+export function changeSettingsVersion(accountId?: string): void {
+  if (accountId) mappingRevisions.set(accountId, randomUUID());
+  else revision = randomUUID();
 }
 
 export async function loadSettings(config: AppConfig): Promise<AppConfig> {
@@ -113,18 +101,26 @@ export async function loadSettings(config: AppConfig): Promise<AppConfig> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return config;
     throw error;
   }
-  const envelope = envelopeSchema.parse(JSON.parse(source));
-  const iv = Buffer.from(envelope.iv, "base64");
-  const tag = Buffer.from(envelope.tag, "base64");
-  if (iv.length !== 12 || tag.length !== 16) throw new Error("Invalid encrypted settings");
-  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(config), iv);
-  decipher.setAAD(context);
-  decipher.setAuthTag(tag);
-  const plaintext = Buffer.concat([
-    decipher.update(Buffer.from(envelope.data, "base64")),
-    decipher.final(),
-  ]);
-  const saved = storedSchema.parse(JSON.parse(plaintext.toString("utf8")));
+  const key = encryptionKey(config);
+  let saved: z.infer<typeof storedSchema>;
+  try {
+    const envelope = envelopeSchema.parse(JSON.parse(source));
+    const iv = Buffer.from(envelope.iv, "base64");
+    const tag = Buffer.from(envelope.tag, "base64");
+    if (iv.length !== 12 || tag.length !== 16) throw new Error("Invalid encrypted settings");
+    const decipher = createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAAD(context);
+    decipher.setAuthTag(tag);
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(envelope.data, "base64")),
+      decipher.final(),
+    ]);
+    saved = storedSchema.parse(JSON.parse(plaintext.toString("utf8")));
+  } catch {
+    throw new ConfigError(
+      `Could not decrypt ${config.settingsFile}; check the encryption key and settings file`,
+    );
+  }
   const loaded = parseConfig({
     ...config,
     actual: saved.actual,
@@ -132,8 +128,7 @@ export async function loadSettings(config: AppConfig): Promise<AppConfig> {
     mappings: saved.mappings,
   });
   loaded.actual.cacheDirectory = config.actual.cacheDirectory;
-  credentials.set(loaded, saved.tokens);
-  if (saved.actualCredentials) actualSecrets.set(loaded, saved.actualCredentials);
+  loaded.secrets = { actual: saved.actualCredentials, tokens: saved.tokens };
   for (const connection of loaded.up.connections) connectionToken(loaded, connection);
   return loaded;
 }

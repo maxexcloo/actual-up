@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Logger } from "pino";
+
+import { ConfigError } from "./errors.js";
 import type { Metrics } from "./metrics.js";
 
 export type JobProgress = {
@@ -71,10 +73,11 @@ export class JobRunner {
           : hasConflicts(job.result)
             ? "warning"
             : "success";
-      } catch {
+      } catch (error) {
         job.state = "failure";
+        // Upstream errors can contain bank data; only the app's own messages are logged.
         this.logger.error(
-          { trigger },
+          error instanceof ConfigError ? { reason: error.message, trigger } : { trigger },
           "Operation failed; check credentials, mappings and connectivity",
         );
       } finally {

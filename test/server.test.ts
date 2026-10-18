@@ -104,6 +104,24 @@ const headers = {
 };
 
 describe("operator app", () => {
+  it("returns client errors for unsupported and oversized bodies", async () => {
+    const { server } = await fixture();
+    const json = await server.inject({
+      method: "POST",
+      url: "/actions/sync",
+      headers: { ...headers, "content-type": "application/json" },
+      payload: "{}",
+    });
+    expect(json.statusCode).toBe(415);
+    const large = await server.inject({
+      method: "POST",
+      url: "/actions/sync",
+      headers,
+      payload: `mode=live&since=${"x".repeat(70_000)}`,
+    });
+    expect(large.statusCode).toBe(413);
+  });
+
   it("uses the public URL override for Secure cookies and origin checks", async () => {
     vi.stubEnv("ACTUAL_UP_PUBLIC_URL", "https://private.example.com");
     const { server } = await fixture();
@@ -190,6 +208,22 @@ describe("operator app", () => {
     expect(
       (await server.inject({ url: "/", headers: { cookie: headers.cookie } })).statusCode,
     ).toBe(303);
+  });
+
+  it("limits sign-in attempts by the client address the proxy forwarded", async () => {
+    const { server } = await fixture();
+    const attempt = (forwarded: string) =>
+      server.inject({
+        headers: { ...headers, "x-forwarded-for": forwarded },
+        method: "POST",
+        payload: "username=operator&password=wrong",
+        url: "/login",
+      });
+    for (let index = 0; index < 10; index += 1)
+      expect((await attempt("203.0.113.1")).statusCode).toBe(401);
+    expect((await attempt("203.0.113.1")).statusCode).toBe(429);
+    expect((await attempt("203.0.113.9, 203.0.113.1")).statusCode).toBe(429);
+    expect((await attempt("203.0.113.2")).statusCode).toBe(401);
   });
 
   it("expires opaque sessions after eight hours and rejects forged cookies", async () => {
