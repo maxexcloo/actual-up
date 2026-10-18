@@ -28,6 +28,10 @@ declare module "fastify" {
   }
 }
 
+const sessionCookie = "actual_up_session";
+const sessionLifetime = 8 * 60 * 60 * 1000;
+const probePaths = new Set(["/livez", "/readyz", "/metrics"]);
+
 export type Service = {
   close(): Promise<void>;
 };
@@ -66,13 +70,21 @@ export async function createServer(
   const username = environmentValue(config.auth.usernameEnv);
   const password = environmentValue(config.auth.passwordEnv);
   const attempts = new LoginAttempts(username, password);
-  const htmx = await readFile(
-    createRequire(import.meta.url).resolve("htmx.org/dist/htmx.min.js"),
-    "utf8",
-  );
-  const stylesheet = await readFile(new URL("../dist/style.css", import.meta.url), "utf8");
-  const themeScript = await readFile(new URL("../dist/theme.js", import.meta.url), "utf8");
-  const components = await readFile(new URL("../dist/components.js", import.meta.url), "utf8");
+  const bundled = (name: string) => readFile(new URL(`../dist/${name}`, import.meta.url), "utf8");
+  // The sign-in page loads these before authentication.
+  const publicAssets: Record<string, [type: string, body: string]> = {
+    "/assets/components.js": ["application/javascript", await bundled("components.js")],
+    "/assets/style.css": ["text/css", await bundled("style.css")],
+    "/assets/theme.js": ["application/javascript", await bundled("theme.js")],
+  };
+  const assets = {
+    ...publicAssets,
+    "/assets/htmx.js": [
+      "application/javascript",
+      await readFile(createRequire(import.meta.url).resolve("htmx.org/dist/htmx.min.js"), "utf8"),
+    ],
+  } satisfies typeof publicAssets;
+  const publicPaths = new Set(["/login", ...Object.keys(publicAssets)]);
   const server = Fastify({
     bodyLimit: 65_536,
     logController: new LogController({ disableRequestLogging: true }),
@@ -83,7 +95,7 @@ export async function createServer(
 
   const sessionData = new LRUCache<string, import("fastify").Session>({
     max: 100,
-    ttl: 8 * 60 * 60 * 1000,
+    ttl: sessionLifetime,
   });
   await server.register(cookie);
   await server.register(session, {
@@ -93,7 +105,7 @@ export async function createServer(
       sameSite: "strict",
       secure: config.server.publicUrl?.startsWith("https://") ?? false,
     },
-    cookieName: "actual_up_session",
+    cookieName: sessionCookie,
     rolling: false,
     saveUninitialized: false,
     secret: randomBytes(32).toString("hex"),
@@ -147,7 +159,7 @@ export async function createServer(
       "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     );
     const path = request.url.split("?")[0];
-    if (["/livez", "/readyz", "/metrics"].includes(path!)) return;
+    if (probePaths.has(path!)) return;
     if (request.method === "POST") {
       const origin = request.headers.origin;
       const expected = config.server.publicUrl
@@ -157,10 +169,7 @@ export async function createServer(
         return reply.code(403).send("Request origin does not match this app");
       }
     }
-    if (
-      ["/login", "/assets/components.js", "/assets/style.css", "/assets/theme.js"].includes(path!)
-    )
-      return;
+    if (publicPaths.has(path!)) return;
     if (request.session.authenticated !== true) {
       if (request.headers["hx-request"] === "true")
         return reply.header("HX-Redirect", "/login").code(200).send();
@@ -194,7 +203,7 @@ export async function createServer(
         );
     const now = Date.now();
     await request.session.regenerate();
-    request.session.options({ expires: new Date(now + 8 * 60 * 60 * 1000) });
+    request.session.options({ expires: new Date(now + sessionLifetime) });
     request.session.authenticated = true;
     // Save explicitly so HTTPS cookies also work behind the configured TLS proxy.
     await request.session.save();
@@ -202,7 +211,7 @@ export async function createServer(
   });
   server.post("/logout", async (request, reply) => {
     await request.session.destroy();
-    return reply.clearCookie("actual_up_session", { path: "/" }).redirect("/login", 303);
+    return reply.clearCookie(sessionCookie, { path: "/" }).redirect("/login", 303);
   });
 
   registerSettings(server, config, runner, engine, runtime, logger, makeUpClient);
@@ -211,20 +220,8 @@ export async function createServer(
     if (request.query.version === statusVersion(runner)) return reply.code(204).send();
     return reply.type("text/html").send(status(runner, config.schedule));
   });
-  server.get("/assets/style.css", async (_request, reply) =>
-    reply.type("text/css").send(stylesheet),
-  );
-  server.get("/assets/htmx.js", async (_request, reply) =>
-    reply.type("application/javascript").send(htmx),
-  );
-
-  server.get("/assets/theme.js", async (_request, reply) =>
-    reply.type("application/javascript").send(themeScript),
-  );
-
-  server.get("/assets/components.js", async (_request, reply) =>
-    reply.type("application/javascript").send(components),
-  );
+  for (const [path, [type, body]] of Object.entries(assets))
+    server.get(path, async (_request, reply) => reply.type(type).send(body));
 
   const connectionTest = (target: string) =>
     runner.history.find((job) => job.trigger === "test-connection" && job.scope?.target === target);
