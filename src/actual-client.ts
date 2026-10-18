@@ -106,8 +106,8 @@ export class ActualBudgetClient implements ActualClient {
   getTransactions(accountId: string, startDate: string, endDate: string) {
     return this.call("getTransactions", accountId, startDate, endDate);
   }
-  importTransaction(accountId: string, transaction: ActualImportTransaction) {
-    return this.call("importTransaction", accountId, transaction);
+  importTransactions(accountId: string, transactions: ActualImportTransaction[]) {
+    return this.call("importTransactions", accountId, transactions);
   }
   updateTransaction(id: string, fields: Partial<ActualTransaction>) {
     return this.call("updateTransaction", id, fields);

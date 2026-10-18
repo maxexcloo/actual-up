@@ -17,6 +17,13 @@ const IMPORT_PREFIX = "up:";
 const END_DATE = "2999-12-31";
 const HISTORY_START = "1970-01-01";
 
+type Change = {
+  converted: ActualImportTransaction;
+  current?: ActualTransaction;
+  transferPayee?: ActualPayee;
+  up: UpTransaction;
+};
+
 type CategoryUpdate = {
   categoryId: string;
   importedId: string;
@@ -195,22 +202,19 @@ export class SyncEngine {
     });
 
     progress(dryRun ? "Preview Changes" : "Apply Changes");
-    const categoryUpdates: CategoryUpdate[] = [];
-    try {
-      for (const transaction of transactions) {
-        const update = await this.importOne(
-          mapping,
-          transaction,
-          existing,
-          transferPayees,
-          report,
-          dryRun,
-        );
-        if (update) categoryUpdates.push(update);
-      }
-    } finally {
-      await this.applyCategories(mapping, categoryUpdates, report);
-    }
+    const changes = transactions.map((up): Change => {
+      const current = existing.get(importedId(up.id));
+      const transferAccount = up.relationships.transferAccount?.data?.id;
+      const target = transferAccount
+        ? this.config.mappings.find(({ upAccountId }) => upAccountId === transferAccount)
+        : undefined;
+      const transferPayee = target ? transferPayees.get(target.actualAccountId) : undefined;
+      const converted = convertTransaction(up, mapping, this.config, current, transferPayee);
+      return { converted, current, transferPayee, up };
+    });
+    report.inspected += changes.length;
+    if (dryRun) for (const change of changes) this.preview(mapping, change, report);
+    else await this.importAll(mapping, changes, report);
 
     // A partial Up window cannot prove that an absent transaction was deleted.
     if (since > `${HISTORY_START}T00:00:00.000Z`) return;
@@ -225,63 +229,71 @@ export class SyncEngine {
     }
   }
 
-  private async importOne(
+  private preview(
     mapping: AccountMapping,
-    up: UpTransaction,
-    existing: Map<string, ActualTransaction>,
-    transferPayees: Map<string, ActualPayee>,
+    { converted, current, transferPayee, up }: Change,
     report: SyncCounts,
-    dryRun: boolean,
-  ): Promise<CategoryUpdate | undefined> {
-    report.inspected += 1;
-    const id = importedId(up.id);
-    const current = existing.get(id);
-    const transferAccount = up.relationships.transferAccount?.data?.id;
-    const target = transferAccount
-      ? this.config.mappings.find(({ upAccountId }) => upAccountId === transferAccount)
-      : undefined;
-    const transferPayee = target ? transferPayees.get(target.actualAccountId) : undefined;
-    const converted = convertTransaction(up, mapping, this.config, current, transferPayee);
+  ): void {
+    const category = up.relationships.category?.data?.id;
+    const categoryChange =
+      current &&
+      !current.category &&
+      category &&
+      this.config.categoryMappings[category] &&
+      !transferPayee;
+    const changed =
+      !current ||
+      current.amount !== converted.amount ||
+      current.date !== converted.date ||
+      current.cleared !== converted.cleared ||
+      current.imported_payee !== converted.imported_payee ||
+      (converted.payee !== undefined && current.payee !== converted.payee) ||
+      Boolean(categoryChange);
+    const action = !current ? "would-import" : changed ? "would-update" : "unchanged";
+    this.metrics.transactions.inc({ account: mapping.alias, action });
+    if (!current) report.imported += 1;
+    else if (changed) report.updated += 1;
+    else report.unchanged += 1;
+  }
 
-    if (dryRun) {
-      const category = up.relationships.category?.data?.id;
-      const categoryChange =
-        current &&
-        !current.category &&
-        category &&
-        this.config.categoryMappings[category] &&
-        !transferPayee;
-      const changed =
-        !current ||
-        current.amount !== converted.amount ||
-        current.date !== converted.date ||
-        current.cleared !== converted.cleared ||
-        current.imported_payee !== converted.imported_payee ||
-        (converted.payee !== undefined && current.payee !== converted.payee) ||
-        Boolean(categoryChange);
-      const action = !current ? "would-import" : changed ? "would-update" : "unchanged";
-      this.metrics.transactions.inc({ account: mapping.alias, action });
-      if (!current) report.imported += 1;
-      else if (changed) report.updated += 1;
-      else report.unchanged += 1;
-      return;
-    }
-
-    const result = await this.actual.importTransaction(mapping.actualAccountId, converted);
+  private async importAll(
+    mapping: AccountMapping,
+    changes: Change[],
+    report: SyncCounts,
+  ): Promise<void> {
+    if (!changes.length) return;
+    // One batch per account; Actual still matches and applies rules to each transaction.
+    const result = await this.actual.importTransactions(
+      mapping.actualAccountId,
+      changes.map(({ converted }) => converted),
+    );
     if (result.errors.length > 0) {
       throw new Error("Actual transaction import failed");
     }
-    const action =
-      result.added.length > 0 ? "imported" : result.updated.length > 0 ? "updated" : "unchanged";
-    this.metrics.transactions.inc({ account: mapping.alias, action });
-    if (result.added.length > 0) report.imported += 1;
-    else if (result.updated.length > 0) report.updated += 1;
-    else report.unchanged += 1;
-
-    const upCategoryId = up.relationships.category?.data?.id;
-    const actualCategoryId = upCategoryId ? this.config.categoryMappings[upCategoryId] : undefined;
-    if (actualCategoryId && !transferPayee)
-      return { categoryId: actualCategoryId, importedId: id, unchanged: action === "unchanged" };
+    const updated = new Set(result.updated);
+    // New Up IDs that Actual matched to an existing unimported transaction are updates.
+    let added = result.added.length;
+    const categoryUpdates: CategoryUpdate[] = [];
+    for (const { converted, current, transferPayee, up } of changes) {
+      const action = current
+        ? updated.has(current.id)
+          ? "updated"
+          : "unchanged"
+        : added-- > 0
+          ? "imported"
+          : "updated";
+      this.metrics.transactions.inc({ account: mapping.alias, action });
+      report[action] += 1;
+      const upCategoryId = up.relationships.category?.data?.id;
+      const categoryId = upCategoryId ? this.config.categoryMappings[upCategoryId] : undefined;
+      if (categoryId && !transferPayee)
+        categoryUpdates.push({
+          categoryId,
+          importedId: converted.imported_id,
+          unchanged: action === "unchanged",
+        });
+    }
+    await this.applyCategories(mapping, categoryUpdates, report);
   }
 
   private async applyCategories(

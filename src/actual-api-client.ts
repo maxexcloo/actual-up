@@ -94,13 +94,13 @@ export class ActualApiClient implements ActualClient {
     return api.getTransactions(accountId, startDate, endDate);
   }
 
-  async importTransaction(
+  async importTransactions(
     accountId: string,
-    transaction: ActualImportTransaction,
+    transactions: ActualImportTransaction[],
   ): Promise<ActualImportResult> {
     await this.open();
-    const result = await api.importTransactions(accountId, [transaction], {
-      defaultCleared: transaction.cleared,
+    // Each transaction sets its own cleared state, so Actual's default does not apply.
+    const result = await api.importTransactions(accountId, transactions, {
       reimportDeleted: false,
     });
     return {

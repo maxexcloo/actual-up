@@ -106,9 +106,9 @@ export interface ActualClient {
     startDate: string,
     endDate: string,
   ): Promise<ActualTransaction[]>;
-  importTransaction(
+  importTransactions(
     accountId: string,
-    transaction: ActualImportTransaction,
+    transactions: ActualImportTransaction[],
   ): Promise<ActualImportResult>;
   open(): Promise<void>;
   sync(): Promise<void>;

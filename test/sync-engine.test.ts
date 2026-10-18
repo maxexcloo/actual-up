@@ -101,23 +101,30 @@ class MemoryActual implements ActualClient {
       ),
     );
   }
-  async importTransaction(
+  async importTransactions(
     _accountId: string,
-    value: ActualImportTransaction,
+    values: ActualImportTransaction[],
   ): Promise<ActualImportResult> {
-    const existing = this.transactions.find(({ imported_id }) => imported_id === value.imported_id);
-    if (existing) {
-      existing.amount = value.amount;
-      existing.cleared = value.cleared;
-      existing.date = value.date;
-      return { added: [], errors: [], updated: [existing.id] };
+    const result: ActualImportResult = { added: [], errors: [], updated: [] };
+    for (const value of values) {
+      const existing = this.transactions.find(
+        ({ imported_id }) => imported_id === value.imported_id,
+      );
+      if (existing) {
+        existing.amount = value.amount;
+        existing.cleared = value.cleared;
+        existing.date = value.date;
+        result.updated.push(existing.id);
+        continue;
+      }
+      this.transactions.push({
+        ...value,
+        id: `actual-${this.transactions.length + 1}`,
+        payee: null,
+      });
+      result.added.push(this.transactions.at(-1)!.id);
     }
-    this.transactions.push({
-      ...value,
-      id: `actual-${this.transactions.length + 1}`,
-      payee: null,
-    });
-    return { added: [this.transactions.at(-1)!.id], errors: [], updated: [] };
+    return result;
   }
   async updateTransaction(id: string, fields: Partial<ActualTransaction>) {
     Object.assign(
@@ -209,7 +216,7 @@ describe("sync engine", () => {
     await value.reconcile();
     actual.transactions[0]!.notes = "edited locally";
     actual.transactions[0]!.category = "household";
-    const write = vi.spyOn(actual, "importTransaction");
+    const write = vi.spyOn(actual, "importTransactions");
     const preview = await value.reconcile({ dryRun: true });
     expect(preview).toMatchObject({
       imported: 0,
@@ -412,28 +419,29 @@ describe("sync engine", () => {
       id: `bank-${index}`,
     }));
     const { value } = engine(actual, new StubUp(transactions));
-    const originalImport = actual.importTransaction.bind(actual);
-    vi.spyOn(actual, "importTransaction").mockImplementation(async (account, converted) => {
-      const result = await originalImport(account, converted);
-      if (converted.imported_id === "up:bank-0") {
+    const originalImport = actual.importTransactions.bind(actual);
+    const write = vi
+      .spyOn(actual, "importTransactions")
+      .mockImplementation(async (account, converted) => {
+        const result = await originalImport(account, converted);
         actual.transactions[0]!.category = "rule-category";
         actual.transactions[0]!.date = "2026-01-01";
-      }
-      return result;
-    });
+        return result;
+      });
     const read = vi.spyOn(actual, "getTransactions");
     expect(await value.reconcile({ since: "1970-01-01" })).toMatchObject({
       failed: 0,
       imported: 100,
     });
     expect(read).toHaveBeenCalledTimes(2);
+    expect(write).toHaveBeenCalledTimes(1);
     expect(actual.transactions[0]?.category).toBe("rule-category");
     expect(actual.transactions.slice(1).every(({ category }) => category === "actual-food")).toBe(
       true,
     );
 
     read.mockClear();
-    vi.mocked(actual.importTransaction).mockResolvedValue({ added: [], errors: [], updated: [] });
+    vi.mocked(actual.importTransactions).mockResolvedValue({ added: [], errors: [], updated: [] });
     expect(await value.reconcile({ since: "1970-01-01" })).toMatchObject({
       failed: 0,
       unchanged: 100,
