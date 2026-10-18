@@ -23,6 +23,10 @@ require a matching Origin. The login page and CSS are public; app pages and
 operations require a session. `/livez`, `/readyz` and `/metrics` remain available
 for cluster probes and monitoring.
 
+Serve the app behind exactly one reverse proxy, such as Kubelab's Traefik. The
+app trusts that proxy's `X-Forwarded-For` hop to key sign-in rate limits by client
+address; without a proxy, clients could choose their own address.
+
 ## Browser Setup
 
 1. Enter the Actual server URL, budget sync ID and session token or password.

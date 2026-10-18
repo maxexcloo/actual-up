@@ -210,6 +210,22 @@ describe("operator app", () => {
     ).toBe(303);
   });
 
+  it("limits sign-in attempts by the client address the proxy forwarded", async () => {
+    const { server } = await fixture();
+    const attempt = (forwarded: string) =>
+      server.inject({
+        headers: { ...headers, "x-forwarded-for": forwarded },
+        method: "POST",
+        payload: "username=operator&password=wrong",
+        url: "/login",
+      });
+    for (let index = 0; index < 10; index += 1)
+      expect((await attempt("203.0.113.1")).statusCode).toBe(401);
+    expect((await attempt("203.0.113.1")).statusCode).toBe(429);
+    expect((await attempt("203.0.113.9, 203.0.113.1")).statusCode).toBe(429);
+    expect((await attempt("203.0.113.2")).statusCode).toBe(401);
+  });
+
   it("expires opaque sessions after eight hours and rejects forged cookies", async () => {
     const { server } = await fixture();
     expect(headers.cookie).not.toContain("operator");

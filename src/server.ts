@@ -77,6 +77,8 @@ export async function createServer(
     bodyLimit: 65_536,
     logController: new LogController({ disableRequestLogging: true }),
     loggerInstance: logger,
+    // Run behind one reverse proxy (Kubelab's Traefik); its X-Forwarded-For hop identifies the client.
+    trustProxy: (_address, hop) => hop === 0,
   });
 
   const sessionData = new LRUCache<string, import("fastify").Session>({
