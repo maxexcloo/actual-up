@@ -16,7 +16,6 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:${NODE_RUNTIME_TAG} AS runtime
 
-ENV ACTUAL_UP_CONFIG=/config/config.yaml
 ENV NODE_ENV=production
 
 WORKDIR /app
