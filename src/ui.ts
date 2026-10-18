@@ -1,6 +1,7 @@
 import { Cron } from "croner";
 import type { AppConfig } from "./config.js";
 import type { Job, JobRunner } from "./job-runner.js";
+import { HISTORY_START } from "./sync-engine.js";
 
 export function escapeHtml(value: unknown): string {
   return String(value).replace(
@@ -147,7 +148,7 @@ function retry(job: Job): string {
       mode: scope.mode ?? "live",
       account: scope.account ?? "",
       connection: scope.connection ?? "",
-      since: scope.since ?? (job.trigger === "automatic-backfill" ? "1970-01-01" : ""),
+      since: scope.since ?? (job.trigger === "automatic-backfill" ? HISTORY_START : ""),
     },
   )
     .map(([key, value]) => `<input type="hidden" name="${key}" value="${escapeHtml(value)}">`)

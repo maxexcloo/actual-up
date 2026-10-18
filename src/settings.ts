@@ -19,7 +19,7 @@ import {
   type AccountUpdate,
   type Discovery,
 } from "./settings-ui.js";
-import type { SyncEngine } from "./sync-engine.js";
+import { HISTORY_START, type SyncEngine } from "./sync-engine.js";
 import { UpClient } from "./up-client.js";
 import type { UpClientLike } from "./types.js";
 
@@ -403,12 +403,12 @@ export function registerSettings(
                 progress({ stage: "Refresh Actual" });
                 await runtime.actual.sync();
                 return engine.reconcile({
-                  since: "1970-01-01",
+                  since: HISTORY_START,
                   mappingAliases: [mapping.alias],
                   progress,
                 });
               },
-              { account: command.alias, mode: "live", since: "1970-01-01" },
+              { account: command.alias, mode: "live", since: HISTORY_START },
             );
             operationMessage = queued
               ? "Saved. History backfill queued; you can continue with other accounts."
