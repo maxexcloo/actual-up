@@ -20,7 +20,7 @@ One Node service owns the UI, polling and a serial operation queue. No separate 
 
 ## Run Locally
 
-Requires Node.js 22 or later. Install the pinned tools and dependencies:
+Requires Node.js 22.12 or later. Install the pinned tools and dependencies:
 
 ```sh
 mise run setup
