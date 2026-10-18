@@ -27,7 +27,9 @@ COPY --chown=node:node --from=build /workspace/package.json ./package.json
 
 # Apply Debian fixes not yet included in the Node image. The runtime
 # only executes Node; package managers and their dependencies are unnecessary.
+# Slim images lack OpenSSL's default CA path, so apt is pointed at the copied bundle.
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && echo 'Acquire::https::CaInfo "/etc/ssl/certs/ca-certificates.crt";' > /etc/apt/apt.conf.d/99ca-certificates \
     && apt-get update --error-on=any \
     && apt-get upgrade --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/* /usr/local/lib/node_modules/npm /opt/yarn* \
