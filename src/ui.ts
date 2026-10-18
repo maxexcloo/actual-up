@@ -1,6 +1,7 @@
 import { Cron } from "croner";
 import type { AppConfig } from "./config.js";
 import type { Job, JobRunner } from "./job-runner.js";
+import { HISTORY_START } from "./sync-engine.js";
 
 export function escapeHtml(value: unknown): string {
   return String(value).replace(
@@ -26,11 +27,8 @@ export function statusVersion(runner: JobRunner): string {
 }
 
 const syncTriggers = new Set(["automatic-backfill", "backfill", "dry-run", "manual", "schedule"]);
-export function status(
-  runner: JobRunner,
-  timezone = "Australia/Sydney",
-  schedule?: AppConfig["schedule"],
-): string {
+export function status(runner: JobRunner, schedule: AppConfig["schedule"]): string {
+  const { timezone } = schedule;
   const syncs = runner.history.filter((job) => syncTriggers.has(job.trigger));
   const active = runner.history.find((job) => job.state === "running");
   const latest = syncs[0];
@@ -53,11 +51,11 @@ export function status(
       : latest
         ? "Sync Status"
         : "Ready for Your First Sync";
-  const next = schedule?.enabled ? nextRun(schedule.cron, timezone) : undefined;
+  const next = schedule.enabled ? nextRun(schedule.cron, timezone) : undefined;
   return `<section id="runs" class="wa-stack" hx-get="/runs?version=${encodeURIComponent(statusVersion(runner))}" hx-trigger="refresh-status from:body, every 3s" hx-swap="outerHTML" aria-label="Sync Status"><wa-card><div class="wa-stack">
     <div class="wa-split"><h2>${heading}</h2>${badge(active?.state ?? latest?.state ?? "idle")}</div>
     <div role="status" aria-live="polite">${active ? `<p>${escapeHtml(active.progress?.stage ?? "Starting")} ${active.progress?.account ? `· ${escapeHtml(active.progress.account)}` : ""} · Started ${runTime(active, timezone)} · <span role="timer" aria-live="off">${elapsed(active)} elapsed</span>${active.progress?.total !== undefined ? ` · ${active.progress.completed ?? 0} of ${active.progress.total} accounts processed` : ""}</p>` : ""}${queued ? `<p>${queued} queued operation${queued === 1 ? "" : "s"}.</p>` : ""}</div>
-    <p class="hint">Last Successful Sync: ${lastSuccess ? runTime(lastSuccess, timezone) : "None in recent activity"}${schedule ? ` · Automatic Sync ${schedule.enabled ? "On" : "Off"}${next ? ` · Next Recent Sync: ${formatTime(next, timezone)}` : ""}` : ""}</p>
+    <p class="hint">Last Successful Sync: ${lastSuccess ? runTime(lastSuccess, timezone) : "None in recent activity"} · Automatic Sync ${schedule.enabled ? "On" : "Off"}${next ? ` · Next Recent Sync: ${formatTime(next, timezone)}` : ""}</p>
     ${latest ? renderJob(latest, timezone) : "<p>Your first sync result will appear here.</p>"}
     ${
       runner.history.length
@@ -147,7 +145,7 @@ function retry(job: Job): string {
       mode: scope.mode ?? "live",
       account: scope.account ?? "",
       connection: scope.connection ?? "",
-      since: scope.since ?? (job.trigger === "automatic-backfill" ? "1970-01-01" : ""),
+      since: scope.since ?? (job.trigger === "automatic-backfill" ? HISTORY_START : ""),
     },
   )
     .map(([key, value]) => `<input type="hidden" name="${key}" value="${escapeHtml(value)}">`)

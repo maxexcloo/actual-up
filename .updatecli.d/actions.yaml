@@ -16,6 +16,7 @@ autodiscovery:
 labels:
   group: actions
 ---
+# Trivy Action publishes no major tags, so it tracks exact releases.
 name: Update Versioned Actions
 pipelineid: update-versioned-actions
 autodiscovery:

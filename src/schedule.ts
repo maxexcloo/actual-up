@@ -2,7 +2,7 @@ import { Cron } from "croner";
 
 import type { AppConfig } from "./config.js";
 import type { JobRunner } from "./job-runner.js";
-import type { SyncEngine } from "./sync-engine.js";
+import { HISTORY_START, type SyncEngine } from "./sync-engine.js";
 import type { ActualClient } from "./types.js";
 
 /** Full history repairs interrupted imports without a separate cursor database. */
@@ -22,11 +22,11 @@ export function startSchedule(
         progress({ stage: "Refresh Actual" });
         await actual.sync();
         return engine.reconcile({
-          ...(backfill ? { since: "1970-01-01" } : {}),
+          ...(backfill ? { since: HISTORY_START } : {}),
           progress,
         });
       },
-      { mode: "live", since: backfill ? "1970-01-01" : undefined },
+      { mode: "live", since: backfill ? HISTORY_START : undefined },
     );
   };
   const options = { paused: true, timezone: config.schedule.timezone };

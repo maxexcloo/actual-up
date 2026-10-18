@@ -11,7 +11,8 @@ import { loadSettings, type ActualCredentials } from "./settings-store.js";
 const environmentName = z
   .string()
   .regex(/^[A-Z][A-Z0-9_]*$/, "must be an environment variable name");
-const httpUrl = z
+export const connectionId = z.string().regex(/^[a-z][a-z0-9-]*$/);
+export const httpUrl = z
   .url()
   .refine(
     (value) => ["http:", "https:"].includes(new URL(value).protocol),
@@ -38,7 +39,7 @@ const actualSchema = z
   );
 
 const connectionSchema = z.object({
-  id: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  id: connectionId,
   tokenEnv: environmentName.optional(),
 });
 
@@ -58,10 +59,7 @@ const configSchema = z.object({
       usernameEnv: environmentName.default("ACTUAL_UP_USERNAME"),
       passwordEnv: environmentName.default("ACTUAL_UP_PASSWORD"),
     })
-    .default({
-      passwordEnv: "ACTUAL_UP_PASSWORD",
-      usernameEnv: "ACTUAL_UP_USERNAME",
-    }),
+    .prefault({}),
   actual: actualSchema,
   alerts: z
     .object({
@@ -79,13 +77,7 @@ const configSchema = z.object({
       includePerformer: z.boolean().default(true),
       includeRoundUp: z.boolean().default(false),
     })
-    .default({
-      includeCashback: true,
-      includeForeignAmount: true,
-      includeMessage: true,
-      includePerformer: true,
-      includeRoundUp: false,
-    }),
+    .prefault({}),
   schedule: z
     .object({
       enabled: z.boolean().default(true),
@@ -94,20 +86,14 @@ const configSchema = z.object({
       lookbackDays: z.number().int().min(1).max(365).default(30),
       timezone: z.string().min(1).default("Australia/Sydney"),
     })
-    .default({
-      backfillCron: "0 3 * * *",
-      cron: "*/15 * * * *",
-      enabled: true,
-      lookbackDays: 30,
-      timezone: "Australia/Sydney",
-    }),
+    .prefault({}),
   server: z
     .object({
       host: z.string().default("0.0.0.0"),
       port: z.number().int().min(1).max(65_535).default(3000),
       publicUrl: httpUrl.optional(),
     })
-    .default({ host: "0.0.0.0", port: 3000 }),
+    .prefault({}),
   up: z.object({ connections: z.array(connectionSchema) }),
 });
 

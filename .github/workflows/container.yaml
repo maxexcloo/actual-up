@@ -52,7 +52,7 @@ jobs:
       - name: Set Up Shared Tools & Tasks
         uses: maxexcloo/dotfiles/.github/actions/mise@main
         with:
-          tools: actionlint node oxfmt python updatecli
+          tools: actionlint node oxfmt updatecli
       - name: Install Dependencies
         run: mise run setup
       - name: Run Checks
