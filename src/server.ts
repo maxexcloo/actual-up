@@ -209,7 +209,7 @@ export async function createServer(
 
   server.get<{ Querystring: { version?: string } }>("/runs", async (request, reply) => {
     if (request.query.version === statusVersion(runner)) return reply.code(204).send();
-    return reply.type("text/html").send(status(runner, config.schedule.timezone, config.schedule));
+    return reply.type("text/html").send(status(runner, config.schedule));
   });
   server.get("/assets/style.css", async (_request, reply) =>
     reply.type("text/css").send(stylesheet),
