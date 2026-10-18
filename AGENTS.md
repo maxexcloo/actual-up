@@ -5,7 +5,6 @@
 - `src/` contains the TypeScript service, server-rendered htmx UI and CLI.
 - `assets/` contains the default Web Awesome stylesheet and browser helpers, bundled into `dist/`.
 - `test/` contains unit and in-memory integration tests.
-- `chart/actual-up/` contains the Kubernetes Helm chart.
 - `docs/` contains maintained operator documentation.
 
 ## Conventions
@@ -24,4 +23,4 @@
 
 ## Verification
 
-Run `helm lint chart/actual-up --set existingConfigMap=test` and render the chart after template changes.
+Run `mise run check`.

@@ -7,7 +7,7 @@
    tag and digest in kubelab.
 2. Let kubelab provision the `Actual Up` 1Password item with app login and
    encryption key.
-3. Unsuspend the prepared Helm release when ready to configure it. Mappings
+3. Unsuspend the Kubelab Helm release when ready to configure it. Mappings
    start empty, so no accounts are imported until they are configured.
 4. Open the private HTTPS app with the login from 1Password. Use **Connections** to enter Actual credentials, add Up keys and save mappings.
 5. Saving a mapping automatically backfills it. The app syncs recent
@@ -31,8 +31,7 @@ An account failure makes the run fail even if other accounts succeeded.
 
 History and queued jobs reset on restart. `/data` uses a persistent volume for
 browser settings and the Actual cache. Back up `settings.json`; only the Actual
-cache can be rebuilt. The chart creates a 1Gi claim by default, or accepts
-`persistence.existingClaim` and `persistence.storageClass`. Import identities make reconciliation repeatable.
+cache can be rebuilt. Import identities make reconciliation repeatable.
 Startup and nightly full-history backfills recover gaps after an extended outage
 or interrupted run and confirm deletions. Partial syncs retain transactions absent
 from their Up window. Manual backfill remains available. Do not run a
