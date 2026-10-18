@@ -1,6 +1,6 @@
 # Separate tag arguments keep native dependency discovery from mixing image variants.
-ARG NODE_BUILD_TAG=26.11.1-bookworm
-ARG NODE_RUNTIME_TAG=26.11.1-bookworm-slim
+ARG NODE_BUILD_TAG=26-trixie
+ARG NODE_RUNTIME_TAG=26-trixie-slim
 
 # The full build image supplies Python and a compiler for SQLite native bindings.
 FROM node:${NODE_BUILD_TAG} AS build
@@ -16,7 +16,6 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:${NODE_RUNTIME_TAG} AS runtime
 
-ENV ACTUAL_UP_CONFIG=/config/config.yaml
 ENV NODE_ENV=production
 
 WORKDIR /app
@@ -25,9 +24,11 @@ COPY --chown=node:node --from=build /workspace/dist ./dist
 COPY --chown=node:node --from=build /workspace/node_modules ./node_modules
 COPY --chown=node:node --from=build /workspace/package.json ./package.json
 
-# Apply Debian fixes not yet included in the pinned Node image. The runtime
+# Apply Debian fixes not yet included in the Node image. The runtime
 # only executes Node; package managers and their dependencies are unnecessary.
+# Slim images lack OpenSSL's default CA path, so apt is pointed at the copied bundle.
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && echo 'Acquire::https::CaInfo "/etc/ssl/certs/ca-certificates.crt";' > /etc/apt/apt.conf.d/99ca-certificates \
     && apt-get update --error-on=any \
     && apt-get upgrade --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/* /usr/local/lib/node_modules/npm /opt/yarn* \

@@ -25,6 +25,6 @@ autodiscovery:
             "@types/node": ""
       versionfilter:
         kind: semver
-        pattern: ~22
+        pattern: ~26
 labels:
   group: npm

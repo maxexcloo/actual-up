@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { Server, IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "pino";
 import { z } from "zod";
-import { environmentValue, parseConfig, type AppConfig } from "./config.js";
+import { connectionId, environmentValue, httpUrl, parseConfig, type AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
@@ -19,7 +19,7 @@ import {
   type AccountUpdate,
   type Discovery,
 } from "./settings-ui.js";
-import type { SyncEngine } from "./sync-engine.js";
+import { HISTORY_START, type SyncEngine } from "./sync-engine.js";
 import { UpClient } from "./up-client.js";
 import type { UpClientLike } from "./types.js";
 
@@ -28,10 +28,7 @@ class SettingsError extends ConfigError {}
 const fields = { revision: z.string() };
 const accountFields = {
   upAccountId: z.string().uuid(),
-  viewConnection: z
-    .string()
-    .regex(/^[a-z][a-z0-9-]*$/)
-    .optional(),
+  viewConnection: connectionId.optional(),
 };
 const accountContextSchema = z.object({
   action: z.enum(["mapping", "remove-mapping"]),
@@ -42,7 +39,7 @@ const commandSchema = z.discriminatedUnion("action", [
     .object({
       ...fields,
       action: z.literal("actual"),
-      serverUrl: z.url().refine((value) => ["http:", "https:"].includes(new URL(value).protocol)),
+      serverUrl: httpUrl,
       syncId: z.string().trim().min(1),
       method: z.enum(["session", "password"]),
       credential: z.string().max(8192).default(""),
@@ -55,10 +52,7 @@ const commandSchema = z.discriminatedUnion("action", [
     .object({
       ...fields,
       action: z.literal("connection"),
-      id: z
-        .string()
-        .regex(/^[a-z][a-z0-9-]*$/)
-        .max(80),
+      id: connectionId.max(80),
       token: z.string().trim().min(1).max(8192),
     })
     .strict(),
@@ -409,12 +403,12 @@ export function registerSettings(
                 progress({ stage: "Refresh Actual" });
                 await runtime.actual.sync();
                 return engine.reconcile({
-                  since: "1970-01-01",
+                  since: HISTORY_START,
                   mappingAliases: [mapping.alias],
                   progress,
                 });
               },
-              { account: command.alias, mode: "live", since: "1970-01-01" },
+              { account: command.alias, mode: "live", since: HISTORY_START },
             );
             operationMessage = queued
               ? "Saved. History backfill queued; you can continue with other accounts."

@@ -8,25 +8,29 @@ import { LRUCache } from "lru-cache";
 import type { Logger } from "pino";
 import { z } from "zod";
 
+import { registerActions } from "./actions.js";
 import { LoginAttempts } from "./auth.js";
 import { environmentValue, type AppConfig } from "./config.js";
 import { ConfigError } from "./errors.js";
-import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import type { JobRunner } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
-import { assertActualCompatibility, type Runtime } from "./runtime.js";
+import type { Runtime } from "./runtime.js";
 import { checkEncryptionKey } from "./settings-store.js";
 import { registerSettings } from "./settings.js";
 import { startSchedule } from "./schedule.js";
 import type { SyncEngine } from "./sync-engine.js";
 import { loginPage } from "./login-ui.js";
-import { connectionTestStatus, status, statusVersion } from "./ui.js";
+import { status, statusVersion } from "./ui.js";
 
 declare module "fastify" {
   interface Session {
     authenticated?: boolean;
   }
 }
+
+const sessionCookie = "actual_up_session";
+const sessionLifetime = 8 * 60 * 60 * 1000;
+const probePaths = new Set(["/livez", "/readyz", "/metrics"]);
 
 export type Service = {
   close(): Promise<void>;
@@ -66,13 +70,21 @@ export async function createServer(
   const username = environmentValue(config.auth.usernameEnv);
   const password = environmentValue(config.auth.passwordEnv);
   const attempts = new LoginAttempts(username, password);
-  const htmx = await readFile(
-    createRequire(import.meta.url).resolve("htmx.org/dist/htmx.min.js"),
-    "utf8",
-  );
-  const stylesheet = await readFile(new URL("../dist/style.css", import.meta.url), "utf8");
-  const themeScript = await readFile(new URL("../dist/theme.js", import.meta.url), "utf8");
-  const components = await readFile(new URL("../dist/components.js", import.meta.url), "utf8");
+  const bundled = (name: string) => readFile(new URL(`../dist/${name}`, import.meta.url), "utf8");
+  // The sign-in page loads these before authentication.
+  const publicAssets: Record<string, [type: string, body: string]> = {
+    "/assets/components.js": ["application/javascript", await bundled("components.js")],
+    "/assets/style.css": ["text/css", await bundled("style.css")],
+    "/assets/theme.js": ["application/javascript", await bundled("theme.js")],
+  };
+  const assets = {
+    ...publicAssets,
+    "/assets/htmx.js": [
+      "application/javascript",
+      await readFile(createRequire(import.meta.url).resolve("htmx.org/dist/htmx.min.js"), "utf8"),
+    ],
+  } satisfies typeof publicAssets;
+  const publicPaths = new Set(["/login", ...Object.keys(publicAssets)]);
   const server = Fastify({
     bodyLimit: 65_536,
     logController: new LogController({ disableRequestLogging: true }),
@@ -83,7 +95,7 @@ export async function createServer(
 
   const sessionData = new LRUCache<string, import("fastify").Session>({
     max: 100,
-    ttl: 8 * 60 * 60 * 1000,
+    ttl: sessionLifetime,
   });
   await server.register(cookie);
   await server.register(session, {
@@ -93,7 +105,7 @@ export async function createServer(
       sameSite: "strict",
       secure: config.server.publicUrl?.startsWith("https://") ?? false,
     },
-    cookieName: "actual_up_session",
+    cookieName: sessionCookie,
     rolling: false,
     saveUninitialized: false,
     secret: randomBytes(32).toString("hex"),
@@ -147,7 +159,7 @@ export async function createServer(
       "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     );
     const path = request.url.split("?")[0];
-    if (["/livez", "/readyz", "/metrics"].includes(path!)) return;
+    if (probePaths.has(path!)) return;
     if (request.method === "POST") {
       const origin = request.headers.origin;
       const expected = config.server.publicUrl
@@ -157,10 +169,7 @@ export async function createServer(
         return reply.code(403).send("Request origin does not match this app");
       }
     }
-    if (
-      ["/login", "/assets/components.js", "/assets/style.css", "/assets/theme.js"].includes(path!)
-    )
-      return;
+    if (publicPaths.has(path!)) return;
     if (request.session.authenticated !== true) {
       if (request.headers["hx-request"] === "true")
         return reply.header("HX-Redirect", "/login").code(200).send();
@@ -194,7 +203,7 @@ export async function createServer(
         );
     const now = Date.now();
     await request.session.regenerate();
-    request.session.options({ expires: new Date(now + 8 * 60 * 60 * 1000) });
+    request.session.options({ expires: new Date(now + sessionLifetime) });
     request.session.authenticated = true;
     // Save explicitly so HTTPS cookies also work behind the configured TLS proxy.
     await request.session.save();
@@ -202,168 +211,19 @@ export async function createServer(
   });
   server.post("/logout", async (request, reply) => {
     await request.session.destroy();
-    return reply.clearCookie("actual_up_session", { path: "/" }).redirect("/login", 303);
+    return reply.clearCookie(sessionCookie, { path: "/" }).redirect("/login", 303);
   });
 
   registerSettings(server, config, runner, engine, runtime, logger, makeUpClient);
+  registerActions(server, config, runner, engine, runtime);
 
   server.get<{ Querystring: { version?: string } }>("/runs", async (request, reply) => {
     if (request.query.version === statusVersion(runner)) return reply.code(204).send();
-    return reply.type("text/html").send(status(runner, config.schedule.timezone, config.schedule));
+    return reply.type("text/html").send(status(runner, config.schedule));
   });
-  server.get("/assets/style.css", async (_request, reply) =>
-    reply.type("text/css").send(stylesheet),
-  );
-  server.get("/assets/htmx.js", async (_request, reply) =>
-    reply.type("application/javascript").send(htmx),
-  );
+  for (const [path, [type, body]] of Object.entries(assets))
+    server.get(path, async (_request, reply) => reply.type(type).send(body));
 
-  server.get("/assets/theme.js", async (_request, reply) =>
-    reply.type("application/javascript").send(themeScript),
-  );
-
-  server.get("/assets/components.js", async (_request, reply) =>
-    reply.type("application/javascript").send(components),
-  );
-
-  const connectionTest = (target: string) =>
-    runner.history.find((job) => job.trigger === "test-connection" && job.scope?.target === target);
-  server.get<{ Params: { target: string } }>(
-    "/connection-tests/:target",
-    async (request, reply) => {
-      const job = connectionTest(request.params.target);
-      if (!job) return reply.code(404).send("Unknown connection test");
-      return reply.type("text/html").send(connectionTestStatus(request.params.target, job.state));
-    },
-  );
-  server.post("/actions/test", async (request, reply) => {
-    const parsed = z
-      .object({
-        target: z.enum(["actual", "up"]),
-        connection: z.string().default(""),
-      })
-      .strict()
-      .safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send("Invalid connection test");
-    const { target, connection } = parsed.data;
-    if (
-      (target === "actual" && connection) ||
-      (target === "up" && !runtime.clients.has(connection))
-    )
-      return reply.code(400).send("Unknown connection");
-    const id = target === "actual" ? "actual" : `up-${connection}`;
-    const accepted = runner.enqueue(
-      `test:${id}`,
-      "test-connection",
-      async () => {
-        if (target === "actual") assertActualCompatibility(await runtime.actual.getServerVersion());
-        else await runtime.clients.get(connection)!.ping();
-        return { ok: true };
-      },
-      { target: id },
-    );
-    const state = connectionTest(id)?.state;
-    if (request.headers["hx-request"] !== "true") return reply.redirect("/", 303);
-    return reply
-      .header("HX-Trigger", "refresh-status")
-      .type("text/html")
-      .send(
-        connectionTestStatus(
-          id,
-          accepted || state === "queued" || state === "running" ? state : "busy",
-        ),
-      );
-  });
-
-  server.post<{ Params: { action: string } }>("/actions/:action", async (request, reply) => {
-    const action = request.params.action;
-    let operation: Parameters<JobRunner["enqueue"]>[2];
-    let scope: Parameters<JobRunner["enqueue"]>[3];
-    let queueKey = "manual";
-    let trigger = action;
-    if (action === "sync") {
-      const parsed = z
-        .object({
-          mode: z.enum(["dry-run", "live"]),
-          account: z.string().default(""),
-          connection: z.string().default(""),
-          since: z.string().default(""),
-        })
-        .strict()
-        .safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send("Invalid action");
-      const { account, connection, since, mode } = parsed.data;
-      if (
-        (account && connection) ||
-        (connection && !config.up.connections.some(({ id }) => id === connection))
-      )
-        return reply.code(400).send("Unknown connection or ambiguous scope");
-      if (account && !config.mappings.some((mapping) => mapping.alias === account))
-        return reply.code(400).send("Unknown account");
-      if (
-        since &&
-        (!/^\d{4}-\d{2}-\d{2}$/.test(since) ||
-          !Number.isFinite(Date.parse(since)) ||
-          new Date(since).toISOString().slice(0, 10) !== since ||
-          since > new Date().toISOString().slice(0, 10))
-      )
-        return reply.code(400).send("Choose a valid date in the past");
-      trigger = mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual";
-      scope = { account, connection, mode, since };
-      queueKey = `manual:${JSON.stringify(scope)}`;
-      operation = async (progress) => {
-        progress({ stage: "Refresh Actual" });
-        await runtime.actual.sync();
-        return engine.reconcile({
-          dryRun: mode === "dry-run",
-          mappingAliases: account
-            ? [account]
-            : connection
-              ? config.mappings
-                  .filter(({ connections }) => connections.includes(connection))
-                  .map(({ alias }) => alias)
-              : undefined,
-          since: since || undefined,
-          progress,
-        });
-      };
-    } else if (action === "validate") {
-      operation = async () => {
-        for (const client of runtime.clients.values()) await client.ping();
-        const result = await engine.validate();
-        assertActualCompatibility(result.actualVersion);
-        return { ok: true, ...result };
-      };
-    } else if (action === "discover") {
-      operation = async () => {
-        const up = [];
-        for (const [connection, client] of runtime.clients) {
-          up.push({
-            connection,
-            accounts: await discoverUpAccounts(client),
-          });
-        }
-        const accounts = await discoverActualAccounts(runtime.actual);
-        const categories = (await runtime.actual.getCategories()).map(({ id, name }) => ({
-          id,
-          name,
-        }));
-        return { up, actual: { accounts, categories } };
-      };
-    } else {
-      return reply.code(404).send("Unknown action");
-    }
-    const accepted = runner.enqueue(queueKey, trigger, operation, scope);
-    if (request.headers["hx-request"] !== "true") return reply.redirect("/", 303);
-    return reply
-      .header("HX-Trigger", "refresh-status")
-      .type("text/html")
-      .send(
-        accepted
-          ? "Queued. Follow progress in Sync Status."
-          : "An action is already queued, or the queue is full. Please wait.",
-      );
-  });
   server.setErrorHandler((error: Error & { statusCode?: number }, _request, reply) => {
     // Fastify's own client errors, such as 413 and 415, carry safe messages.
     if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500)
