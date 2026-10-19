@@ -2,6 +2,5 @@
 .actual-up/
 .env
 config.local.yaml
-coverage/
 dist/
 node_modules/

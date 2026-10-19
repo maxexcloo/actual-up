@@ -4,7 +4,6 @@
 .git
 .github
 config.local.yaml
-coverage
 dist
 node_modules
 test
