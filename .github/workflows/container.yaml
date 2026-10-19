@@ -44,7 +44,7 @@ jobs:
           fi
           image=true
           if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && [ "$GITHUB_REF_TYPE" != tag ] && [ -n "$BASE_REVISION" ] && [ "$BASE_REVISION" != 0000000000000000000000000000000000000000 ]; then
-            if git merge-base --is-ancestor HEAD "$BASE_REVISION" || git diff --quiet "$BASE_REVISION" HEAD -- . ':!AGENTS.md' ':!LICENSE' ':!README.md' ':!docs/**' ':!.gitignore' ':!.mise.toml' ':!.updatecli.d/**'; then
+            if git merge-base --is-ancestor HEAD "$BASE_REVISION" || git diff --quiet "$BASE_REVISION" HEAD -- . ':!AGENTS.md' ':!LICENSE' ':!README.md' ':!docs/**' ':!.gitignore' ':!.mise.toml' ':!renovate.json5'; then
               image=false
             fi
           fi
@@ -52,7 +52,7 @@ jobs:
       - name: Set Up Shared Tools & Tasks
         uses: maxexcloo/dotfiles/.github/actions/mise@main
         with:
-          tools: actionlint node oxfmt updatecli
+          tools: actionlint node@24 npm:renovate oxfmt
       - name: Install Dependencies
         run: mise run setup
       - name: Run Checks

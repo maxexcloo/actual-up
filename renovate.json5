@@ -1,0 +1,12 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["github>maxexcloo/dotfiles//renovate/default.json5"],
+  packageRules: [
+    {
+      description: "Node types follow the Node major in package.json engines, changed deliberately",
+      enabled: false,
+      matchPackageNames: ["@types/node"],
+      matchUpdateTypes: ["major"],
+    },
+  ],
+}
