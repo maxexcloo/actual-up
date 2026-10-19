@@ -2,15 +2,13 @@
 
 ## First Run
 
-1. Push `main` to publish a commit-tagged image, or tag the matching package
-   version (for example `v0.1.0`) to publish a versioned image. Pin the resulting
-   tag and digest in kubelab.
-2. Let kubelab provision the `Actual Up` 1Password item with app login and
-   encryption key.
-3. Unsuspend the Kubelab Helm release when ready to configure it. Mappings
-   start empty, so no accounts are imported until they are configured.
-4. Open the private HTTPS app with the login from 1Password. Use **Accounts & Sync** to enter Actual credentials, add Up keys and save mappings.
-5. Saving a mapping automatically backfills it. The app syncs recent
+1. Tag the matching package version (for example `v0.1.0`) to publish a
+   versioned image and set that tag in Kubelab.
+2. Let Kubelab provision the `Actual Up` 1Password item with app login and
+   encryption key. Mappings start empty, so no accounts are imported until
+   they are configured.
+3. Open the private HTTPS app with the login from 1Password. Use **Accounts & Sync** to enter Actual credentials, add Up keys and save mappings.
+4. Saving a mapping automatically backfills it. The app syncs recent
    changes every 15 minutes and backfills nightly. Set `schedule.enabled: false`
    before adding mappings if you want to preview changes first.
 

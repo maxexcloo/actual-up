@@ -47,8 +47,8 @@ while using discovery or dry runs.
 Kubelab owns the production deployment (`kubelab/apps/base/actual-up`) using
 `bjw-s/app-template`, a private route and External Secrets. Its `Actual Up`
 1Password item holds the app login and settings encryption key. Merging here
-publishes an image but does not deploy it: pin the published tag and digest in
-Kubelab to release.
+publishes an image but does not deploy it: update the image tag in Kubelab to
+release.
 
 The image runs `serve`, listens on port 3000 and needs writable `/data` and `/tmp`
 directories. Persist `/data`: browser settings live in `/data/settings.json`.
