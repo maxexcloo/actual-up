@@ -13,8 +13,9 @@ permissions:
   actions: read
   contents: read
 
+# A newer push supersedes an older run; release tags always finish.
 concurrency:
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
   group: container-${{ github.ref }}
 
 env:
