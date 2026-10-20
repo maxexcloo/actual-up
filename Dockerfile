@@ -1,5 +1,8 @@
+# syntax=docker/dockerfile:1
+ARG NODE_VERSION=26.12.0
+
 # The full build image supplies Python and a compiler for SQLite native bindings.
-FROM node:26-trixie AS build
+FROM node:${NODE_VERSION}-trixie AS build
 
 WORKDIR /workspace
 COPY package.json package-lock.json ./
@@ -10,7 +13,7 @@ COPY src ./src
 COPY tsconfig.build.json tsconfig.json ./
 RUN npm run build && npm prune --omit=dev
 
-FROM node:26-trixie-slim AS runtime
+FROM node:${NODE_VERSION}-trixie-slim AS runtime
 
 ENV NODE_ENV=production
 

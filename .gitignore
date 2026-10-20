@@ -1,6 +1,6 @@
 .actual-cache/
 .actual-up/
-.env
-config.local.yaml
 dist/
 node_modules/
+.env
+config.local.yaml
