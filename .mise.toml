@@ -12,17 +12,18 @@ depends = [
   "check:mise",
   "check:oxfmt",
   "check:oxlint",
+  "check:typescript",
   "check:updates",
   "check:whitespace",
+  "test",
 ]
-run = [{ task = "check:typescript" }, { task = "test" }]
 
 [tasks."check:oxlint"]
 run = "oxlint --deny-warnings src test"
 
 [tasks.dev]
-depends = ["build"]
 run = "node dist/cli.js serve"
+depends = ["build"]
 
 [tasks.fmt]
 depends = ["fmt:mise", "fmt:oxfmt"]
