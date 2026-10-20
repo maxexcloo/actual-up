@@ -1,10 +1,9 @@
 # Configuration
 
-The version 1 YAML file supplies deployment settings. Start from
+Deployment settings come from the version 1 YAML file. Start from
 [config.example.yaml](../config.example.yaml); optional settings use the defaults
-below. **Accounts & Sync**
-manages Actual credentials, Up API keys and account mappings in the browser.
-Never commit credentials to either repository.
+below. Actual credentials, Up API keys and account mappings are managed in the
+browser under **Accounts & Sync**. Never commit credentials to either repository.
 
 ## Authentication
 
@@ -16,9 +15,9 @@ signing out invalidates the session. Failed sign-ins are rate-limited.
 
 Use a private HTTPS route in production. Set `server.publicUrl` to the external
 HTTPS URL, or supply `ACTUAL_UP_PUBLIC_URL` to override it through the environment.
-The override uses the same HTTP/HTTPS URL validation and rejects empty or invalid
-values. The effective URL supplies the expected origin and enables Secure cookies. Without
-it, actions must match the request's own origin. All POSTs, including sign-in,
+The override goes through the same HTTP/HTTPS URL validation and rejects empty
+or invalid values. The effective URL sets the expected origin and turns on Secure
+cookies. Without it, actions must match the request's own origin. All POSTs, including sign-in,
 require a matching Origin. The login page and CSS are public; app pages and
 operations require a session. `/livez`, `/readyz` and `/metrics` remain available
 for cluster probes and monitoring.
@@ -41,13 +40,13 @@ Use **Test Connection** on Actual or an Up connection to check its saved credent
 Results appear inline without importing bank transactions.
 
 Account changes save independently, so you can connect several accounts without
-waiting for backfill. Only the affected account rows refresh; drafts in other
-rows remain in place. Shared account rows update together. Actual operations and
+waiting for backfill. Only the affected account rows refresh, and drafts in other
+rows stay where they are. Shared account rows update together. Actual operations and
 backfills still run through one serial queue. The Actual API runs in a single
 worker thread so its synchronous database work cannot block the web server.
 
-Blank credentials on the Actual edit form retain saved values. Existing keys
-are never sent back to the browser. A replacement Up key must still access its
+Leaving credentials blank on the Actual edit form keeps the saved values.
+Existing keys are never sent back to the browser. A replacement Up key must still access its
 mapped accounts. Remove mappings before removing a key they use, switching
 Actual budgets/servers or changing a mapping's destination. Disconnecting keeps
 existing Actual transactions; review them before reconnecting elsewhere.
@@ -57,12 +56,12 @@ Editing an existing mapping does not start another backfill. An unavailable
 existing fallback key can be retained if another selected key works. Configuration
 changes, connection checks and imports all run through one serial queue.
 
-Actual's API and server must match in major and minor version; connection setup
-checks this before saving. The app starts without an upstream connection so the
-browser remains available for first-time setup and repairs.
+Actual's API and server must match in major and minor version, and connection
+setup checks this before saving. The app starts without an upstream connection so
+the browser is still available for first-time setup and repairs.
 
-Each Up connection contains its accessible accounts, discovered automatically after
-saving a key. **Sync** imports one account; a connection's **Sync All** imports its
+Each Up connection lists the accounts it can access, which are discovered
+automatically after you save a key. **Sync** imports one account; a connection's **Sync All** imports its
 mapped accounts; the page-level **Sync All** imports every mapping. A shared
 account may appear beneath both connections but retains one mapping and one
 import identity. Key settings, mapping edits and backfill controls stay visible.
@@ -81,8 +80,9 @@ is authoritative for browser-managed settings on startup, including CLI commands
 Schedules, note options and category mappings stay in deployment configuration.
 
 Persist and back up `/data/settings.json` and retain its matching encryption key.
-Do not simply rotate that key: existing settings will become unreadable. Corrupt,
-tampered or incorrectly keyed settings fail startup rather than silently resetting.
+Don't just rotate that key, because existing settings will become unreadable.
+Corrupt, tampered or incorrectly keyed settings stop startup instead of silently
+resetting.
 Stop the service before restoring a backup or resetting setup by removing the file.
 A reset returns to the YAML defaults and requires re-entering saved credentials.
 Actual's budget cache is separate and is not encrypted by this settings mechanism.
@@ -115,16 +115,17 @@ scheduled until at least one account is mapped. Stable import IDs prevent duplic
 Set `schedule.enabled: false` to disable automatic writes while retaining manual
 preview and sync. Restart after changing deployment configuration.
 
-Polling requires no public endpoint; keep the UI private. Queued jobs live in
-memory and are not durable, so periodic reconciliation recovers missed work.
+Polling doesn't need a public endpoint, so keep the UI private. Queued jobs live
+in memory and aren't durable; periodic reconciliation picks up missed work.
 
 Keep `actual.cacheDirectory` on local pod storage, not NFS. Actual rebuilds this
-cache from the server; encrypted app settings remain on persistent storage.
+cache from the server, while the encrypted app settings stay on persistent
+storage.
 
 ## Kubelab & 1Password
 
-The `Actual Up` item in `Cluster: MBK` follows kubelab's existing item reconciliation
-and `ClusterSecretStore/onepassword` convention:
+The `Actual Up` item in `Cluster: MBK` follows Kubelab's usual item
+reconciliation and `ClusterSecretStore/onepassword` convention:
 
 | Field            | Environment Variable       | Source                   |
 | ---------------- | -------------------------- | ------------------------ |
