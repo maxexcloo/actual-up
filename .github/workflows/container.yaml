@@ -45,7 +45,7 @@ jobs:
           fi
           image=true
           if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && [ "$GITHUB_REF_TYPE" != tag ] && [ -n "$BASE_REVISION" ] && [ "$BASE_REVISION" != 0000000000000000000000000000000000000000 ]; then
-            if git merge-base --is-ancestor HEAD "$BASE_REVISION" || git diff --quiet "$BASE_REVISION" HEAD -- . ':!AGENTS.md' ':!LICENSE' ':!README.md' ':!docs/**' ':!.gitignore' ':!.mise.toml' ':!renovate.json5'; then
+            if git merge-base --is-ancestor HEAD "$BASE_REVISION" || git diff --quiet "$BASE_REVISION" HEAD -- . ':!AGENTS.md' ':!LICENSE' ':!README.md' ':!docs/**' ':!.gitignore' ':!.mise.toml' ':!config.example.yaml' ':!renovate.json5' ':!test/**'; then
               image=false
             fi
           fi

@@ -1,9 +1,13 @@
+**/*.md
 .actual-cache
 .actual-up
 .env*
-.git
-.github
+.git*
+.mise.toml
+config.example.yaml
 config.local.yaml
 dist
+docs
 node_modules
+renovate.json5
 test
