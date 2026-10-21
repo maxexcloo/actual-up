@@ -325,6 +325,39 @@ describe("operator app", () => {
     expect(runner.history[0]?.state).toBe("success");
   });
 
+  it.each(["renamed", "disconnected"])(
+    "keeps queued account syncs scoped when their mapping is %s",
+    async (change) => {
+      const { server, runner, engine, config } = await fixture();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      runner.enqueue("block", "manual", () => gate);
+      await server.inject({
+        headers,
+        method: "POST",
+        payload: "mode=live&account=spending",
+        url: "/actions/sync",
+      });
+      if (change === "renamed") config.mappings[0]!.alias = "new-name";
+      else config.mappings = [];
+      release();
+      await runner.drain();
+      if (change === "renamed") {
+        expect(engine.reconcile).toHaveBeenCalledWith(
+          expect.objectContaining({
+            mappingAliases: ["new-name"],
+          }),
+        );
+        expect(runner.history[0]?.state).toBe("success");
+      } else {
+        expect(engine.reconcile).not.toHaveBeenCalled();
+        expect(runner.history[0]?.state).toBe("failure");
+      }
+    },
+  );
+
   it("limits connection syncs to their mapped accounts and includes shared accounts once", async () => {
     const { server, runner, engine, config } = await fixture();
     config.up.connections.push({ id: "partner", tokenEnv: "UP_PARTNER" });

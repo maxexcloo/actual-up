@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
+import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
 import { assertActualCompatibility, type Runtime } from "./runtime.js";
 import type { SyncEngine } from "./sync-engine.js";
@@ -92,6 +93,7 @@ export function registerActions(
         return reply.code(400).send("Unknown connection or ambiguous scope");
       if (account && !config.mappings.some((mapping) => mapping.alias === account))
         return reply.code(400).send("Unknown account");
+      const accountId = config.mappings.find((mapping) => mapping.alias === account)?.upAccountId;
       if (
         since &&
         (!/^\d{4}-\d{2}-\d{2}$/.test(since) ||
@@ -104,12 +106,17 @@ export function registerActions(
       scope = { account, connection, mode, since };
       queueKey = `manual:${JSON.stringify(scope)}`;
       operation = async (progress) => {
+        const mapping = accountId
+          ? config.mappings.find(({ upAccountId }) => upAccountId === accountId)
+          : undefined;
+        if (accountId && !mapping)
+          throw new ConfigError("The account was disconnected before this sync started.");
         progress({ stage: "Refresh Actual" });
         await runtime.actual.sync();
         return engine.reconcile({
           dryRun: mode === "dry-run",
-          mappingAliases: account
-            ? [account]
+          mappingAliases: mapping
+            ? [mapping.alias]
             : connection
               ? config.mappings
                   .filter(({ connections }) => connections.includes(connection))
