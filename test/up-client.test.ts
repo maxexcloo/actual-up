@@ -41,6 +41,33 @@ describe("Up client", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["3600", 60_000],
+    ["-1", 0],
+    ["invalid", 250],
+  ])("bounds Retry-After %s to %i milliseconds", async (retryAfter, delay) => {
+    vi.useFakeTimers();
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    try {
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(null, { status: 429, headers: { "Retry-After": retryAfter } }),
+        )
+        .mockResolvedValueOnce(new Response(null, { status: 204 }));
+      const client = new UpClient("token", pino({ level: "silent" }), fetcher);
+      const ping = client.ping();
+      await vi.advanceTimersByTimeAsync(Math.max(0, delay - 1));
+      if (delay > 0) expect(fetcher).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await ping;
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      random.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it("follows opaque pagination links on the trusted origin", async () => {
     const fetcher = vi
       .fn()

@@ -489,7 +489,7 @@ describe("transaction conversion", () => {
     expect(converted.notes).toBeUndefined();
   });
 
-  it("guards cleared edits but permits cancelled pending holds", () => {
+  it("protects edited transactions whether pending or cleared", () => {
     expect(
       isSafeToDelete({
         account: "a",
@@ -499,7 +499,7 @@ describe("transaction conversion", () => {
         date: "2026-01-01",
         id: "1",
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isSafeToDelete({
         account: "a",
@@ -510,6 +510,24 @@ describe("transaction conversion", () => {
         id: "1",
       }),
     ).toBe(false);
+  });
+
+  it.each([
+    [{}, true],
+    [{ notes: "kept" }, false],
+    [{ category: "category" }, false],
+    [{ reconciled: true }, false],
+  ])("preserves pending hold edits %j", (edits, deletable) => {
+    expect(
+      isSafeToDelete({
+        account: "a",
+        amount: 1,
+        cleared: false,
+        date: "2026-01-01",
+        id: "1",
+        ...edits,
+      }),
+    ).toBe(deletable);
   });
 
   it("formats an instant in the configured timezone", () => {

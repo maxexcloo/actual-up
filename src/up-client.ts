@@ -56,7 +56,7 @@ export class UpClient implements UpClientLike {
     let next: string | null = this.url(path).toString();
     while (next) {
       const url = new URL(next);
-      if (url.origin !== "https://api.up.com.au") {
+      if (url.origin !== new URL(API_BASE_URL).origin) {
         throw new Error("Up pagination returned an untrusted origin");
       }
       const page = collectionSchema.parse(await this.request(url.toString()));
@@ -107,9 +107,9 @@ export class UpClient implements UpClientLike {
   }
 
   private async backoff(attempt: number, retryAfter: string | null = null): Promise<void> {
-    const retrySeconds = retryAfter ? Number.parseInt(retryAfter, 10) : Number.NaN;
+    const retrySeconds = retryAfter ? Number(retryAfter) : Number.NaN;
     const delay = Number.isFinite(retrySeconds)
-      ? retrySeconds * 1000
+      ? Math.min(60_000, Math.max(0, retrySeconds * 1000))
       : Math.min(10_000, 250 * 2 ** attempt) + Math.floor(Math.random() * 200);
     await new Promise((resolvePromise) => setTimeout(resolvePromise, delay));
   }

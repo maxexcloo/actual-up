@@ -33,9 +33,10 @@
 
 ## Release
 
-1. Bump `version` in `package.json`.
-2. Tag the commit `v<version>` and push the tag to publish the image.
-3. Update the image reference in Kubelab (`apps/base/actual-up`).
+- Pushes to `main` publish the `latest` image after checks pass.
+- For a versioned release, bump `version` in `package.json`, tag the commit
+  `v<version>` and push the tag. Update the image reference in Kubelab
+  (`apps/base/actual-up`) to deploy it.
 
 ## Verification
 

@@ -325,28 +325,6 @@ export function registerSettings(
             delete next.secrets.tokens[command.id];
             next.up.connections = next.up.connections.filter(({ id }) => id !== command.id);
           } else if (command.action === "mapping") {
-            discovery = await discover();
-            const account = discovery.up.find(({ id }) => id === command.upAccountId);
-            if (
-              !account ||
-              !command.connections.length ||
-              new Set(command.connections).size !== command.connections.length ||
-              !command.connections.every(
-                (id) =>
-                  account.connections.includes(id) ||
-                  (discovery!.unavailable.includes(id) &&
-                    config.mappings.some(
-                      (mapping) =>
-                        mapping.upAccountId === command.upAccountId &&
-                        mapping.connections.includes(id),
-                    )),
-              ) ||
-              !command.connections.some((id) => account.connections.includes(id)) ||
-              !discovery.actual.some(({ id }) => id === command.actualAccountId)
-            )
-              throw new SettingsError(
-                "The selected keys cannot access these accounts. Refresh accounts and choose an available key and destination.",
-              );
             const existing = next.mappings.find(
               ({ upAccountId }) => upAccountId === command.upAccountId,
             );
@@ -354,6 +332,34 @@ export function registerSettings(
               throw new SettingsError(
                 "Disconnect the mapping before changing its Actual destination. Existing transactions will remain in the old account.",
               );
+            const accessUnchanged =
+              existing &&
+              existing.connections.length === command.connections.length &&
+              existing.connections.every((id, index) => id === command.connections[index]);
+            if (!accessUnchanged) {
+              discovery = await discover();
+              const account = discovery.up.find(({ id }) => id === command.upAccountId);
+              if (
+                !account ||
+                !command.connections.length ||
+                new Set(command.connections).size !== command.connections.length ||
+                !command.connections.every(
+                  (id) =>
+                    account.connections.includes(id) ||
+                    (discovery!.unavailable.includes(id) &&
+                      config.mappings.some(
+                        (mapping) =>
+                          mapping.upAccountId === command.upAccountId &&
+                          mapping.connections.includes(id),
+                      )),
+                ) ||
+                !command.connections.some((id) => account.connections.includes(id)) ||
+                !discovery.actual.some(({ id }) => id === command.actualAccountId)
+              )
+                throw new SettingsError(
+                  "The selected keys cannot access these accounts. Refresh accounts and choose an available key and destination.",
+                );
+            }
             const mapping = {
               actualAccountId: command.actualAccountId,
               alias: command.alias,
