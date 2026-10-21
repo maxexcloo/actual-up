@@ -11,7 +11,9 @@ function applyTheme() {
   document.documentElement.classList.toggle("wa-dark", dark);
   document.documentElement.classList.toggle("wa-light", !dark);
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
-    button.setAttribute("aria-pressed", String(dark));
+    const label = `${dark ? "Light" : "Dark"} Mode`;
+    button.textContent = label;
+    button.setAttribute("aria-label", label);
     button.title = `Switch to ${dark ? "Light" : "Dark"} Mode${theme === "system" ? " · Following Browser" : ""}`;
   });
 }
