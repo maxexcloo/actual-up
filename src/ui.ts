@@ -10,7 +10,7 @@ export function escapeHtml(value: unknown): string {
   );
 }
 
-export const themeControl = `<button type="button" class="wa-plain theme-toggle" data-theme-toggle aria-label="Dark Mode" aria-pressed="false" title="Switch to Dark Mode">Dark Mode</button>`;
+export const themeControl = `<button type="button" class="wa-plain theme-toggle" data-theme-toggle aria-label="Dark Mode" title="Switch to Dark Mode">Dark Mode</button>`;
 export const pageHead = `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"historyCacheSize":0,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true}]}'><link rel="stylesheet" href="/assets/style.css"><script src="/assets/components.js" type="module"></script><script src="/assets/theme.js" defer></script>`;
 
 export function statusVersion(runner: JobRunner): string {
@@ -43,6 +43,7 @@ export function status(runner: JobRunner, schedule: AppConfig["schedule"]): stri
         job.result.publication === "not-required"
       ),
   );
+  const recent = runner.history.filter((job) => job !== latest);
   const queued = runner.history.filter((job) => job.state === "queued").length;
   const heading = active
     ? triggerLabel(active.trigger)
@@ -53,21 +54,20 @@ export function status(runner: JobRunner, schedule: AppConfig["schedule"]): stri
         : "Ready for Your First Sync";
   const next = schedule.enabled ? nextRun(schedule.cron, timezone) : undefined;
   return `<section id="runs" class="wa-stack" hx-get="/runs?version=${encodeURIComponent(statusVersion(runner))}" hx-trigger="refresh-status from:body, every 3s" hx-swap="outerHTML" aria-label="Sync Status"><wa-card><div class="wa-stack">
-    <div class="wa-split"><h2>${heading}</h2>${badge(active?.state ?? latest?.state ?? "idle")}</div>
+    <div class="wa-split"><h2 class="wa-heading-l">${heading}</h2>${badge(active?.state ?? latest?.state ?? "idle")}</div>
     <div role="status" aria-live="polite">${active ? `<p>${escapeHtml(active.progress?.stage ?? "Starting")} ${active.progress?.account ? `· ${escapeHtml(active.progress.account)}` : ""} · Started ${runTime(active, timezone)} · <span role="timer" aria-live="off">${elapsed(active)} elapsed</span>${active.progress?.total !== undefined ? ` · ${active.progress.completed ?? 0} of ${active.progress.total} accounts processed` : ""}</p>` : ""}${queued ? `<p>${queued} queued operation${queued === 1 ? "" : "s"}.</p>` : ""}</div>
-    <p class="hint">Last Successful Sync: ${lastSuccess ? runTime(lastSuccess, timezone) : "None in recent activity"} · Automatic Sync ${schedule.enabled ? "On" : "Off"}${next ? ` · Next Recent Sync: ${formatTime(next, timezone)}` : ""}</p>
+    <p class="wa-font-size-s wa-color-text-quiet">Last Successful Sync: ${lastSuccess ? runTime(lastSuccess, timezone) : "None in recent activity"} · Automatic Sync ${schedule.enabled ? "On" : "Off"}${next ? ` · Next Recent Sync: ${formatTime(next, timezone)}` : ""}</p>
     ${latest ? renderJob(latest, timezone) : "<p>Your first sync result will appear here.</p>"}
     ${
-      runner.history.length
-        ? `<details id="activity"><summary>Recent Activity · ${runner.history.length} Runs</summary><div class="wa-stack">${runner.history
-            .filter((job) => job !== latest)
+      recent.length
+        ? `<details id="activity"><summary>Recent Activity · ${recent.length} ${recent.length === 1 ? "Run" : "Runs"}</summary><div class="wa-stack">${recent
             .map(
               (job) =>
                 `<details id="run-${escapeHtml(job.id)}"><summary>${escapeHtml(triggerLabel(job.trigger))} · ${runTime(job, timezone)} · ${escapeHtml(stateLabel(job.state))}</summary>${renderJob(job, timezone)}</details>`,
             )
             .join(
               "",
-            )}</div><p class="hint">Activity and last-success times reset when the app restarts.</p></details>`
+            )}</div><p class="wa-font-size-s wa-color-text-quiet">Activity and last-success times reset when the app restarts.</p></details>`
         : ""
     }
   </div></wa-card></section>`;
@@ -152,7 +152,7 @@ function retry(job: Job): string {
     .join("")}<button>Retry ${scope.account ? escapeHtml(scope.account) : "Sync"}</button></form>`;
 }
 function renderJob(job: Job, timezone: string): string {
-  return `<div class="wa-stack"><p>${escapeHtml(triggerLabel(job.trigger))} · ${escapeHtml(job.scope?.account || job.scope?.connection || (syncTriggers.has(job.trigger) ? "All Accounts" : "Connections"))} · ${runTime(job, timezone)}${job.scope?.since ? ` · From ${escapeHtml(job.scope.since)}` : ""}</p>${job.state === "failure" && job.result === undefined ? '<p role="alert">The operation could not complete. Test the saved connections, check the account mapping and retry. No completed result was received.</p>' : ""}${job.result !== undefined ? renderResult(job.result) : ""}${retry(job)}</div>`;
+  return `<div class="wa-stack"><p>${escapeHtml(triggerLabel(job.trigger))} · ${escapeHtml(job.scope?.account || job.scope?.connection || (syncTriggers.has(job.trigger) ? "All Accounts" : "Connections"))} · ${runTime(job, timezone)}${job.scope?.since ? ` · From ${escapeHtml(job.scope.since)}` : ""}</p>${job.state === "failure" && job.result === undefined ? '<wa-callout variant="danger" role="alert">The operation could not complete. Test the saved connections, check the account mapping and retry. No completed result was received.</wa-callout>' : ""}${job.result !== undefined ? renderResult(job.result) : ""}${retry(job)}</div>`;
 }
 function renderResult(value: unknown): string {
   const labels = [
@@ -187,7 +187,7 @@ function renderResult(value: unknown): string {
       )
       .join(
         "",
-      )}</dl>${result.publication === "published" ? "<p>Changes published to Actual.</p>" : result.publication === "failed" ? '<p role="alert">Publishing to Actual failed. Some changes may be saved locally; retry the sync to publish them.</p>' : ""}${Number(result.conflicts) > 0 ? '<p role="status">Protected Actual edits were retained. Review the affected accounts in Actual; retrying will preserve those edits again.</p>' : ""}${Array.isArray(result.accounts) ? `<ul>${result.accounts.map((entry) => `<li>${escapeHtml(entry.account)}: ${entry.failed ? escapeHtml(issues[entry.issue] ?? "Sync failed; test connections and retry.") : `${entry.imported} ${preview ? "would import" : "imported"}, ${entry.updated} ${preview ? "would update" : "updated"}, ${entry.unchanged} unchanged, ${entry.deleted} ${preview ? "would delete" : "deleted"}`}${entry.conflicts ? ` · ${entry.conflicts} protected deletion conflicts` : ""}</li>`).join("")}</ul>` : ""}`;
+      )}</dl>${result.publication === "published" ? '<wa-callout variant="success">Changes published to Actual.</wa-callout>' : result.publication === "failed" ? '<wa-callout variant="danger" role="alert">Publishing to Actual failed. Some changes may be saved locally; retry the sync to publish them.</wa-callout>' : ""}${Number(result.conflicts) > 0 ? '<wa-callout variant="warning" role="status">Protected Actual edits were retained. Review the affected accounts in Actual; retrying will preserve those edits again.</wa-callout>' : ""}${Array.isArray(result.accounts) ? `<ul>${result.accounts.map((entry) => `<li>${escapeHtml(entry.account)}: ${entry.failed ? escapeHtml(issues[entry.issue] ?? "Sync failed; test connections and retry.") : `${entry.imported} ${preview ? "would import" : "imported"}, ${entry.updated} ${preview ? "would update" : "updated"}, ${entry.unchanged} unchanged, ${entry.deleted} ${preview ? "would delete" : "deleted"}`}${entry.conflicts ? ` · ${entry.conflicts} protected deletion conflicts` : ""}</li>`).join("")}</ul>` : ""}`;
   }
   if (typeof value === "object" && value !== null && "ok" in value && value.ok === true)
     return "<p>Operation completed successfully.</p>";
@@ -206,5 +206,5 @@ export function connectionTestStatus(target: string, state?: Job["state"] | "bus
           : pending
             ? "Testing Connection…"
             : "";
-  return `<span id="test-${escapeHtml(target)}" class="hint" role="status" aria-live="polite"${pending ? ` hx-get="/connection-tests/${encodeURIComponent(target)}" hx-trigger="every 1s" hx-swap="outerHTML"` : ""}>${message}</span>`;
+  return `<div id="test-${escapeHtml(target)}" role="status" aria-live="polite"${pending ? ` hx-get="/connection-tests/${encodeURIComponent(target)}" hx-trigger="every 1s" hx-swap="outerHTML"` : ""}>${message ? `<wa-callout variant="${state === "success" ? "success" : state === "failure" ? "danger" : state === "busy" ? "warning" : "neutral"}">${message}${state === "failure" ? " · Check the saved connection details and retry Test." : ""}</wa-callout>` : ""}</div>`;
 }

@@ -14,6 +14,26 @@ document.addEventListener("htmx:beforeSwap", (event) => {
     const replacement = template.content.getElementById(element.id);
     if (replacement) replacement.open = true;
   });
+  // Stable region IDs also preserve keyboard focus on summaries and actions.
+  const active = document.activeElement;
+  if (active && target.contains(active)) {
+    const anchor = active.closest("[id]");
+    const path = [];
+    let current = active;
+    while (anchor && current !== anchor) {
+      path.unshift([...current.parentElement.children].indexOf(current));
+      current = current.parentElement;
+    }
+    let replacement = anchor && template.content.getElementById(anchor.id);
+    for (const index of path) replacement = replacement?.children[index];
+    if (
+      replacement?.tagName === active.tagName &&
+      replacement.getAttribute("name") === active.getAttribute("name") &&
+      !replacement.hasAttribute("disabled")
+    ) {
+      replacement.setAttribute("data-poll-focus", "");
+    }
+  }
   const submitted = requestConfig?.verb === "post" ? requestConfig.elt?.closest("form") : undefined;
   target.querySelectorAll("form[id]").forEach((form) => {
     if (form === submitted) return;
@@ -54,7 +74,7 @@ document.addEventListener("htmx:beforeSwap", (event) => {
   });
   event.detail.serverResponse = template.innerHTML;
 });
-document.addEventListener("htmx:afterSwap", () => {
+document.addEventListener("htmx:afterSettle", () => {
   document.querySelectorAll("form[id] [data-unsaved]").forEach((control) => {
     dirtyControls.add(control);
     control.removeAttribute("data-unsaved");
@@ -66,4 +86,12 @@ document.addEventListener("htmx:afterSwap", () => {
         control.setSelectionRange(start, end);
     }
   });
+});
+
+// Wait for the new card slots to render before restoring focus.
+document.addEventListener("htmx:afterSettle", () => {
+  const focused = document.querySelector("[data-poll-focus]");
+  if (!focused) return;
+  focused.removeAttribute("data-poll-focus");
+  focused.focus({ preventScroll: true });
 });

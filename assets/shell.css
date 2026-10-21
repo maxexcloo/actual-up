@@ -1,53 +1,29 @@
+:root {
+  --app-content-width: 110ch;
+}
+
 [hidden] {
   display: none !important;
 }
-html,
-body {
-  min-height: 100%;
-  margin: 0;
-  padding: 0;
+
+wa-page {
+  --main-width: var(--app-content-width);
 }
-body {
-  background: var(--wa-color-surface-default);
-}
-.app-header {
-  max-width: 110ch;
-  margin-inline: auto;
-}
-.app-title > a {
-  color: inherit;
-  font-size: var(--wa-font-size-l);
-  font-weight: var(--wa-font-weight-bold);
-  text-decoration: none;
-}
+
+.app-header,
 main {
   width: 100%;
-  max-width: 110ch;
+  max-width: var(--app-content-width);
   margin-inline: auto;
-  padding: var(--wa-space-xl) var(--wa-space-l);
+  padding-inline: var(--wa-space-l);
 }
-.hint {
-  color: var(--wa-color-text-quiet);
-  font-size: var(--wa-font-size-s);
+
+main {
+  min-width: 0;
+  padding-block: var(--wa-space-s) var(--wa-space-xl);
+  overflow-wrap: anywhere;
 }
-h1 {
-  font-size: var(--wa-font-size-2xl);
-}
-h2 {
-  font-size: var(--wa-font-size-l);
-}
-h3 {
-  font-size: var(--wa-font-size-m);
-}
-h1,
-h2,
-h3,
-.section-intro > p {
-  margin: 0;
-}
+
 .section-intro {
   min-width: 0;
-}
-.section-actions {
-  gap: var(--wa-space-s);
 }
