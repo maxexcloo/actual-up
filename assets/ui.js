@@ -74,7 +74,7 @@ document.addEventListener("htmx:beforeSwap", (event) => {
   });
   event.detail.serverResponse = template.innerHTML;
 });
-document.addEventListener("htmx:afterSwap", () => {
+document.addEventListener("htmx:afterSettle", () => {
   document.querySelectorAll("form[id] [data-unsaved]").forEach((control) => {
     dirtyControls.add(control);
     control.removeAttribute("data-unsaved");
@@ -88,8 +88,8 @@ document.addEventListener("htmx:afterSwap", () => {
   });
 });
 
-// Restore after draft values, using the replacement region rather than the old node.
-document.addEventListener("htmx:afterSwap", () => {
+// Wait for the new card slots to render before restoring focus.
+document.addEventListener("htmx:afterSettle", () => {
   const focused = document.querySelector("[data-poll-focus]");
   if (!focused) return;
   focused.removeAttribute("data-poll-focus");
