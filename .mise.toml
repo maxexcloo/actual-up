@@ -7,7 +7,6 @@ run = "npm run build"
 
 [tasks.check]
 depends = [
-  "build",
   "check:actions",
   "check:mise",
   "check:oxfmt",
@@ -29,6 +28,7 @@ depends = ["build"]
 depends = ["fmt:mise", "fmt:oxfmt"]
 
 [tasks.test]
+depends = ["build"]
 run = "vitest run"
 
 # Setup
