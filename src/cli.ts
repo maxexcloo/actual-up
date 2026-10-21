@@ -3,6 +3,7 @@
 import { Command } from "commander";
 
 import { loadConfig } from "./config.js";
+import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import { JobRunner } from "./job-runner.js";
 import { assertActualCompatibility, createRuntime } from "./runtime.js";
@@ -64,14 +65,14 @@ program
     try {
       const up = Object.fromEntries(
         await Promise.all(
-          [...runtime.clients].map(async ([id, client]) => [id, await client.listAccounts()]),
+          [...runtime.clients].map(async ([id, client]) => [id, await discoverUpAccounts(client)]),
         ),
       );
       process.stdout.write(
         `${JSON.stringify(
           {
             actual: {
-              accounts: await runtime.actual.getAccounts(),
+              accounts: await discoverActualAccounts(runtime.actual),
               categories: await runtime.actual.getCategories(),
             },
             up,

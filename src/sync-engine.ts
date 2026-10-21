@@ -442,7 +442,6 @@ export function isSafeToDelete(transaction: ActualTransaction): boolean {
   if (transaction.is_parent || transaction.is_child || transaction.subtransactions?.length) {
     return false;
   }
-  if (transaction.cleared === false) return !transaction.reconciled;
   return !transaction.category && !transaction.notes && !transaction.reconciled;
 }
 

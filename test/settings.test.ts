@@ -200,8 +200,12 @@ describe("browser setup", () => {
     const f = await fixture();
     await f.post(f.mapping);
     f.engine.reconcile.mockClear();
+    f.client.listAccounts.mockClear().mockRejectedValue(new Error("unavailable"));
+    f.actual.getAccounts.mockClear().mockRejectedValue(new Error("unavailable"));
     await f.post({ ...f.mapping, alias: "renamed" });
     expect(f.config.mappings[0]?.alias).toBe("renamed");
+    expect(f.client.listAccounts).not.toHaveBeenCalled();
+    expect(f.actual.getAccounts).not.toHaveBeenCalled();
     expect(f.engine.reconcile).not.toHaveBeenCalled();
   });
 

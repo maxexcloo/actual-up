@@ -29,9 +29,11 @@ latest 20 completed results in memory. Configuration and setup errors are logged
 Up and Actual errors are reported without their potentially sensitive contents.
 An account failure makes the run fail even if other accounts succeeded.
 
-History and queued jobs reset on restart. `/data` uses a persistent volume for
-browser settings and the Actual cache. Back up `settings.json`; only the Actual
-cache can be rebuilt. Import identities make reconciliation repeatable.
+History and queued jobs reset on restart. Kubelab persists browser settings in
+`/data/settings.json` and keeps the rebuildable Actual cache on ephemeral storage
+at `/tmp/actual-cache`. Back up `settings.json`. Other deployments control the
+cache location with `actual.cacheDirectory`. Import identities make
+reconciliation repeatable.
 Startup and nightly full-history backfills recover gaps after an extended outage
 or interrupted run and confirm deletions. Partial syncs keep transactions that fall outside their Up window. Manual
 backfill is still available. Don't run a standalone CLI writer alongside the

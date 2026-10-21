@@ -30,7 +30,7 @@ export class ActualBudgetClient implements ActualClient {
     const worker = new Worker(this.workerUrl, {
       stderr: true,
       stdout: true,
-      // The worker only needs Actual credentials, not Up keys.
+      // Omit Up keys from workerData; the worker still inherits the process environment.
       workerData: {
         ...this.app,
         actual: { ...this.app.actual, syncId },
