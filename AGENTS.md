@@ -5,7 +5,8 @@
 - `src/` contains the TypeScript service, JSON API and CLI; `src/api.ts` and
   `src/schemas.ts` are shared with the browser and may only import zod.
 - `web/` contains the React and Mantine browser app, built by Vite into `dist/public/`.
-- `web/src/vendor/mantinehub/` is an unmodified upstream copy; override it in `web/src/theme.ts`.
+- `web/src/vendor/mantinehub/` is an unmodified upstream copy, kept because upstream
+  publishes no package; override it in `web/src/theme.ts`.
 - `test/` contains unit and in-memory integration tests.
 - `docs/` contains maintained operator documentation.
 
