@@ -62,8 +62,8 @@ settings encryption key come from environment variables, and upstream
 credentials are managed in the browser.
 
 The GitHub Container workflow builds, smoke-tests and scans the image before
-publishing it to `ghcr.io/maxexcloo/actual-up`. Runtime or build-input changes on
-`main` publish `latest` and `sha-<full-commit>`. Version tags such as `v0.1.0`
+publishing it to `ghcr.io/maxexcloo/actual-up`. Pushes to `main` other than
+Markdown-only changes publish `latest` and `sha-<full-commit>`. Version tags such as `v0.1.0`
 publish `0.1.0` and `0.1`. Pull requests test and verify the image without
 publishing it. Images include OCI labels, provenance and an SBOM. Publishing uses
 the repository's `GITHUB_TOKEN`, so no registry password is needed.
