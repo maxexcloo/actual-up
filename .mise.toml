@@ -21,7 +21,11 @@ depends = [
 run = "oxlint --deny-warnings src test web"
 
 [tasks."check:typescript"]
-run = ["tsc --noEmit", "tsc --noEmit -p web"]
+run = '''
+set -eu
+tsc --noEmit
+tsc --noEmit -p web
+'''
 
 [tasks.dev]
 run = "fnox exec -- node dist/cli.js serve"

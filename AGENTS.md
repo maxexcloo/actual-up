@@ -36,13 +36,6 @@
   `src/actual-version.ts`. Move it in lockstep with Kubelab's `actual-budget` version.
 - Kubelab owns the production deployment; this repository only publishes images.
 
-## Release
-
-- Pushes to `main` publish the `latest` image after checks pass.
-- For a versioned release, bump `version` in `package.json`, tag the commit
-  `v<version>` and push the tag. Update the image reference in Kubelab
-  (`apps/base/actual-up`) to deploy it.
-
 ## Verification
 
 Run `mise run check`.
