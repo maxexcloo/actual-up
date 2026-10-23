@@ -6,15 +6,10 @@
   "bin": {
     "actual-up": "dist/cli.js"
   },
-  "files": [
-    "dist"
-  ],
   "type": "module",
-  "exports": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json && npm run build:ui",
-    "build:ui": "node assets/build.mjs",
-    "start": "node dist/cli.js serve"
+    "build:ui": "node assets/build.mjs"
   },
   "dependencies": {
     "@actual-app/api": "26.10.0",

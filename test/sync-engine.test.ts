@@ -1,7 +1,6 @@
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Alert, AlertSink } from "../src/alerts.js";
 import { parseConfig, type AppConfig } from "../src/config.js";
 import { Metrics } from "../src/metrics.js";
 import { SyncEngine, actualDate, convertTransaction, isSafeToDelete } from "../src/sync-engine.js";
@@ -29,7 +28,6 @@ function config(overrides: Partial<AppConfig> = {}): AppConfig {
   const value = parseConfig({
     version: 1,
     actual: {
-      passwordEnv: "ACTUAL_PASSWORD",
       serverUrl: "https://actual.example.com",
       syncId: "budget-id",
     },
@@ -43,10 +41,7 @@ function config(overrides: Partial<AppConfig> = {}): AppConfig {
       },
     ],
     up: {
-      connections: [
-        { id: "first", tokenEnv: "UP_TOKEN_FIRST" },
-        { id: "second", tokenEnv: "UP_TOKEN_SECOND" },
-      ],
+      connections: [{ id: "first" }, { id: "second" }],
     },
   });
   return { ...value, ...overrides };
@@ -170,21 +165,8 @@ class StubUp implements UpClientLike {
   }
 }
 
-class MemoryAlerts implements AlertSink {
-  values: Alert[] = [];
-  async send(alert: Alert) {
-    this.values.push(alert);
-  }
-}
-
-function engine(
-  actual: MemoryActual,
-  first: StubUp,
-  second = new StubUp([]),
-  alerts = new MemoryAlerts(),
-) {
+function engine(actual: MemoryActual, first: StubUp, second = new StubUp([])) {
   return {
-    alerts,
     value: new SyncEngine(
       config(),
       actual,
@@ -192,7 +174,6 @@ function engine(
         ["first", first],
         ["second", second],
       ]),
-      alerts,
       new Metrics(),
       pino({ level: "silent" }),
     ),
@@ -234,7 +215,7 @@ describe("sync engine", () => {
     expect(actual.transactions[0]!.cleared).toBe(false);
   });
 
-  it("publishes partial imports, identifies the failed account safely and continues after alert failure", async () => {
+  it("publishes partial imports, and identifies the failed account safely", async () => {
     const actual = new MemoryActual();
     const app = config();
     app.mappings.push({
@@ -243,13 +224,10 @@ describe("sync engine", () => {
       upAccountId: "33333333-3333-4333-8333-333333333333",
       connections: ["missing"],
     });
-    const alerts = new MemoryAlerts();
-    vi.spyOn(alerts, "send").mockRejectedValue(new Error("sensitive response"));
     const value = new SyncEngine(
       app,
       actual,
       new Map([["first", new StubUp([transaction()])]]),
-      alerts,
       new Metrics(),
       pino({ enabled: false }),
     );
@@ -319,7 +297,6 @@ describe("sync engine", () => {
         ["first", first],
         ["second", second],
       ]),
-      new MemoryAlerts(),
       new Metrics(),
       pino({ enabled: false }),
     );
@@ -359,11 +336,10 @@ describe("sync engine", () => {
       id: "actual-1",
       imported_id: "up:gone",
     });
-    const { alerts, value } = engine(actual, new StubUp([]));
+    const { value } = engine(actual, new StubUp([]));
     const report = await value.reconcile({ since: "1970-01-01" });
     expect(report.conflicts).toBe(1);
     expect(actual.transactions).toHaveLength(1);
-    expect(alerts.values[0]?.type).toBe("delete-conflict");
   });
 
   it("applies a category mapping only after import leaves it empty", async () => {

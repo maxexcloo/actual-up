@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 
 import { ConfigError } from "./errors.js";
 import type { Metrics } from "./metrics.js";
+import type { SyncReport } from "./sync-engine.js";
 
 export type JobProgress = {
   account?: string;
@@ -68,11 +69,13 @@ export class JobRunner {
         job.result = await operation((value) => {
           job.progress = value;
         });
-        job.state = hasFailures(job.result)
-          ? "failure"
-          : hasConflicts(job.result)
-            ? "warning"
-            : "success";
+        const report = (job.result ?? {}) as Partial<SyncReport>;
+        job.state =
+          (report.failed ?? 0) > 0 || report.publication === "failed"
+            ? "failure"
+            : (report.conflicts ?? 0) > 0
+              ? "warning"
+              : "success";
       } catch (error) {
         job.state = "failure";
         // Upstream errors can contain bank data; only the app's own messages are logged.
@@ -105,23 +108,4 @@ export class JobRunner {
     this.stopping = true;
     await this.drain();
   }
-}
-
-function hasFailures(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (("failed" in value && typeof value.failed === "number" && value.failed > 0) ||
-      ("publication" in value && value.publication === "failed"))
-  );
-}
-
-function hasConflicts(value: unknown): boolean {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "conflicts" in value &&
-    typeof value.conflicts === "number" &&
-    value.conflicts > 0
-  );
 }

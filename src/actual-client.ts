@@ -1,10 +1,7 @@
 import { Worker } from "node:worker_threads";
-import { environmentValue, type AppConfig } from "./config.js";
+import type { AppConfig } from "./config.js";
 import { ConfigError } from "./errors.js";
-import { getActualCredentials } from "./settings-store.js";
 import type { ActualClient, ActualImportTransaction, ActualTransaction } from "./types.js";
-
-export { assertActualCompatibility } from "./actual-version.js";
 
 /** One worker owns Actual's synchronous database work; the web thread stays responsive. */
 export class ActualBudgetClient implements ActualClient {
@@ -22,20 +19,14 @@ export class ActualBudgetClient implements ActualClient {
 
   private getWorker(): Worker {
     if (this.worker) return this.worker;
-    const credentials = getActualCredentials(this.app);
-    const syncId =
-      this.app.actual.syncId ??
-      (this.app.actual.syncIdEnv ? environmentValue(this.app.actual.syncIdEnv) : undefined);
-    if (!credentials || !syncId) throw new ConfigError("Configure Actual in the app first");
+    const { actual } = this.app.secrets;
+    if (!actual || !this.app.actual.syncId)
+      throw new ConfigError("Configure Actual in the app first");
     const worker = new Worker(this.workerUrl, {
       stderr: true,
       stdout: true,
-      // Omit Up keys from workerData; the worker still inherits the process environment.
-      workerData: {
-        ...this.app,
-        actual: { ...this.app.actual, syncId },
-        secrets: { actual: credentials, tokens: {} },
-      },
+      // Omit Up keys from workerData.
+      workerData: { ...this.app, secrets: { actual, tokens: {} } },
     });
     // SDK output can contain bank data. Only the app emits sanitised diagnostics.
     worker.stdout.resume();

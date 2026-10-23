@@ -18,11 +18,10 @@ function fixture(enabled = true, mapped = true) {
   const config = parseConfig({
     version: 1,
     actual: {
-      passwordEnv: "ACTUAL_PASSWORD",
       serverUrl: "http://actual",
       syncId: "budget",
     },
-    up: { connections: [{ id: "first", tokenEnv: "UP_TOKEN" }] },
+    up: { connections: [{ id: "first" }] },
     schedule: { enabled },
     mappings: mapped
       ? [

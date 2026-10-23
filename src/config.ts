@@ -8,9 +8,6 @@ import { z } from "zod";
 import { ConfigError } from "./errors.js";
 import { loadSettings, type ActualCredentials } from "./settings-store.js";
 
-const environmentName = z
-  .string()
-  .regex(/^[A-Z][A-Z0-9_]*$/, "must be an environment variable name");
 export const connectionId = z.string().regex(/^[a-z][a-z0-9-]*$/);
 export const httpUrl = z
   .url()
@@ -19,29 +16,13 @@ export const httpUrl = z
     "must use HTTP or HTTPS",
   );
 
-const actualSchema = z
-  .object({
-    cacheDirectory: z.string().default("/data/actual-cache"),
-    encryptionPasswordEnv: environmentName.optional(),
-    passwordEnv: environmentName.optional(),
-    serverUrl: httpUrl,
-    sessionTokenEnv: environmentName.optional(),
-    syncId: z.string().min(1).optional(),
-    syncIdEnv: environmentName.optional(),
-  })
-  .refine(
-    ({ syncId, syncIdEnv }) => !(syncId && syncIdEnv),
-    "set at most one of syncId or syncIdEnv",
-  )
-  .refine(
-    ({ passwordEnv, sessionTokenEnv }) => !(passwordEnv && sessionTokenEnv),
-    "set at most one of passwordEnv or sessionTokenEnv",
-  );
-
-const connectionSchema = z.object({
-  id: connectionId,
-  tokenEnv: environmentName.optional(),
+const actualSchema = z.object({
+  cacheDirectory: z.string().default("/tmp/actual-cache"),
+  serverUrl: httpUrl,
+  syncId: z.string().min(1).optional(),
 });
+
+const connectionSchema = z.object({ id: connectionId });
 
 const mappingSchema = z.object({
   actualAccountId: z.string().min(1),
@@ -52,21 +33,8 @@ const mappingSchema = z.object({
 
 const configSchema = z.object({
   version: z.literal(1),
-  encryptionKeyEnv: environmentName.default("ACTUAL_UP_ENCRYPTION_KEY"),
   settingsFile: z.string().min(1).default("/data/settings.json"),
-  auth: z
-    .object({
-      usernameEnv: environmentName.default("ACTUAL_UP_USERNAME"),
-      passwordEnv: environmentName.default("ACTUAL_UP_PASSWORD"),
-    })
-    .prefault({}),
   actual: actualSchema,
-  alerts: z
-    .object({
-      cooldownMinutes: z.number().int().min(0).default(60),
-      urlEnv: environmentName,
-    })
-    .optional(),
   categoryMappings: z.record(z.string(), z.string()).default({}),
   mappings: z.array(mappingSchema).default([]),
   notes: z

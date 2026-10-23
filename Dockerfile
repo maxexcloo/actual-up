@@ -31,8 +31,8 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
     && apt-get upgrade --no-install-recommends -y \
     && rm -rf /var/lib/apt/lists/* /usr/local/lib/node_modules/npm /opt/yarn* \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn /usr/local/bin/yarnpkg \
-    && mkdir -p /data/actual-cache \
-    && chown -R node:node /data
+    && mkdir /data \
+    && chown node:node /data
 
 USER node
 EXPOSE 3000

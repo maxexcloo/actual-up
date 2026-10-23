@@ -32,11 +32,10 @@ async function fixture() {
   const config = parseConfig({
     version: 1,
     actual: {
-      passwordEnv: "ACTUAL_PASSWORD",
       serverUrl: "http://actual",
       syncId: "budget",
     },
-    up: { connections: [{ id: "max", tokenEnv: "UP_TOKEN" }] },
+    up: { connections: [{ id: "max" }] },
     mappings: [
       {
         actualAccountId: "actual-id",
@@ -360,7 +359,7 @@ describe("operator app", () => {
 
   it("limits connection syncs to their mapped accounts and includes shared accounts once", async () => {
     const { server, runner, engine, config } = await fixture();
-    config.up.connections.push({ id: "partner", tokenEnv: "UP_PARTNER" });
+    config.up.connections.push({ id: "partner" });
     config.mappings[0]!.connections.push("partner");
     config.mappings.push({
       actualAccountId: "savings",

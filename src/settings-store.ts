@@ -19,19 +19,6 @@ const actualCredentialsSchema = z
   .strict();
 export type ActualCredentials = z.infer<typeof actualCredentialsSchema>;
 
-export function getActualCredentials(config: AppConfig): ActualCredentials | undefined {
-  if (config.secrets.actual) return config.secrets.actual;
-  const name = config.actual.sessionTokenEnv ?? config.actual.passwordEnv;
-  if (!name || !process.env[name]) return undefined;
-  return {
-    method: config.actual.sessionTokenEnv ? "session" : "password",
-    credential: environmentValue(name),
-    encryptionPassword: config.actual.encryptionPasswordEnv
-      ? environmentValue(config.actual.encryptionPasswordEnv)
-      : undefined,
-  };
-}
-
 const context = Buffer.from("actual-up/settings/v1");
 const envelopeSchema = z
   .object({
@@ -61,21 +48,16 @@ function settings(config: AppConfig) {
   };
 }
 
-function encryptionKey(config: AppConfig): Buffer {
-  const secret = environmentValue(config.encryptionKeyEnv);
+export function encryptionKey(): Buffer {
+  const secret = environmentValue("ACTUAL_UP_ENCRYPTION_KEY");
   if (secret.length < 32)
     throw new ConfigError("Encryption key must contain at least 32 characters");
   return createHash("sha256").update(secret).digest();
 }
 
-export function checkEncryptionKey(config: AppConfig): void {
-  encryptionKey(config);
-}
-
 export function connectionToken(config: AppConfig, connection: UpConnectionConfig): string {
   const saved = config.secrets.tokens[connection.id];
   if (saved) return saved;
-  if (connection.tokenEnv) return environmentValue(connection.tokenEnv);
   throw new ConfigError("Connection has no saved API key");
 }
 
@@ -101,7 +83,7 @@ export async function loadSettings(config: AppConfig): Promise<AppConfig> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return config;
     throw error;
   }
-  const key = encryptionKey(config);
+  const key = encryptionKey();
   let saved: z.infer<typeof storedSchema>;
   try {
     const envelope = envelopeSchema.parse(JSON.parse(source));
@@ -136,7 +118,7 @@ export async function loadSettings(config: AppConfig): Promise<AppConfig> {
 /** Encrypt all settings and keys together; atomically commit before changing live state. */
 export async function saveSettings(config: AppConfig): Promise<void> {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encryptionKey(config), iv);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
   cipher.setAAD(context);
   const encrypted = Buffer.concat([
     cipher.update(JSON.stringify(settings(config)), "utf8"),

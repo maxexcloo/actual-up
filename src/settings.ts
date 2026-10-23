@@ -2,17 +2,13 @@ import type { FastifyInstance } from "fastify";
 import type { Server, IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "pino";
 import { z } from "zod";
-import { connectionId, environmentValue, httpUrl, parseConfig, type AppConfig } from "./config.js";
+import { assertActualCompatibility } from "./actual-version.js";
+import { connectionId, httpUrl, parseConfig, type AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
-import { assertActualCompatibility, type Runtime } from "./runtime.js";
-import {
-  changeSettingsVersion,
-  getActualCredentials,
-  saveSettings,
-  settingsVersion,
-} from "./settings-store.js";
+import type { Runtime } from "./runtime.js";
+import { changeSettingsVersion, saveSettings, settingsVersion } from "./settings-store.js";
 import {
   accountSettingsRow,
   settingsPage,
@@ -248,17 +244,15 @@ export function registerSettings(
           const next = parseConfig(config);
           next.secrets = structuredClone(config.secrets);
           if (command.action === "actual") {
-            const oldSyncId =
-              config.actual.syncId ??
-              (config.actual.syncIdEnv ? environmentValue(config.actual.syncIdEnv) : undefined);
             if (
               config.mappings.length &&
-              (command.syncId !== oldSyncId || command.serverUrl !== config.actual.serverUrl)
+              (command.syncId !== config.actual.syncId ||
+                command.serverUrl !== config.actual.serverUrl)
             )
               throw new SettingsError(
                 "Disconnect account mappings before switching Actual servers or budgets. Existing transactions remain in the previous budget.",
               );
-            const previousCredentials = getActualCredentials(config);
+            const previousCredentials = config.secrets.actual;
             const credential =
               command.credential ||
               (previousCredentials?.method === command.method
@@ -313,9 +307,8 @@ export function registerSettings(
                   "This key cannot access all its mapped accounts. Update those mappings before replacing the key.",
                 );
             }
-            const existing = next.up.connections.find(({ id }) => id === command.id);
-            if (existing) delete existing.tokenEnv;
-            else next.up.connections.push({ id: command.id });
+            if (!next.up.connections.some(({ id }) => id === command.id))
+              next.up.connections.push({ id: command.id });
             next.secrets.tokens[command.id] = command.token;
           } else if (command.action === "remove-connection") {
             if (next.mappings.some(({ connections }) => connections.includes(command.id)))
