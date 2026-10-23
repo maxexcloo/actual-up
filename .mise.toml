@@ -24,7 +24,7 @@ run = "oxlint --deny-warnings src test web"
 run = ["tsc --noEmit", "tsc --noEmit -p web"]
 
 [tasks.dev]
-run = "node dist/cli.js serve"
+run = "fnox exec -- node dist/cli.js serve"
 depends = ["build"]
 
 [tasks.fmt]
