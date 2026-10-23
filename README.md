@@ -77,13 +77,11 @@ before running local Mise tasks.
 
 The UI in `web/` is a React app built from Mantine components with
 [MantineHub's shadcn theme](web/src/vendor/mantinehub/README.md), light and dark.
-It has no stylesheets of its own: layout comes from Mantine props, and
-`.oxlintrc.json` rejects raw HTML elements, `className` and `style` in app code.
-Forms validate with the zod schemas in `src/schemas.ts`, which the server reuses.
-Theme changes belong in `web/src/theme.ts`.
 
 ```sh
 mise run check
 ```
 
-The repository is licensed under AGPL-3.0-only.
+## Licence
+
+AGPL-3.0 - see [LICENSE](LICENSE).
