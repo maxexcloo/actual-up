@@ -6,7 +6,8 @@ import { loadConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import { JobRunner } from "./job-runner.js";
-import { assertActualCompatibility, createRuntime } from "./runtime.js";
+import { assertActualCompatibility } from "./actual-version.js";
+import { createRuntime } from "./runtime.js";
 import { startService } from "./server.js";
 
 const program = new Command()

@@ -7,8 +7,7 @@ browser under **Accounts & Sync**. Never commit credentials to either repository
 
 ## Authentication
 
-`auth.usernameEnv` defaults to `ACTUAL_UP_USERNAME`; `auth.passwordEnv` defaults
-to `ACTUAL_UP_PASSWORD`. Kubelab generates a strong production password. The app
+The app login comes from `ACTUAL_UP_USERNAME` and `ACTUAL_UP_PASSWORD`. Kubelab generates a strong production password. The app
 uses a normal sign-in page and opaque server-side sessions, with HttpOnly,
 SameSite=Strict cookies and an eight-hour lifetime. Sessions reset on restart;
 signing out invalidates the session. Failed sign-ins are rate-limited.
@@ -73,8 +72,7 @@ account IDs and mappings together with AES-256-GCM, a fresh 96-bit nonce per sav
 and authenticated version context. Files are replaced atomically with mode 0600.
 No application database is needed.
 
-`encryptionKeyEnv` defaults to `ACTUAL_UP_ENCRYPTION_KEY`. Supply a randomly
-generated secret of at least 32 characters; kubelab generates 48. It is separate
+Supply `ACTUAL_UP_ENCRYPTION_KEY` as a randomly generated secret of at least 32 characters; kubelab generates 48. It is separate
 from the app password and never written to the settings file. The encrypted file
 is authoritative for browser-managed settings on startup, including CLI commands.
 Schedules, note options and category mappings stay in deployment configuration.
@@ -89,15 +87,10 @@ Actual's budget cache is separate and is not encrypted by this settings mechanis
 
 ## Deployment Defaults
 
-- `actual.cacheDirectory` defaults to `/data/actual-cache`.
+- `actual.cacheDirectory` defaults to `/tmp/actual-cache`.
 - `actual.serverUrl` prefills the Actual setup form; prefer its internal cluster URL.
-- Optional Actual defaults use one of `syncId`/`syncIdEnv` and one of
-  `passwordEnv`/`sessionTokenEnv`; `encryptionPasswordEnv` supports encrypted budgets.
-- Optional preconfigured Up connections use stable `id` and `tokenEnv` references.
-- `up.connections: []` and `mappings: []` start with browser setup.
+- `up.connections: []` starts with browser setup.
 
-Preconfigured environment secrets remain supported for CLI deployments. Replacing
-credentials in the browser switches that connection to encrypted app storage.
 Aliases are non-sensitive labels used in logs. Each Up and Actual account may
 appear in only one mapping. Shared connections follow the displayed fallback order.
 

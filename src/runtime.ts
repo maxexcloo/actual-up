@@ -1,9 +1,7 @@
 import pino, { type Logger } from "pino";
 
 import { ActualBudgetClient } from "./actual-client.js";
-import { LoggingAlertSink, WebhookAlertSink, type AlertSink } from "./alerts.js";
-import { environmentValue, type AppConfig } from "./config.js";
-import { ConfigError } from "./errors.js";
+import type { AppConfig } from "./config.js";
 import { Metrics } from "./metrics.js";
 import { SyncEngine } from "./sync-engine.js";
 import type { ActualClient, UpClientLike } from "./types.js";
@@ -12,7 +10,6 @@ import { UpClient } from "./up-client.js";
 
 export type Runtime = {
   actual: ActualClient;
-  alerts: AlertSink;
   clients: Map<string, UpClientLike>;
   engine: SyncEngine;
   logger: Logger;
@@ -32,16 +29,6 @@ export function createLogger(): Logger {
 export async function createRuntime(config: AppConfig): Promise<Runtime> {
   const logger = createLogger();
   const metrics = new Metrics();
-  if (config.alerts) {
-    // URL errors would echo the alert URL, which may embed a token.
-    if (
-      !["http:", "https:"].includes(
-        URL.parse(environmentValue(config.alerts.urlEnv))?.protocol ?? "",
-      )
-    ) {
-      throw new ConfigError("Alert webhook URL must use HTTP or HTTPS");
-    }
-  }
   const clients = new Map<string, UpClientLike>(
     config.up.connections.map((connection) => [
       connection.id,
@@ -52,11 +39,6 @@ export async function createRuntime(config: AppConfig): Promise<Runtime> {
     ]),
   );
   const actual = new ActualBudgetClient(config);
-  const alerts = config.alerts
-    ? new WebhookAlertSink(config.alerts, logger)
-    : new LoggingAlertSink(logger);
-  const engine = new SyncEngine(config, actual, clients, alerts, metrics, logger);
-  return { actual, alerts, clients, engine, logger, metrics };
+  const engine = new SyncEngine(config, actual, clients, metrics, logger);
+  return { actual, clients, engine, logger, metrics };
 }
-
-export { assertActualCompatibility } from "./actual-client.js";

@@ -15,7 +15,7 @@ import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
 import type { Runtime } from "./runtime.js";
-import { checkEncryptionKey } from "./settings-store.js";
+import { encryptionKey } from "./settings-store.js";
 import { registerSettings } from "./settings.js";
 import { startSchedule } from "./schedule.js";
 import type { SyncEngine } from "./sync-engine.js";
@@ -66,9 +66,9 @@ export async function createServer(
   runtime: Pick<Runtime, "actual" | "clients">,
   makeUpClient?: Parameters<typeof registerSettings>[6],
 ) {
-  checkEncryptionKey(config);
-  const username = environmentValue(config.auth.usernameEnv);
-  const password = environmentValue(config.auth.passwordEnv);
+  encryptionKey(); // Fail at startup, not on first save, when the key is missing.
+  const username = environmentValue("ACTUAL_UP_USERNAME");
+  const password = environmentValue("ACTUAL_UP_PASSWORD");
   const attempts = new LoginAttempts(username, password);
   const bundled = (name: string) => readFile(new URL(`../dist/${name}`, import.meta.url), "utf8");
   // The sign-in page loads these before authentication.

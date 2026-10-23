@@ -1,6 +1,6 @@
 import type { AppConfig } from "./config.js";
 import type { JobRunner } from "./job-runner.js";
-import { getActualCredentials, settingsVersion } from "./settings-store.js";
+import { settingsVersion } from "./settings-store.js";
 import { HISTORY_START } from "./sync-engine.js";
 import { connectionTestStatus, escapeHtml as e, pageHead, status, themeControl } from "./ui.js";
 
@@ -36,7 +36,7 @@ export function settingsPage(
   accountUpdates: ReadonlyMap<string, AccountUpdate> = new Map(),
 ): string {
   const revision = settingsVersion();
-  const actualCredentials = getActualCredentials(config);
+  const actualCredentials = config.secrets.actual;
   const form = (
     action: string,
     content: string,

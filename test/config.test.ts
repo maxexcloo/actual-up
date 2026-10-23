@@ -5,7 +5,6 @@ import { parseConfig } from "../src/config.js";
 const base = {
   version: 1 as const,
   actual: {
-    passwordEnv: "ACTUAL_PASSWORD",
     serverUrl: "https://actual.example.com",
     syncId: "budget-id",
   },
@@ -17,7 +16,7 @@ const base = {
       connections: ["max"],
     },
   ],
-  up: { connections: [{ id: "max", tokenEnv: "UP_TOKEN_MAX" }] },
+  up: { connections: [{ id: "max" }] },
 };
 
 beforeEach(() => vi.stubEnv("ACTUAL_UP_PUBLIC_URL", undefined));
@@ -32,17 +31,6 @@ describe("configuration", () => {
         server: { publicUrl: "http://app.example.com:3000" },
       }).server.publicUrl,
     ).toBe("http://app.example.com:3000");
-  });
-
-  it("ignores retired webhook settings on existing connections", () => {
-    const connection = {
-      id: "max",
-      tokenEnv: "UP_TOKEN_MAX",
-      webhook: { id: "11111111-1111-4111-8111-111111111111", secretEnv: "UP_WEBHOOK_SECRET" },
-    };
-    expect(parseConfig({ ...base, up: { connections: [connection] } }).up.connections).toEqual([
-      { id: "max", tokenEnv: "UP_TOKEN_MAX" },
-    ]);
   });
 
   it("uses the environment public URL instead of the configured URL", () => {
@@ -73,22 +61,6 @@ describe("configuration", () => {
     expect(config.notes.includePerformer).toBe(true);
   });
 
-  it("accepts a budget ID from the environment and rejects ambiguous IDs", () => {
-    const { syncId: _syncId, ...actual } = base.actual;
-    expect(
-      parseConfig({
-        ...base,
-        actual: { ...actual, syncIdEnv: "ACTUAL_SYNC_ID" },
-      }).actual.syncIdEnv,
-    ).toBe("ACTUAL_SYNC_ID");
-    expect(() =>
-      parseConfig({
-        ...base,
-        actual: { ...base.actual, syncIdEnv: "ACTUAL_SYNC_ID" },
-      }),
-    ).toThrow();
-  });
-
   it("rejects duplicate bank-account mappings", () => {
     expect(() =>
       parseConfig({
@@ -96,17 +68,5 @@ describe("configuration", () => {
         mappings: [...base.mappings, { ...base.mappings[0] }],
       }),
     ).toThrow("mapped more than once");
-  });
-
-  it("requires exactly one Actual authentication method", () => {
-    expect(() =>
-      parseConfig({
-        ...base,
-        actual: {
-          ...base.actual,
-          sessionTokenEnv: "ACTUAL_SESSION_TOKEN",
-        },
-      }),
-    ).toThrow();
   });
 });

@@ -7,7 +7,8 @@ import type { AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
-import { assertActualCompatibility, type Runtime } from "./runtime.js";
+import { assertActualCompatibility } from "./actual-version.js";
+import type { Runtime } from "./runtime.js";
 import type { SyncEngine } from "./sync-engine.js";
 import { connectionTestStatus } from "./ui.js";
 

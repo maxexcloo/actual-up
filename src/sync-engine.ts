@@ -1,6 +1,5 @@
 import type { Logger } from "pino";
 
-import type { AlertSink } from "./alerts.js";
 import type { AccountMapping, AppConfig } from "./config.js";
 import { ConfigError } from "./errors.js";
 import type { JobProgress } from "./job-runner.js";
@@ -60,7 +59,6 @@ export class SyncEngine {
     private readonly config: AppConfig,
     private readonly actual: ActualClient,
     private readonly upClients: Map<string, UpClientLike>,
-    private readonly alerts: AlertSink,
     private readonly metrics: Metrics,
     private readonly logger: Logger,
   ) {}
@@ -143,14 +141,6 @@ export class SyncEngine {
               ? "actual-unavailable"
               : "actual-write-failed";
         this.logger.error({ account: mapping.alias }, "Account sync failed");
-        await this.alerts
-          .send({
-            account: mapping.alias,
-            detail: "Account sync failed; check the account result in the app",
-            severity: "error",
-            type: "account-sync-failed",
-          })
-          .catch(() => this.logger.warn("Alert delivery failed"));
       }
       report.accounts.push(accountReport);
       for (const key of Object.keys(emptyCounts()) as Array<keyof SyncCounts>)
@@ -337,14 +327,10 @@ export class SyncEngine {
         account: mapping.alias,
         action: "delete-conflict",
       });
-      await this.alerts
-        .send({
-          account: mapping.alias,
-          detail: "Up deleted a transaction that has protected Actual edits",
-          severity: "warning",
-          type: "delete-conflict",
-        })
-        .catch(() => this.logger.warn("Alert delivery failed"));
+      this.logger.warn(
+        { account: mapping.alias },
+        "Up deleted a transaction that has protected Actual edits",
+      );
       return;
     }
     if (!dryRun) await this.actual.deleteTransaction(transaction.id);

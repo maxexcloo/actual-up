@@ -8,12 +8,7 @@ import { parseConfig } from "../src/config.js";
 import { JobRunner } from "../src/job-runner.js";
 import { Metrics } from "../src/metrics.js";
 import { registerSettings } from "../src/settings.js";
-import {
-  connectionToken,
-  getActualCredentials,
-  loadSettings,
-  settingsVersion,
-} from "../src/settings-store.js";
+import { connectionToken, loadSettings, settingsVersion } from "../src/settings-store.js";
 import type { SyncEngine } from "../src/sync-engine.js";
 import type { ActualClient, UpClientLike } from "../src/types.js";
 
@@ -28,18 +23,16 @@ async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "actual-up-settings-"));
   cleanups.push(() => rm(directory, { force: true, recursive: true }));
   vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "test-encryption-key-at-least-32-characters");
-  vi.stubEnv("UP_TOKEN_MAX", "test-secret-never-render");
-  vi.stubEnv("UP_TOKEN_PARTNER", "another-secret");
   const config = parseConfig({
     version: 1,
     settingsFile: join(directory, "settings.json"),
     actual: {
       serverUrl: "http://actual",
       syncId: "budget",
-      passwordEnv: "ACTUAL_PASSWORD",
     },
-    up: { connections: [{ id: "max", tokenEnv: "UP_TOKEN_MAX" }] },
+    up: { connections: [{ id: "max" }] },
   });
+  config.secrets.tokens.max = "test-secret-never-render";
   const logger = pino({ enabled: false });
   const runner = new JobRunner(new Metrics(), logger);
   const accounts = [
@@ -311,21 +304,17 @@ describe("browser setup", () => {
     await f.post(command);
     expect(f.runner.history[0]?.state).toBe("success");
     expect(f.config.actual.serverUrl).toBe("http://new-actual");
-    expect(getActualCredentials(await loadSettings(f.config))?.credential).toBe(
-      "actual-secret-token",
-    );
+    expect((await loadSettings(f.config)).secrets.actual?.credential).toBe("actual-secret-token");
     expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("actual-secret-token");
     const page = await f.server.inject("/");
     expect(page.body).not.toContain("actual-secret-token");
     await f.post({ ...command, credential: "" });
-    expect(getActualCredentials(f.config)?.credential).toBe("actual-secret-token");
+    expect(f.config.secrets.actual?.credential).toBe("actual-secret-token");
     f.actual.open.mockRejectedValueOnce(new Error("upstream contains secret"));
     await f.post({ ...command, credential: "replacement-secret" });
     expect(f.runner.history[0]?.state).toBe("failure");
-    expect(getActualCredentials(f.config)?.credential).toBe("actual-secret-token");
-    expect(getActualCredentials(await loadSettings(f.config))?.credential).toBe(
-      "actual-secret-token",
-    );
+    expect(f.config.secrets.actual?.credential).toBe("actual-secret-token");
+    expect((await loadSettings(f.config)).secrets.actual?.credential).toBe("actual-secret-token");
     await f.post(f.mapping);
     await f.post({ ...command, syncId: "other-budget" });
     expect(f.config.actual.syncId).toBe("new-budget");
