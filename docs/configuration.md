@@ -117,7 +117,7 @@ storage.
 
 ## Kubelab & 1Password
 
-The `Actual Up` item in `Cluster SYD` follows Kubelab's usual item
+The `Actual Up` item in `Kubelab SYD` follows Kubelab's usual item
 reconciliation and `ClusterSecretStore/onepassword` convention:
 
 | Field            | Environment Variable       | Source                   |
