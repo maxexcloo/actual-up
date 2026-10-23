@@ -1,16 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import type { Logger } from "pino";
-import { z } from "zod";
 
+import type { ActionResponse } from "./api.js";
 import type { AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
 import { assertActualCompatibility } from "./actual-version.js";
 import type { Runtime } from "./runtime.js";
+import { syncForm, testForm } from "./schemas.js";
 import type { SyncEngine } from "./sync-engine.js";
-import { connectionTestStatus } from "./ui.js";
 
 /** Queue connection tests, syncs, validation and discovery from the dashboard. */
 export function registerActions(
@@ -20,31 +20,15 @@ export function registerActions(
   engine: SyncEngine,
   runtime: Pick<Runtime, "actual" | "clients">,
 ) {
-  const connectionTest = (target: string) =>
-    runner.history.find((job) => job.trigger === "test-connection" && job.scope?.target === target);
-  server.get<{ Params: { target: string } }>(
-    "/connection-tests/:target",
-    async (request, reply) => {
-      const job = connectionTest(request.params.target);
-      if (!job) return reply.code(404).send("Unknown connection test");
-      return reply.type("text/html").send(connectionTestStatus(request.params.target, job.state));
-    },
-  );
   server.post("/actions/test", async (request, reply) => {
-    const parsed = z
-      .object({
-        target: z.enum(["actual", "up"]),
-        connection: z.string().default(""),
-      })
-      .strict()
-      .safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send("Invalid connection test");
+    const parsed = testForm.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Invalid connection test" });
     const { target, connection } = parsed.data;
     if (
       (target === "actual" && connection) ||
       (target === "up" && !runtime.clients.has(connection))
     )
-      return reply.code(400).send("Unknown connection");
+      return reply.code(400).send({ error: "Unknown connection" });
     const id = target === "actual" ? "actual" : `up-${connection}`;
     const accepted = runner.enqueue(
       `test:${id}`,
@@ -56,17 +40,18 @@ export function registerActions(
       },
       { target: id },
     );
-    const state = connectionTest(id)?.state;
-    if (request.headers["hx-request"] !== "true") return reply.redirect("/", 303);
-    return reply
-      .header("HX-Trigger", "refresh-status")
-      .type("text/html")
-      .send(
-        connectionTestStatus(
-          id,
-          accepted || state === "queued" || state === "running" ? state : "busy",
-        ),
-      );
+    // A duplicate request joins the test that is already queued or running.
+    const pending = runner.history.some(
+      (job) =>
+        job.trigger === "test-connection" &&
+        job.scope?.target === id &&
+        (job.state === "queued" || job.state === "running"),
+    );
+    const response: ActionResponse =
+      accepted || pending
+        ? { accepted: true, message: "Testing connection…" }
+        : { accepted: false, message: "The queue is busy. Try again shortly." };
+    return reply.code(response.accepted ? 202 : 409).send(response);
   });
 
   server.post<{ Params: { action: string } }>("/actions/:action", async (request, reply) => {
@@ -76,24 +61,16 @@ export function registerActions(
     let queueKey = "manual";
     let trigger = action;
     if (action === "sync") {
-      const parsed = z
-        .object({
-          mode: z.enum(["dry-run", "live"]),
-          account: z.string().default(""),
-          connection: z.string().default(""),
-          since: z.string().default(""),
-        })
-        .strict()
-        .safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send("Invalid action");
+      const parsed = syncForm.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "Invalid action" });
       const { account, connection, since, mode } = parsed.data;
       if (
         (account && connection) ||
         (connection && !config.up.connections.some(({ id }) => id === connection))
       )
-        return reply.code(400).send("Unknown connection or ambiguous scope");
+        return reply.code(400).send({ error: "Unknown connection or ambiguous scope" });
       if (account && !config.mappings.some((mapping) => mapping.alias === account))
-        return reply.code(400).send("Unknown account");
+        return reply.code(400).send({ error: "Unknown account" });
       const accountId = config.mappings.find((mapping) => mapping.alias === account)?.upAccountId;
       if (
         since &&
@@ -102,7 +79,7 @@ export function registerActions(
           new Date(since).toISOString().slice(0, 10) !== since ||
           since > new Date().toISOString().slice(0, 10))
       )
-        return reply.code(400).send("Choose a valid date in the past");
+        return reply.code(400).send({ error: "Choose a valid date in the past" });
       trigger = mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual";
       scope = { account, connection, mode, since };
       queueKey = `manual:${JSON.stringify(scope)}`;
@@ -151,17 +128,12 @@ export function registerActions(
         return { up, actual: { accounts, categories } };
       };
     } else {
-      return reply.code(404).send("Unknown action");
+      return reply.code(404).send({ error: "Unknown action" });
     }
     const accepted = runner.enqueue(queueKey, trigger, operation, scope);
-    if (request.headers["hx-request"] !== "true") return reply.redirect("/", 303);
-    return reply
-      .header("HX-Trigger", "refresh-status")
-      .type("text/html")
-      .send(
-        accepted
-          ? "Queued. Follow progress in Sync Status."
-          : "An action is already queued, or the queue is full. Please wait.",
-      );
+    const response: ActionResponse = accepted
+      ? { accepted, message: "Queued. Follow progress in Sync Status." }
+      : { accepted, message: "An action is already queued, or the queue is full. Please wait." };
+    return reply.code(accepted ? 202 : 409).send(response);
   });
 }

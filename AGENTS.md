@@ -2,15 +2,20 @@
 
 ## Structure
 
-- `src/` contains the TypeScript service, server-rendered htmx UI and CLI.
-- `assets/` contains the default Web Awesome stylesheet and browser helpers, bundled into `dist/`.
+- `src/` contains the TypeScript service, JSON API and CLI; `src/api.ts` and
+  `src/schemas.ts` are shared with the browser and may only import zod.
+- `web/` contains the React and Mantine browser app, built by Vite into `dist/public/`.
+- `web/src/vendor/mantinehub/` is an unmodified upstream copy; override it in `web/src/theme.ts`.
 - `test/` contains unit and in-memory integration tests.
 - `docs/` contains maintained operator documentation.
 
 ## Conventions
 
-- Use the default Web Awesome theme and component appearance; keep app CSS limited
-  to layout and operational feedback.
+- Build the UI only from Mantine components and props with the MantineHub shadcn
+  theme; add no CSS, raw HTML elements, `className` or `style` (oxlint enforces this).
+- Validate forms with the shared zod schemas and keep server responses JSON.
+- Use palette colour names (green, red, amber, gray) rather than semantic aliases;
+  the theme only generates text contrast for palette names.
 - Keep Up and Actual API field names unchanged.
 - Treat Up IDs as immutable bank identities and prefix Actual import IDs with `up:`.
 - Infer deletions from missing Up IDs only after a full-history read; partial
