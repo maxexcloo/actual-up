@@ -6,15 +6,8 @@ import { parse } from "yaml";
 import { z } from "zod";
 
 import { ConfigError } from "./errors.js";
+import { connectionId, httpUrl } from "./schemas.js";
 import { loadSettings, type ActualCredentials } from "./settings-store.js";
-
-export const connectionId = z.string().regex(/^[a-z][a-z0-9-]*$/);
-export const httpUrl = z
-  .url()
-  .refine(
-    (value) => ["http:", "https:"].includes(new URL(value).protocol),
-    "must use HTTP or HTTPS",
-  );
 
 const actualSchema = z.object({
   cacheDirectory: z.string().default("/tmp/actual-cache"),

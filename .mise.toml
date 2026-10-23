@@ -18,7 +18,10 @@ depends = [
 ]
 
 [tasks."check:oxlint"]
-run = "oxlint --deny-warnings src test"
+run = "oxlint --deny-warnings src test web"
+
+[tasks."check:typescript"]
+run = ["tsc --noEmit", "tsc --noEmit -p web"]
 
 [tasks.dev]
 run = "node dist/cli.js serve"

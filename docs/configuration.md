@@ -17,8 +17,8 @@ HTTPS URL, or supply `ACTUAL_UP_PUBLIC_URL` to override it through the environme
 The override goes through the same HTTP/HTTPS URL validation and rejects empty
 or invalid values. The effective URL sets the expected origin and turns on Secure
 cookies. Without it, actions must match the request's own origin. All POSTs, including sign-in,
-require a matching Origin. The login page and CSS are public; app pages and
-operations require a session. `/livez`, `/readyz` and `/metrics` remain available
+require a matching Origin. The app shell and its built assets are public;
+state and operations require a session. `/livez`, `/readyz` and `/metrics` remain available
 for cluster probes and monitoring.
 
 Serve the app behind exactly one reverse proxy, such as Kubelab's Traefik. The

@@ -1,0 +1,40 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react"],
+  "ignorePatterns": ["web/src/vendor/**"],
+  "overrides": [
+    {
+      "files": ["web/src/**/*.tsx"],
+      "rules": {
+        "react/forbid-component-props": ["error", { "forbid": ["className", "style"] }],
+        "react/forbid-dom-props": ["error", { "forbid": ["className", "style"] }],
+        "react/forbid-elements": [
+          "error",
+          {
+            "forbid": [
+              { "element": "a", "message": "use Anchor or Button" },
+              { "element": "button", "message": "use Button or ActionIcon" },
+              { "element": "details", "message": "use Accordion" },
+              { "element": "div", "message": "use Stack, Group, SimpleGrid or Card" },
+              { "element": "fieldset", "message": "use Fieldset" },
+              { "element": "h1", "message": "use Title" },
+              { "element": "h2", "message": "use Title" },
+              { "element": "h3", "message": "use Title" },
+              { "element": "h4", "message": "use Title" },
+              { "element": "input", "message": "use a Mantine input" },
+              { "element": "label", "message": "use the input's label prop" },
+              { "element": "li", "message": "use List.Item" },
+              { "element": "p", "message": "use Text" },
+              { "element": "section", "message": "use Card" },
+              { "element": "select", "message": "use Select" },
+              { "element": "span", "message": "use Text" },
+              { "element": "table", "message": "use Table" },
+              { "element": "textarea", "message": "use Textarea" },
+              { "element": "ul", "message": "use List" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

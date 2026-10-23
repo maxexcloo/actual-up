@@ -4,6 +4,7 @@ import type { AccountMapping, AppConfig } from "./config.js";
 import { ConfigError } from "./errors.js";
 import type { JobProgress } from "./job-runner.js";
 import type { Metrics } from "./metrics.js";
+import { HISTORY_START } from "./schemas.js";
 import type {
   ActualClient,
   ActualImportTransaction,
@@ -16,7 +17,7 @@ import type {
 const IMPORT_PREFIX = "up:";
 const END_DATE = "2999-12-31";
 /** A `since` value that reads full history, which also proves deletions. */
-export const HISTORY_START = "1970-01-01";
+export { HISTORY_START } from "./schemas.js";
 
 type Change = {
   converted: ActualImportTransaction;

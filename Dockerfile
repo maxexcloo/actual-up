@@ -7,9 +7,9 @@ WORKDIR /workspace
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY assets ./assets
 COPY src ./src
-COPY tsconfig.build.json tsconfig.json ./
+COPY web ./web
+COPY tsconfig.build.json tsconfig.json vite.config.ts ./
 RUN npm run build && npm prune --omit=dev
 
 FROM node:26.12.1-trixie-slim AS runtime

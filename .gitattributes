@@ -1,0 +1,2 @@
+# Upstream copy kept byte-for-byte.
+web/src/vendor/** -whitespace

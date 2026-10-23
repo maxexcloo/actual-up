@@ -3,33 +3,10 @@ import type { Logger } from "pino";
 
 import { ConfigError } from "./errors.js";
 import type { Metrics } from "./metrics.js";
+import type { Job, JobProgress, JobScope } from "./api.js";
 import type { SyncReport } from "./sync-engine.js";
 
-export type JobProgress = {
-  account?: string;
-  completed?: number;
-  stage: string;
-  total?: number;
-};
-
-export type JobScope = {
-  account?: string;
-  connection?: string;
-  mode?: "dry-run" | "live";
-  since?: string;
-  target?: string;
-};
-
-export type Job = {
-  id: string;
-  trigger: string;
-  state: "queued" | "running" | "success" | "warning" | "failure";
-  startedAt?: string;
-  finishedAt?: string;
-  result?: unknown;
-  progress?: JobProgress;
-  scope?: JobScope;
-};
+export type { Job, JobProgress, JobScope } from "./api.js";
 
 /** One queue owns complete operations, including reads and manual actions. */
 export class JobRunner {

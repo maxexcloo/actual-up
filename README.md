@@ -14,9 +14,9 @@ no separate application database or workflow platform.
 - Manage connections, API keys and nested account mappings on one page, with
   encrypted credential storage. Sync an account, a connection or everything.
 - Preview imports, run a sync, backfill from a date and discover account IDs.
-- Serve a responsive Web Awesome + htmx interface from the same process, using
-  the default theme, with password sign-in, same-origin checks and a light/dark
-  toggle that follows the browser by default.
+- Serve a responsive Mantine interface from the same process, using MantineHub's
+  shadcn theme, with password sign-in, same-origin checks and a light/dark toggle
+  that follows the browser by default.
 - Support multiple API keys, personal accounts and shared 2Up accounts. Each bank
   account is mapped once, with partner keys in fallback order, and imported with
   an `up:` identity.
@@ -75,10 +75,12 @@ See [configuration](docs/configuration.md) and [operations](docs/operations.md).
 Install the [shared Mise configuration](https://github.com/maxexcloo/dotfiles#shared-tools--tasks)
 before running local Mise tasks.
 
-The UI uses Web Awesome's default theme and controls. [Shell styles](assets/shell.css)
-hold the shared page layout and [app styles](assets/style.css) hold the
-removable account and sync layouts. For theme changes, use Web Awesome's `--wa-*`
-tokens instead of overriding individual components.
+The UI in `web/` is a React app built from Mantine components with
+[MantineHub's shadcn theme](web/src/vendor/mantinehub/README.md), light and dark.
+It has no stylesheets of its own: layout comes from Mantine props, and
+`.oxlintrc.json` rejects raw HTML elements, `className` and `style` in app code.
+Forms validate with the zod schemas in `src/schemas.ts`, which the server reuses.
+Theme changes belong in `web/src/theme.ts`.
 
 ```sh
 mise run check

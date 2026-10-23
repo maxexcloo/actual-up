@@ -1,84 +1,29 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { Server, IncomingMessage, ServerResponse } from "node:http";
+import { Cron } from "croner";
 import type { Logger } from "pino";
-import { z } from "zod";
+import type { AccountUpdate, ActionResponse, AppState, JobState } from "./api.js";
 import { assertActualCompatibility } from "./actual-version.js";
-import { connectionId, httpUrl, parseConfig, type AppConfig } from "./config.js";
+import { parseConfig, type AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
 import type { Runtime } from "./runtime.js";
+import { settingsCommand } from "./schemas.js";
 import { changeSettingsVersion, saveSettings, settingsVersion } from "./settings-store.js";
-import {
-  accountSettingsRow,
-  settingsPage,
-  type AccountUpdate,
-  type Discovery,
-} from "./settings-ui.js";
 import { HISTORY_START, type SyncEngine } from "./sync-engine.js";
 import { UpClient } from "./up-client.js";
 import type { UpClientLike } from "./types.js";
 
 class SettingsError extends ConfigError {}
 
-const fields = { revision: z.string() };
-const accountFields = {
-  upAccountId: z.string().uuid(),
-  viewConnection: connectionId.optional(),
+type Discovery = {
+  actual: Array<{ id: string; name: string }>;
+  actualUnavailable: boolean;
+  up: Array<{ id: string; name: string; connections: string[] }>;
+  unavailable: string[];
 };
-const accountContextSchema = z.object({
-  action: z.enum(["mapping", "remove-mapping"]),
-  ...accountFields,
-});
-const commandSchema = z.discriminatedUnion("action", [
-  z
-    .object({
-      ...fields,
-      action: z.literal("actual"),
-      serverUrl: httpUrl,
-      syncId: z.string().trim().min(1),
-      method: z.enum(["session", "password"]),
-      credential: z.string().max(8192).default(""),
-      encryptionPassword: z.string().max(8192).default(""),
-      clearEncryption: z.literal("true").optional(),
-    })
-    .strict(),
-  z.object({ ...fields, action: z.literal("discover") }).strict(),
-  z
-    .object({
-      ...fields,
-      action: z.literal("connection"),
-      id: connectionId.max(80),
-      token: z.string().trim().min(1).max(8192),
-    })
-    .strict(),
-  z
-    .object({
-      ...fields,
-      action: z.literal("remove-connection"),
-      id: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      ...fields,
-      ...accountFields,
-      action: z.literal("mapping"),
-      alias: z.string().trim().min(1).max(80),
-      actualAccountId: z.string().min(1),
-      connections: z
-        .union([z.string(), z.array(z.string())])
-        .transform((value) => (typeof value === "string" ? [value] : value)),
-    })
-    .strict(),
-  z
-    .object({
-      ...fields,
-      ...accountFields,
-      action: z.literal("remove-mapping"),
-    })
-    .strict(),
-]);
 
 export function registerSettings(
   server: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>,
@@ -95,36 +40,6 @@ export function registerSettings(
   let message = "";
   let discoveryAttempted = false;
   const accountUpdates = new Map<string, AccountUpdate>();
-  const accountRow = (id: string, update = accountUpdates.get(id), viewConnection?: string) => {
-    const mapping = config.mappings.find(({ upAccountId }) => upAccountId === id);
-    const account = discovery?.up.find((account) => account.id === id) ?? {
-      connections: mapping?.connections ?? [],
-      id,
-      name: mapping?.alias ?? "Account",
-    };
-    const primary = viewConnection ?? account.connections[0] ?? "";
-    const others = account.connections.filter((connection) => connection !== primary);
-    return (
-      accountSettingsRow(config, discovery, account, update, primary) +
-      others
-        .map((connection) =>
-          accountSettingsRow(config, discovery, account, update, connection, true),
-        )
-        .join("")
-    );
-  };
-  server.get<{ Params: { id: string }; Querystring: { connection?: string } }>(
-    "/accounts/:id",
-    async (request, reply) => {
-      const update = accountUpdates.get(request.params.id);
-      if (!update) return reply.code(404).send("Unknown account update");
-      if (update.pending) return reply.code(204).send();
-      return reply
-        .type("text/html")
-        .send(accountRow(request.params.id, update, request.query.connection));
-    },
-  );
-
   const discover = async (): Promise<Discovery> => {
     discoveryAttempted = true;
     let actual: Discovery["actual"] = [];
@@ -160,9 +75,85 @@ export function registerSettings(
     };
   };
 
-  server.get("/settings", async (_request, reply) => reply.redirect("/", 303));
-  server.get<{ Querystring: { pending?: string } }>("/", async (request, reply) => {
-    if (request.query.pending === "1" && busy) return reply.code(204).send();
+  const connectionTest = (target: string): JobState | undefined =>
+    runner.history.find((job) => job.trigger === "test-connection" && job.scope?.target === target)
+      ?.state;
+  const state = (): AppState => {
+    const credentials = config.secrets.actual;
+    const accounts = new Map<string, AppState["accounts"][number]>();
+    for (const { id, name, connections } of discovery?.up ?? [])
+      accounts.set(id, { id, name, connections: [...connections], revision: "" });
+    for (const mapping of config.mappings) {
+      const account = accounts.get(mapping.upAccountId) ?? {
+        id: mapping.upAccountId,
+        name: mapping.alias,
+        connections: [],
+        revision: "",
+      };
+      account.connections = [...new Set([...mapping.connections, ...account.connections])];
+      account.mapping = {
+        alias: mapping.alias,
+        actualAccountId: mapping.actualAccountId,
+        actualAccountName: discovery?.actual.find(({ id }) => id === mapping.actualAccountId)?.name,
+        connections: mapping.connections,
+      };
+      accounts.set(mapping.upAccountId, account);
+    }
+    for (const account of accounts.values()) {
+      account.revision = settingsVersion(account.id);
+      account.update = accountUpdates.get(account.id);
+    }
+    const cron = new Cron(config.schedule.cron, {
+      paused: true,
+      timezone: config.schedule.timezone,
+    });
+    const nextRun = config.schedule.enabled ? cron.nextRun()?.toISOString() : undefined;
+    cron.stop();
+    const body: Omit<AppState, "version"> = {
+      revision: settingsVersion(),
+      busy,
+      message,
+      schedule: {
+        enabled: config.schedule.enabled,
+        lookbackDays: config.schedule.lookbackDays,
+        cron: config.schedule.cron,
+        backfillCron: config.schedule.backfillCron,
+        timezone: config.schedule.timezone,
+        nextRun,
+      },
+      actual: {
+        serverUrl: config.actual.serverUrl,
+        syncId: config.actual.syncId ?? "",
+        method: credentials?.method ?? "session",
+        configured: Boolean(credentials),
+        encryptionPassword: Boolean(credentials?.encryptionPassword),
+        status: discovery?.actualUnavailable
+          ? "attention"
+          : credentials && discovery
+            ? "connected"
+            : credentials
+              ? "configured"
+              : "setup",
+        test: connectionTest("actual"),
+      },
+      actualAccounts: discovery && !discovery.actualUnavailable ? discovery.actual : undefined,
+      connections: config.up.connections.map(({ id }) => ({
+        id,
+        status: discovery?.unavailable.includes(id)
+          ? "attention"
+          : discovery
+            ? "connected"
+            : "unchecked",
+        test: connectionTest(`up-${id}`),
+      })),
+      accounts: [...accounts.values()],
+      jobs: [...runner.history],
+    };
+    const json = JSON.stringify(body);
+    return { version: createHash("sha256").update(json).digest("base64url"), ...body };
+  };
+
+  server.get("/state", async (request, reply) => {
     if (!discoveryAttempted && !busy && config.up.connections.length) {
       busy = true;
       const accepted = runner.enqueue("settings", "settings", async () => {
@@ -175,36 +166,19 @@ export function registerSettings(
       });
       if (!accepted) busy = false;
     }
-    return reply
-      .type("text/html")
-      .send(settingsPage(config, discovery, busy, message, runner, accountUpdates));
+    const current = state();
+    const etag = `"${current.version}"`;
+    reply.header("ETag", etag);
+    if (request.headers["if-none-match"] === etag) return reply.code(304).send();
+    return current;
   });
   server.post("/settings", async (request, reply) => {
-    const parsed = commandSchema.safeParse(request.body);
-    // Invalid account fields still need an error fragment for the submitted row.
-    const context = accountContextSchema.safeParse(request.body);
-    const accountId = context.success ? context.data.upAccountId : undefined;
-    const viewConnection = context.success ? context.data.viewConnection : undefined;
+    const parsed = settingsCommand.safeParse(request.body);
+    const accountId =
+      parsed.success && "upAccountId" in parsed.data ? parsed.data.upAccountId : undefined;
     const revision = () => settingsVersion(accountId);
-    const reject = (code: number, explanation: string) =>
-      reply
-        .code(code)
-        .type("text/html")
-        .send(
-          accountId && request.headers["hx-request"] === "true"
-            ? accountRow(
-                accountId,
-                {
-                  failed: true,
-                  message: explanation,
-                  pending: false,
-                },
-                viewConnection,
-              )
-            : settingsPage(config, discovery, busy, explanation, runner, accountUpdates),
-        );
-    if (!parsed.success)
-      return reject(400, "Invalid settings. Reload the setup page and try again.");
+    const reject = (code: number, error: string) => reply.code(code).send({ error });
+    if (!parsed.success) return reject(400, "Invalid settings. Reload the page and try again.");
     const command = parsed.data;
     if (
       busy ||
@@ -449,11 +423,9 @@ export function registerSettings(
         message = "The queue is full. Please try again shortly.";
       }
     }
-    if (accountId && request.headers["hx-request"] === "true")
-      return reply
-        .header("HX-Trigger", "refresh-status")
-        .type("text/html")
-        .send(accountRow(accountId, accountUpdates.get(accountId), viewConnection));
-    return reply.redirect("/", 303);
+    const response: ActionResponse = accepted
+      ? { accepted, message: accountId ? "Save queued." : "Applying your changes…" }
+      : { accepted, message: "The queue is full. Please try again shortly." };
+    return reply.code(accepted ? 202 : 503).send(response);
   });
 }

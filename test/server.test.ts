@@ -4,7 +4,6 @@ import { parseConfig } from "../src/config.js";
 import { JobRunner } from "../src/job-runner.js";
 import { Metrics } from "../src/metrics.js";
 import { createServer } from "../src/server.js";
-import { statusVersion } from "../src/ui.js";
 import type { SyncEngine } from "../src/sync-engine.js";
 import type { ActualClient, UpClientLike } from "../src/types.js";
 
@@ -84,13 +83,10 @@ async function fixture() {
   const login = await server.inject({
     method: "POST",
     url: "/login",
-    headers: {
-      origin: config.server.publicUrl ?? "http://localhost:80",
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    payload: `username=operator&password=${password}`,
+    headers: { origin: config.server.publicUrl ?? "http://localhost:80" },
+    payload: { username: "operator", password },
   });
-  expect(login.statusCode).toBe(303);
+  expect(login.statusCode).toBe(204);
   headers.cookie = String(login.headers["set-cookie"]).split(";")[0]!;
   return { actual, client, config, engine, runner, server };
 }
@@ -98,25 +94,23 @@ async function fixture() {
 const headers = {
   cookie: "",
   origin: "http://localhost:80",
-  "content-type": "application/x-www-form-urlencoded",
-  "hx-request": "true",
 };
 
 describe("operator app", () => {
   it("returns client errors for unsupported and oversized bodies", async () => {
     const { server } = await fixture();
-    const json = await server.inject({
+    const form = await server.inject({
       method: "POST",
       url: "/actions/sync",
-      headers: { ...headers, "content-type": "application/json" },
-      payload: "{}",
+      headers: { ...headers, "content-type": "application/x-www-form-urlencoded" },
+      payload: "mode=live",
     });
-    expect(json.statusCode).toBe(415);
+    expect(form.statusCode).toBe(415);
     const large = await server.inject({
       method: "POST",
       url: "/actions/sync",
       headers,
-      payload: `mode=live&since=${"x".repeat(70_000)}`,
+      payload: { mode: "live", since: "x".repeat(70_000) },
     });
     expect(large.statusCode).toBe(413);
   });
@@ -128,85 +122,78 @@ describe("operator app", () => {
       method: "POST",
       url: "/login",
       headers: { ...headers, origin: "https://private.example.com" },
-      payload: `username=operator&password=${password}`,
+      payload: { username: "operator", password },
     });
-    expect(login.statusCode).toBe(303);
+    expect(login.statusCode).toBe(204);
     expect(String(login.headers["set-cookie"])).toContain("; Secure");
     const rejected = await server.inject({
       method: "POST",
       url: "/login",
       headers,
-      payload: `username=operator&password=${password}`,
+      payload: { username: "operator", password },
     });
     expect(rejected.statusCode).toBe(403);
   });
 
-  it("protects the app, assets and actions, while allowing probes", async () => {
+  it("serves the app shell publicly, but protects state and actions, while allowing probes", async () => {
     const { server, runner } = await fixture();
-    for (const url of ["/", "/settings", "/runs", "/assets/htmx.js"])
-      expect((await server.inject(url)).statusCode).toBe(303);
+    for (const url of ["/", "/login"]) {
+      const shell = await server.inject(url);
+      expect(shell.statusCode).toBe(200);
+      expect(shell.body).toContain('<div id="root">');
+      const nonce = /'nonce-([^']+)'/.exec(String(shell.headers["content-security-policy"]))?.[1];
+      expect(nonce).toBeTruthy();
+      expect(shell.body).toContain(`<meta name="style-nonce" content="${nonce}"`);
+    }
+    const script = /src="(\/assets\/[^"]+\.js)"/.exec((await server.inject("/")).body)?.[1];
+    expect((await server.inject(script!)).statusCode).toBe(200);
+    for (const url of ["/state", "/settings"])
+      expect((await server.inject(url)).statusCode).toBe(401);
     expect(
       (
         await server.inject({
           method: "POST",
-          payload: "mode=live",
+          payload: { mode: "live" },
           url: "/actions/sync",
-          headers: {
-            "content-type": headers["content-type"],
-            origin: headers.origin,
-          },
+          headers: { origin: headers.origin },
         })
       ).statusCode,
-    ).toBe(303);
+    ).toBe(401);
     expect(runner.depth).toBe(0);
     expect((await server.inject("/livez")).statusCode).toBe(200);
-    const page = await server.inject({
-      headers,
-      url: "/",
-    });
-    expect(page.statusCode).toBe(200);
-    expect(page.body).toContain("Automatic Sync On");
-    expect(page.headers["cache-control"]).toBe("no-store");
-    expect(page.body).not.toContain(password);
+    const state = await server.inject({ headers, url: "/state" });
+    expect(state.statusCode).toBe(200);
+    expect(state.json().schedule.enabled).toBe(true);
+    expect(state.headers["cache-control"]).toBe("no-store");
+    expect(state.body).not.toContain(password);
   });
 
-  it("uses a normal login page, rejects cross-site login and invalidates sessions on logout", async () => {
+  it("signs in with JSON, rejects cross-site login and invalidates sessions on logout", async () => {
     const { server } = await fixture();
-    const page = await server.inject("/login");
-    expect(page.statusCode).toBe(200);
-    expect(page.body).toContain('autocomplete="current-password"');
-    expect(page.headers["www-authenticate"]).toBeUndefined();
     expect(
       (
         await server.inject({
           method: "POST",
           url: "/login",
           headers: { ...headers, origin: "https://other.example" },
-          payload: "username=operator&password=wrong",
+          payload: { username: "operator", password: "wrong" },
         })
       ).statusCode,
     ).toBe(403);
     const rejected = await server.inject({
       headers,
       method: "POST",
-      payload: "username=operator&password=wrong",
+      payload: { username: "operator", password: "wrong" },
       url: "/login",
     });
     expect(rejected.statusCode).toBe(401);
+    expect(rejected.json().error).toBe("Incorrect username or password.");
     expect(rejected.headers["set-cookie"]).toBeUndefined();
-    const logout = await server.inject({
-      headers,
-      method: "POST",
-      payload: "",
-      url: "/logout",
-    });
+    expect(rejected.headers["www-authenticate"]).toBeUndefined();
+    const logout = await server.inject({ headers, method: "POST", url: "/logout" });
+    expect(logout.statusCode).toBe(204);
     expect(logout.headers["set-cookie"]).toContain("Max-Age=0");
-    const expired = await server.inject({ headers, url: "/runs" });
-    expect(expired.statusCode).toBe(200);
-    expect(expired.headers["hx-redirect"]).toBe("/login");
-    expect(
-      (await server.inject({ url: "/", headers: { cookie: headers.cookie } })).statusCode,
-    ).toBe(303);
+    expect((await server.inject({ headers, url: "/state" })).statusCode).toBe(401);
   });
 
   it("limits sign-in attempts by the client address the proxy forwarded", async () => {
@@ -215,7 +202,7 @@ describe("operator app", () => {
       server.inject({
         headers: { ...headers, "x-forwarded-for": forwarded },
         method: "POST",
-        payload: "username=operator&password=wrong",
+        payload: { username: "operator", password: "wrong" },
         url: "/login",
       });
     for (let index = 0; index < 10; index += 1)
@@ -232,33 +219,47 @@ describe("operator app", () => {
     expect(
       (
         await server.inject({
-          url: "/",
+          url: "/state",
           headers: { cookie: "actual_up_session=forged" },
         })
       ).statusCode,
-    ).toBe(303);
+    ).toBe(401);
     const now = Date.now();
     const clock = vi.spyOn(Date, "now").mockReturnValue(now + 8 * 60 * 60 * 1000 + 1);
     try {
       expect(
-        (await server.inject({ url: "/", headers: { cookie: headers.cookie } })).statusCode,
-      ).toBe(303);
+        (await server.inject({ url: "/state", headers: { cookie: headers.cookie } })).statusCode,
+      ).toBe(401);
     } finally {
       clock.mockRestore();
     }
   });
 
-  it("leaves an unchanged status panel intact and detects background runs", async () => {
+  it("answers unchanged state polls without a body and reports background runs", async () => {
     const { server, runner } = await fixture();
-    const version = statusVersion(runner);
-    const url = `/runs?version=${encodeURIComponent(version)}`;
-    expect((await server.inject({ headers, url })).statusCode).toBe(204);
+    const first = await server.inject({ headers, url: "/state" });
+    await runner.drain();
+    const settled = await server.inject({ headers, url: "/state" });
+    const etag = String(settled.headers.etag);
+    expect(etag).not.toBe(String(first.headers.etag));
+    const unchanged = await server.inject({
+      headers: { ...headers, "if-none-match": etag },
+      url: "/state",
+    });
+    expect(unchanged.statusCode).toBe(304);
+    expect(unchanged.body).toBe("");
     runner.enqueue("schedule", "schedule", async () => report);
     await runner.drain();
-    const response = await server.inject({ headers, url });
+    const response = await server.inject({
+      headers: { ...headers, "if-none-match": etag },
+      url: "/state",
+    });
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain("Scheduled Sync");
-    expect(response.body).toContain("Imported");
+    expect(response.json().jobs[0]).toMatchObject({
+      trigger: "schedule",
+      state: "success",
+      result: { imported: 1 },
+    });
   });
 
   it("rejects cross-site writes, invalid dates and unknown account aliases", async () => {
@@ -268,16 +269,16 @@ describe("operator app", () => {
         (
           await server.inject({
             method: "POST",
-            payload: "mode=live",
+            payload: { mode: "live" },
             url: "/actions/sync",
             headers: { ...headers, origin },
           })
         ).statusCode,
       ).toBe(403);
     for (const payload of [
-      "mode=live&since=2026-02-30",
-      "mode=live&account=missing",
-      "mode=unknown",
+      { mode: "live", since: "2026-02-30" },
+      { mode: "live", account: "missing" },
+      { mode: "unknown" },
     ])
       expect(
         (
@@ -295,7 +296,7 @@ describe("operator app", () => {
           method: "POST",
           url: "/settings",
           headers: { ...headers, origin: "https://attacker.example" },
-          payload: "action=discover",
+          payload: { action: "discover" },
         })
       ).statusCode,
     ).toBe(403);
@@ -307,10 +308,14 @@ describe("operator app", () => {
     const response = await server.inject({
       headers,
       method: "POST",
-      payload: "mode=dry-run&account=spending&since=2025-01-01",
+      payload: { mode: "dry-run", account: "spending", since: "2025-01-01" },
       url: "/actions/sync",
     });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      accepted: true,
+      message: "Queued. Follow progress in Sync Status.",
+    });
     await runner.drain();
     expect(engine.reconcile).toHaveBeenCalledWith({
       dryRun: true,
@@ -336,7 +341,7 @@ describe("operator app", () => {
       await server.inject({
         headers,
         method: "POST",
-        payload: "mode=live&account=spending",
+        payload: { mode: "live", account: "spending" },
         url: "/actions/sync",
       });
       if (change === "renamed") config.mappings[0]!.alias = "new-name";
@@ -374,7 +379,7 @@ describe("operator app", () => {
       await server.inject({
         headers,
         method: "POST",
-        payload: `mode=live&connection=${connection}`,
+        payload: { mode: "live", connection },
         url: "/actions/sync",
       });
       await runner.drain();
@@ -385,79 +390,73 @@ describe("operator app", () => {
         since: undefined,
       });
     }
-    for (const scope of ["connection=missing", "connection=max&account=spending"])
+    for (const scope of [{ connection: "missing" }, { connection: "max", account: "spending" }])
       expect(
         (
           await server.inject({
             headers,
             method: "POST",
-            payload: `mode=live&${scope}`,
+            payload: { mode: "live", ...scope },
             url: "/actions/sync",
           })
         ).statusCode,
       ).toBe(400);
   });
 
-  it("tests Actual and individual Up connections without importing, and reports safe inline failures", async () => {
+  it("tests Actual and individual Up connections without importing, and reports safe failures", async () => {
     const { server, runner, actual, client, engine } = await fixture();
-    for (const payload of ["target=actual", "target=up&connection=max"]) {
+    for (const payload of [{ target: "actual" }, { target: "up", connection: "max" }]) {
       const queued = await server.inject({
         headers,
         method: "POST",
         payload,
         url: "/actions/test",
       });
-      expect(queued.statusCode).toBe(200);
+      expect(queued.statusCode).toBe(202);
       await runner.drain();
     }
     expect(actual.getServerVersion).toHaveBeenCalledOnce();
     expect(client.ping).toHaveBeenCalledOnce();
     expect(engine.reconcile).not.toHaveBeenCalled();
     expect(actual.sync).not.toHaveBeenCalled();
-    const result = await server.inject({
-      headers,
-      url: "/connection-tests/up-max",
-    });
-    expect(result.body).toContain("Connection Working");
+    const state = async () => (await server.inject({ headers, url: "/state" })).json();
+    expect((await state()).connections[0].test).toBe("success");
+    expect((await state()).actual.test).toBe("success");
     client.ping.mockRejectedValueOnce(new Error("sensitive-token"));
     await server.inject({
       headers,
       method: "POST",
-      payload: "target=up&connection=max",
+      payload: { target: "up", connection: "max" },
       url: "/actions/test",
     });
     await runner.drain();
-    const failed = await server.inject({
-      headers,
-      url: "/connection-tests/up-max",
-    });
-    expect(failed.body).toContain("Connection Failed");
+    const failed = await server.inject({ headers, url: "/state" });
+    expect(failed.json().connections[0].test).toBe("failure");
     expect(failed.body).not.toContain("sensitive-token");
     expect(
       (
         await server.inject({
           headers,
           method: "POST",
-          payload: "target=up&connection=missing",
+          payload: { target: "up", connection: "missing" },
           url: "/actions/test",
         })
       ).statusCode,
     ).toBe(400);
   });
 
-  it("keeps discovery balances out of results and escapes upstream names", async () => {
+  it("keeps discovery balances out of results", async () => {
     const { server, runner } = await fixture();
     await server.inject({
       headers,
       method: "POST",
-      payload: "",
       url: "/actions/discover",
     });
     await runner.drain();
-    const response = await server.inject({ headers, url: "/runs" });
+    const response = await server.inject({ headers, url: "/state" });
     expect(response.body).not.toContain("sensitive-balance");
-    expect(response.body).not.toContain("<script>alert");
-    expect(response.body).toContain("&lt;script&gt;");
+    // Names stay data; the browser renders them as text.
+    expect(JSON.stringify(response.json().jobs)).toContain("<script>alert(1)</script>");
   });
 
   it("derives connection-test progress from the queue and coalesces duplicate requests", async () => {
@@ -476,28 +475,25 @@ describe("operator app", () => {
       server.inject({
         headers,
         method: "POST",
-        payload: "target=up&connection=max",
+        payload: { target: "up", connection: "max" },
         url: "/actions/test",
       });
+    const test = async () =>
+      (await server.inject({ headers, url: "/state" })).json().connections[0].test;
     try {
-      expect((await request()).body).toContain("Testing Connection");
+      expect((await request()).json()).toEqual({
+        accepted: true,
+        message: "Testing connection…",
+      });
       expect(runner.history[0]).toMatchObject({ state: "queued", scope: { target: "up-max" } });
-      await request();
+      expect((await request()).statusCode).toBe(202);
       expect(runner.depth).toBe(2);
       releaseQueue();
       await vi.waitFor(() => expect(client.ping).toHaveBeenCalledOnce());
-      expect(runner.history[0]?.state).toBe("running");
-      expect((await server.inject({ headers, url: "/connection-tests/up-max" })).body).toContain(
-        "Testing Connection",
-      );
+      expect(await test()).toBe("running");
       releaseTest();
       await runner.drain();
-      expect((await server.inject({ headers, url: "/connection-tests/up-max" })).body).toContain(
-        "Connection Working",
-      );
-      expect((await server.inject({ headers, url: "/connection-tests/unknown" })).statusCode).toBe(
-        404,
-      );
+      expect(await test()).toBe("success");
     } finally {
       releaseQueue();
       releaseTest();

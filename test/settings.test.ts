@@ -10,6 +10,7 @@ import { Metrics } from "../src/metrics.js";
 import { registerSettings } from "../src/settings.js";
 import { connectionToken, loadSettings, settingsVersion } from "../src/settings-store.js";
 import type { SyncEngine } from "../src/sync-engine.js";
+import type { AppState } from "../src/api.js";
 import type { ActualClient, UpClientLike } from "../src/types.js";
 
 const upId = "11111111-1111-4111-8111-111111111111";
@@ -88,6 +89,10 @@ async function fixture() {
     if (drain) await runner.drain();
     return result;
   };
+  const update = async (id: string) =>
+    ((await server.inject("/state")).json() as AppState).accounts.find(
+      (account) => account.id === id,
+    )?.update;
   const mapping = {
     action: "mapping",
     actualAccountId: "actual-id",
@@ -106,11 +111,12 @@ async function fixture() {
     post,
     runner,
     server,
+    update,
   };
 }
 
 describe("browser setup", () => {
-  it("keeps invalid shared-account submissions within their account rows", async () => {
+  it("rejects invalid account submissions without changing the mapping", async () => {
     const f = await fixture();
     await f.post({
       action: "connection",
@@ -122,47 +128,40 @@ describe("browser setup", () => {
     const response = await f.server.inject({
       method: "POST",
       url: "/settings",
-      headers: { "hx-request": "true" },
-      payload: {
-        ...mapping,
-        revision: settingsVersion(upId),
-        viewConnection: "max",
-      },
+      payload: { ...mapping, revision: settingsVersion(upId) },
     });
     expect(response.statusCode).toBe(400);
-    expect(response.body).toContain(`id="account-max-${upId}"`);
-    expect(response.body).toContain(`id="account-partner-${upId}"`);
-    expect(response.body).toContain("Invalid settings.");
-    expect(response.body).not.toContain("<!doctype html>");
-    expect(response.body).not.toContain('id="setup"');
+    expect(response.json()).toEqual({ error: "Invalid settings. Reload the page and try again." });
     expect(f.config.mappings[0]?.connections).toEqual(["max", "partner"]);
   });
 
-  it("discovers accounts without balances, escapes names and never exposes keys", async () => {
+  it("discovers accounts without balances and never exposes keys", async () => {
     const f = await fixture();
     await f.post({ action: "discover" });
-    const page = await f.server.inject("/");
-    expect(page.body).toContain("&lt;script&gt;");
-    expect(page.body).not.toContain("<script>bad");
+    const page = await f.server.inject("/state");
+    expect(page.json().accounts[0].name).toBe("<script>bad</script>");
     expect(page.body).not.toContain("private-balance");
     expect(page.body).not.toContain("test-secret-never-render");
   });
 
   it("discovers automatically on first visit and after adding a connection", async () => {
     const f = await fixture();
-    await f.server.inject("/");
+    await f.server.inject("/state");
     await f.runner.drain();
     expect(f.client.listAccounts).toHaveBeenCalledOnce();
-    const page = await f.server.inject("/");
-    expect(page.body).toContain('data-connection="max"');
-    expect(page.body).toContain('data-account="11111111-1111-4111-8111-111111111111"');
+    const page = (await f.server.inject("/state")).json();
+    expect(page.connections.map(({ id }: { id: string }) => id)).toEqual(["max"]);
+    expect(page.accounts[0]).toMatchObject({ id: upId, connections: ["max"] });
     await f.post({
       action: "connection",
       id: "partner",
       token: "partner-secret",
     });
-    const updated = await f.server.inject("/");
-    expect(updated.body).toContain('data-connection="partner"');
+    const updated = await f.server.inject("/state");
+    expect(updated.json().connections.map(({ id }: { id: string }) => id)).toEqual([
+      "max",
+      "partner",
+    ]);
     expect(updated.body).not.toContain("partner-secret");
   });
 
@@ -173,7 +172,7 @@ describe("browser setup", () => {
       expect((await loadSettings(f.config)).mappings).toHaveLength(1);
       return { failed: 0, imported: 1 };
     });
-    expect((await f.post(f.mapping)).statusCode).toBe(303);
+    expect((await f.post(f.mapping)).statusCode).toBe(202);
     expect(f.engine.reconcile).toHaveBeenCalledWith({
       since: "1970-01-01",
       progress: expect.any(Function),
@@ -236,18 +235,16 @@ describe("browser setup", () => {
       token: "another-secret",
     });
     await f.post({ ...f.mapping, connections: ["max", "partner"] });
-    const page = await f.server.inject({ method: "GET", url: "/" });
-    expect(page.body).toContain('id="settings-connection-max"');
-    expect(page.body).toContain('id="settings-connection-partner"');
-    expect(page.body).toContain('id="settings-connection-global"');
-    const rows = await f.server.inject({
-      method: "GET",
-      url: `/accounts/${upId}?connection=max`,
+    const page = (await f.server.inject("/state")).json();
+    expect(page.accounts).toHaveLength(1);
+    expect(page.accounts[0]).toMatchObject({
+      connections: ["max", "partner"],
+      mapping: {
+        alias: "spending",
+        actualAccountName: "Spending",
+        connections: ["max", "partner"],
+      },
     });
-    expect(rows.body).toContain(`<div class="account-row wa-stack" id="account-max-${upId}"`);
-    expect(rows.body).toContain(
-      `<div hx-swap-oob="outerHTML" class="account-row wa-stack" id="account-partner-${upId}"`,
-    );
     f.clients.set("max", {
       listAccounts: vi.fn().mockRejectedValue(new Error("unavailable")),
     } as unknown as UpClientLike);
@@ -306,7 +303,8 @@ describe("browser setup", () => {
     expect(f.config.actual.serverUrl).toBe("http://new-actual");
     expect((await loadSettings(f.config)).secrets.actual?.credential).toBe("actual-secret-token");
     expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("actual-secret-token");
-    const page = await f.server.inject("/");
+    const page = await f.server.inject("/state");
+    expect(page.json().actual).toMatchObject({ configured: true, method: "session" });
     expect(page.body).not.toContain("actual-secret-token");
     await f.post({ ...command, credential: "" });
     expect(f.config.secrets.actual?.credential).toBe("actual-secret-token");
@@ -352,7 +350,6 @@ describe("browser setup", () => {
       f.server.inject({
         method: "POST",
         url: "/settings",
-        headers: { "hx-request": "true" },
         payload: {
           ...f.mapping,
           alias: id === upId ? "Everyday" : "Savings",
@@ -364,24 +361,23 @@ describe("browser setup", () => {
     try {
       const first = await submit(upId, "actual-id");
       const second = await submit(secondId, "actual-2");
-      expect(first.statusCode).toBe(200);
-      expect(second.statusCode).toBe(200);
-      expect(first.body).not.toContain('id="setup"');
-      expect(first.body).not.toContain(secondId);
+      expect(first.statusCode).toBe(202);
+      expect(second.statusCode).toBe(202);
+      expect(first.json()).toEqual({ accepted: true, message: "Save queued." });
       expect((await submit(upId, "actual-id")).statusCode).toBe(409);
-      expect((await f.server.inject(`/accounts/${secondId}`)).statusCode).toBe(204);
+      expect((await f.update(secondId))?.pending).toBe(true);
     } finally {
       release();
     }
     await f.runner.drain();
     expect(f.config.mappings).toHaveLength(2);
     expect(f.engine.reconcile).toHaveBeenCalledTimes(2);
-    expect((await f.server.inject(`/accounts/${secondId}`)).body).toContain("Saved.");
+    expect((await f.update(secondId))?.message).toContain("Saved.");
     await f.post({ action: "remove-mapping", upAccountId: secondId });
     await submit(secondId, "actual-id");
     await f.runner.drain();
     expect(f.config.mappings).toHaveLength(1);
-    expect((await f.server.inject(`/accounts/${secondId}`)).body).toContain("only be mapped once");
+    expect((await f.update(secondId))?.message).toContain("only be mapped once");
   });
 
   it("keeps other account saves available while history backfills", async () => {
@@ -412,12 +408,8 @@ describe("browser setup", () => {
     await f.post(f.mapping, false);
     await vi.waitFor(() => expect(release).toBeDefined());
     try {
-      const first = await f.server.inject(`/accounts/${upId}`);
-      expect(first.statusCode).toBe(200);
-      expect(first.body).toContain("backfill queued");
-      const page = await f.server.inject("/");
-      expect(page.body).not.toContain('hx-get="/?pending=1"');
-      expect(page.body).not.toContain("Updating connections…");
+      expect((await f.update(upId))?.message).toContain("backfill queued");
+      expect((await f.server.inject("/state")).json().busy).toBe(false);
       const second = await f.post(
         {
           ...f.mapping,
@@ -428,7 +420,7 @@ describe("browser setup", () => {
         },
         false,
       );
-      expect(second.statusCode).toBe(303);
+      expect(second.statusCode).toBe(202);
       expect(f.config.mappings).toHaveLength(1);
     } finally {
       release();
