@@ -1,0 +1,8 @@
+[providers.kubelab-syd]
+type = "1password"
+vault = "Kubelab SYD"
+
+[secrets]
+ACTUAL_UP_ENCRYPTION_KEY = { provider = "kubelab-syd", value = "Actual Up/encryption-key" }
+ACTUAL_UP_PASSWORD = { provider = "kubelab-syd", value = "Actual Up/password" }
+ACTUAL_UP_USERNAME = { provider = "kubelab-syd", value = "Actual Up/username" }

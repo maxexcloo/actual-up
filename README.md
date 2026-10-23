@@ -30,9 +30,9 @@ mise run setup
 cp config.example.yaml config.local.yaml
 ```
 
-Set `ACTUAL_UP_USERNAME`, `ACTUAL_UP_PASSWORD` and a random
-`ACTUAL_UP_ENCRYPTION_KEY` (at least 32 characters) in your environment, or inject
-them with 1Password CLI. Then run:
+`mise run dev` reads `ACTUAL_UP_USERNAME`, `ACTUAL_UP_PASSWORD` and
+`ACTUAL_UP_ENCRYPTION_KEY` from the `Actual Up` 1Password item through `fnox.toml`.
+Then run:
 
 ```sh
 mise run dev -- --config ./config.local.yaml
