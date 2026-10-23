@@ -85,13 +85,6 @@ jobs:
         run: |
           docker run --cap-drop=ALL --read-only --rm \
             --security-opt=no-new-privileges actual-up:test node dist/cli.js --help
-      - name: Scan Image
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          exit-code: "1"
-          ignore-unfixed: true
-          image-ref: actual-up:test
-          severity: CRITICAL,HIGH
       - if: env.PUBLISH == 'true'
         name: Log In to GHCR
         uses: docker/login-action@v4

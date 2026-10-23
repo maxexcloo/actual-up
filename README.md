@@ -61,7 +61,7 @@ be rebuilt. Put the app behind one private HTTPS reverse proxy. The app login an
 settings encryption key come from environment variables, and upstream
 credentials are managed in the browser.
 
-The GitHub Container workflow builds, smoke-tests and scans the image before
+The GitHub Container workflow builds and smoke-tests the image before
 publishing it to `ghcr.io/maxexcloo/actual-up`. Pushes to `main` other than
 Markdown-only changes publish `latest` and `sha-<full-commit>`. Version tags such as `v0.1.0`
 publish `0.1.0` and `0.1`. Pull requests test and verify the image without
