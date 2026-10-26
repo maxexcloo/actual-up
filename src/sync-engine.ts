@@ -2,7 +2,7 @@ import type { Logger } from "pino";
 
 import type { AccountMapping, AppConfig } from "./config.js";
 import { ConfigError } from "./errors.js";
-import type { JobProgress } from "./job-runner.js";
+import type { AccountIssue, JobProgress, SyncCounts, SyncReport } from "./api.js";
 import type { Metrics } from "./metrics.js";
 import { HISTORY_START } from "./schemas.js";
 import type {
@@ -30,22 +30,6 @@ type CategoryUpdate = {
   categoryId: string;
   importedId: string;
   unchanged: boolean;
-};
-
-export type SyncCounts = {
-  conflicts: number;
-  deleted: number;
-  failed: number;
-  imported: number;
-  inspected: number;
-  unchanged: number;
-  updated: number;
-};
-
-export type SyncReport = SyncCounts & {
-  accounts: Array<SyncCounts & { account: string; issue?: string }>;
-  preview: boolean;
-  publication: "not-required" | "pending" | "published" | "failed";
 };
 
 type SyncOptions = {
@@ -110,7 +94,7 @@ export class SyncEngine {
       const accountReport = {
         ...emptyCounts(),
         account: mapping.alias,
-        issue: undefined as string | undefined,
+        issue: undefined as AccountIssue | undefined,
       };
       let stage = "Read Actual";
       const progress = (next: string) => {

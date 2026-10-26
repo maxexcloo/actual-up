@@ -28,6 +28,24 @@ export type Job = {
   scope?: JobScope;
 };
 
+export type SyncCounts = {
+  conflicts: number;
+  deleted: number;
+  failed: number;
+  imported: number;
+  inspected: number;
+  unchanged: number;
+  updated: number;
+};
+
+export type AccountIssue = "actual-unavailable" | "actual-write-failed" | "up-unavailable";
+
+export type SyncReport = SyncCounts & {
+  accounts: Array<SyncCounts & { account: string; issue?: AccountIssue }>;
+  preview: boolean;
+  publication: "not-required" | "pending" | "published" | "failed";
+};
+
 export type AccountUpdate = {
   pending: boolean;
   message: string;

@@ -3,8 +3,7 @@ import type { Logger } from "pino";
 
 import { ConfigError } from "./errors.js";
 import type { Metrics } from "./metrics.js";
-import type { Job, JobProgress, JobScope } from "./api.js";
-import type { SyncReport } from "./sync-engine.js";
+import type { Job, JobProgress, JobScope, SyncReport } from "./api.js";
 
 export type { Job, JobProgress, JobScope } from "./api.js";
 
