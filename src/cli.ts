@@ -6,7 +6,6 @@ import { loadConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import { JobRunner } from "./job-runner.js";
-import { assertActualCompatibility } from "./actual-version.js";
 import { createRuntime } from "./runtime.js";
 import { startService } from "./server.js";
 
@@ -50,7 +49,6 @@ program
     const runtime = await createRuntime(config);
     try {
       const validation = await runtime.engine.validate();
-      assertActualCompatibility(validation.actualVersion);
       process.stdout.write(`${JSON.stringify({ ok: true, ...validation }, null, 2)}\n`);
     } finally {
       await runtime.actual.close();

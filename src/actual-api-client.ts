@@ -42,9 +42,7 @@ export class ActualApiClient implements ActualClient {
           ? { password: credentials.credential }
           : { sessionToken: credentials.credential }),
       });
-      const version = await api.getServerVersion();
-      if ("error" in version) throw new Error("Actual server check failed");
-      assertActualCompatibility(version.version);
+      await this.serverVersion();
       await api.downloadBudget(syncId, {
         password: credentials.encryptionPassword,
       });
@@ -63,8 +61,14 @@ export class ActualApiClient implements ActualClient {
 
   async getServerVersion(): Promise<string> {
     await this.open();
+    return this.serverVersion();
+  }
+
+  /** Every version read rejects a server the pinned API cannot talk to. */
+  private async serverVersion(): Promise<string> {
     const result = await api.getServerVersion();
-    if ("error" in result) throw new Error(`Actual server check failed: ${result.error}`);
+    if ("error" in result) throw new Error("Actual server check failed");
+    assertActualCompatibility(result.version);
     return result.version;
   }
 

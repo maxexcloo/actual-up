@@ -1,4 +1,4 @@
-import type { Job, JobState } from "../../src/api.js";
+import type { AccountIssue, Job, JobState, SyncCounts, SyncReport } from "../../src/api.js";
 
 export const syncTriggers = new Set([
   "automatic-backfill",
@@ -100,21 +100,6 @@ export function summarise(jobs: readonly Job[]) {
   };
 }
 
-export type SyncReport = {
-  preview?: boolean;
-  publication?: "published" | "failed" | "not-required";
-  accounts?: Array<{
-    account: string;
-    failed?: boolean;
-    issue?: string;
-    imported: number;
-    updated: number;
-    unchanged: number;
-    deleted: number;
-    conflicts?: number;
-  }>;
-} & Partial<Record<(typeof reportFields)[number], number>>;
-
 export const reportFields = [
   "inspected",
   "imported",
@@ -123,12 +108,12 @@ export const reportFields = [
   "deleted",
   "conflicts",
   "failed",
-] as const;
+] as const satisfies ReadonlyArray<keyof SyncCounts>;
 
 export const isReport = (value: unknown): value is SyncReport =>
   typeof value === "object" && value !== null && "inspected" in value;
 
-export const accountIssues: Record<string, string> = {
+export const accountIssues: Record<AccountIssue, string> = {
   "up-unavailable": "Could not read Up. Test this account’s Up connections and retry.",
   "actual-unavailable": "Could not read Actual. Test the Actual connection and check the mapping.",
   "actual-write-failed": "Could not apply changes in Actual. Check the account mapping and retry.",

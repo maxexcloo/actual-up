@@ -7,7 +7,6 @@ import type { AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
-import { assertActualCompatibility } from "./actual-version.js";
 import type { Runtime } from "./runtime.js";
 import { syncForm, testForm } from "./schemas.js";
 import type { SyncEngine } from "./sync-engine.js";
@@ -34,7 +33,7 @@ export function registerActions(
       `test:${id}`,
       "test-connection",
       async () => {
-        if (target === "actual") assertActualCompatibility(await runtime.actual.getServerVersion());
+        if (target === "actual") await runtime.actual.getServerVersion();
         else await runtime.clients.get(connection)!.ping();
         return { ok: true };
       },
@@ -107,9 +106,7 @@ export function registerActions(
     } else if (action === "validate") {
       operation = async () => {
         for (const client of runtime.clients.values()) await client.ping();
-        const result = await engine.validate();
-        assertActualCompatibility(result.actualVersion);
-        return { ok: true, ...result };
+        return { ok: true, ...(await engine.validate()) };
       };
     } else if (action === "discover") {
       operation = async () => {

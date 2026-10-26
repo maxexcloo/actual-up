@@ -11,7 +11,7 @@ import {
 } from "@mantine/core";
 import { useInterval } from "@mantine/hooks";
 import { useEffect, useState } from "react";
-import type { AppState, Job } from "../../src/api.js";
+import type { AppState, Job, SyncReport } from "../../src/api.js";
 import { HISTORY_START } from "../../src/schemas.js";
 import { run } from "./api";
 import {
@@ -27,7 +27,6 @@ import {
   summarise,
   syncTriggers,
   triggerLabel,
-  type SyncReport,
 } from "./format";
 import { SectionHeader } from "./SectionHeader";
 
@@ -227,7 +226,8 @@ function JobResult({ result }: { result: unknown }) {
             <List.Item key={entry.account}>
               {entry.account}:{" "}
               {entry.failed
-                ? (accountIssues[entry.issue ?? ""] ?? "Sync failed; test connections and retry.")
+                ? ((entry.issue && accountIssues[entry.issue]) ??
+                  "Sync failed; test connections and retry.")
                 : `${entry.imported} ${preview ? "would import" : "imported"}, ${entry.updated} ${preview ? "would update" : "updated"}, ${entry.unchanged} unchanged, ${entry.deleted} ${preview ? "would delete" : "deleted"}`}
               {entry.conflicts ? ` · ${entry.conflicts} protected deletion conflicts` : ""}
             </List.Item>
