@@ -4,7 +4,6 @@ import type { Server, IncomingMessage, ServerResponse } from "node:http";
 import { Cron } from "croner";
 import type { Logger } from "pino";
 import type { AccountUpdate, ActionResponse, AppState, JobState } from "./api.js";
-import { assertActualCompatibility } from "./actual-version.js";
 import { parseConfig, type AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
@@ -251,7 +250,6 @@ export function registerSettings(
             config.secrets = next.secrets;
             try {
               await runtime.actual.open();
-              assertActualCompatibility(await runtime.actual.getServerVersion());
               await saveSettings(next);
               changeSettingsVersion();
             } catch (error) {

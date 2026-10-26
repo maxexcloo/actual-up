@@ -6,7 +6,6 @@ const runtime = vi.hoisted(() => ({
 }));
 vi.mock("../src/config.js", () => ({ loadConfig: vi.fn().mockResolvedValue({}) }));
 vi.mock("../src/runtime.js", () => ({
-  assertActualCompatibility: vi.fn(),
   createRuntime: vi.fn().mockResolvedValue(runtime),
 }));
 vi.mock("../src/server.js", () => ({ startService: vi.fn() }));
