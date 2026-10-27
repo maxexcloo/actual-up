@@ -3,6 +3,12 @@
   extends: ["github>maxexcloo/dotfiles//renovate/default.json5"],
   packageRules: [
     {
+      description: "The Actual API moves in lockstep with Kubelab's Actual server, so merge it by hand",
+      automerge: false,
+      groupName: null,
+      matchPackageNames: ["@actual-app/api"],
+    },
+    {
       description: "Node types follow the Node major in package.json engines, changed deliberately",
       enabled: false,
       matchPackageNames: ["@types/node"],
