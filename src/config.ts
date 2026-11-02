@@ -21,7 +21,7 @@ const mappingSchema = z.object({
   actualAccountId: z.string().min(1),
   alias: z.string().min(1),
   connections: z.array(z.string().min(1)).min(1),
-  upAccountId: z.string().uuid(),
+  upAccountId: z.uuid(),
 });
 
 const configSchema = z.object({

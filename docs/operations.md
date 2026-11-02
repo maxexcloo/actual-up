@@ -39,7 +39,8 @@ backfill is still available. Don't run a standalone CLI writer alongside the
 service or deploy a second instance for the same budget. Graceful shutdown stops scheduling, closes HTTP and drains the queue;
 Kubernetes can still terminate work at the configured grace-period limit.
 
-Metrics are exposed at `/metrics`. `actual_up_jobs_total` records outcomes and
+Metrics are exposed at `/metrics`, which Kubelab scrapes into VictoriaMetrics; nothing
+alerts on them yet. `actual_up_jobs_total` records outcomes and
 `actual_up_last_success_timestamp_seconds` records successful operations by
 trigger. Watch `schedule` and `automatic-backfill` for unattended imports. A successful
 validation or dry run doesn't prove a scheduled import worked.

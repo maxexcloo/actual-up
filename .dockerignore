@@ -1,7 +1,6 @@
 **/*.md
 .actual-cache
 .actual-up
-.env*
 .git*
 .mise.toml
 config.example.yaml

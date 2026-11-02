@@ -47,7 +47,17 @@ export const syncForm = z
     mode: z.enum(["dry-run", "live"]),
     account: z.string().default(""),
     connection: z.string().default(""),
-    since: z.string().default(""),
+    since: z
+      .union([
+        z.literal(""),
+        z.iso
+          .date("Choose a valid date in the past")
+          .refine(
+            (value) => value <= new Date().toISOString().slice(0, 10),
+            "Choose a valid date in the past",
+          ),
+      ])
+      .default(""),
   })
   .strict();
 

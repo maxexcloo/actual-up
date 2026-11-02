@@ -2,5 +2,4 @@
 .actual-up/
 dist/
 node_modules/
-.env
 config.local.yaml

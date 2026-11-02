@@ -7,11 +7,9 @@ import type { AccountUpdate, ActionResponse, AppState, JobState } from "./api.js
 import { parseConfig, type AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
-import type { JobRunner } from "./job-runner.js";
 import type { Runtime } from "./runtime.js";
-import { settingsCommand } from "./schemas.js";
+import { HISTORY_START, settingsCommand } from "./schemas.js";
 import { changeSettingsVersion, saveSettings, settingsVersion } from "./settings-store.js";
-import { HISTORY_START, type SyncEngine } from "./sync-engine.js";
 import { UpClient } from "./up-client.js";
 import type { UpClientLike } from "./types.js";
 
@@ -27,13 +25,11 @@ type Discovery = {
 export function registerSettings(
   server: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>,
   config: AppConfig,
-  runner: JobRunner,
-  engine: SyncEngine,
-  runtime: Pick<Runtime, "actual" | "clients">,
-  logger: Logger,
+  runtime: Runtime,
   makeClient: (token: string, id: string) => UpClientLike = (token, id) =>
-    new UpClient(token, logger.child({ connection: id })),
+    new UpClient(token, runtime.logger.child({ connection: id })),
 ) {
+  const { engine, runner } = runtime;
   let discovery: Discovery | undefined;
   let busy = false;
   let message = "";
@@ -371,8 +367,6 @@ export function registerSettings(
                   ({ upAccountId }) => upAccountId === command.upAccountId,
                 );
                 if (!mapping) return { ok: true };
-                progress({ stage: "Refresh Actual" });
-                await runtime.actual.sync();
                 return engine.reconcile({
                   since: HISTORY_START,
                   mappingAliases: [mapping.alias],

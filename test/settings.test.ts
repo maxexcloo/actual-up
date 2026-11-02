@@ -65,10 +65,14 @@ async function fixture() {
   registerSettings(
     server,
     config,
-    runner,
-    engine as unknown as SyncEngine,
-    { actual: actual as unknown as ActualClient, clients },
-    logger,
+    {
+      actual: actual as unknown as ActualClient,
+      clients,
+      engine: engine as unknown as SyncEngine,
+      logger,
+      metrics: new Metrics(),
+      runner,
+    },
     makeClient,
   );
   cleanups.push(async () => {

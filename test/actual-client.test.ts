@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "@actual-app/api";
 import { ActualApiClient as ActualBudgetClient } from "../src/actual-api-client.js";
 import { parseConfig } from "../src/config.js";
+import packageManifest from "../package.json" with { type: "json" };
 
 vi.mock("@actual-app/api", () => ({
   init: vi.fn(),
@@ -24,7 +25,9 @@ async function fixture() {
   directories.push(cacheDirectory);
   vi.mocked(api.init).mockResolvedValue({} as never);
   vi.mocked(api.shutdown).mockResolvedValue(undefined);
-  vi.mocked(api.getServerVersion).mockResolvedValue({ version: "26.10.0" });
+  vi.mocked(api.getServerVersion).mockResolvedValue({
+    version: packageManifest.dependencies["@actual-app/api"],
+  });
   const config = parseConfig({
     version: 1,
     actual: { cacheDirectory, serverUrl: "http://actual", syncId: "budget" },

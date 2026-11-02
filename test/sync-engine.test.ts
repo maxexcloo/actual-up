@@ -70,7 +70,9 @@ function transaction(status: "HELD" | "SETTLED" = "HELD"): UpTransaction {
 
 class MemoryActual implements ActualClient {
   accounts: ActualAccount[] = [{ id: "actual-spending", name: "Spending" }];
-  categories: ActualCategory[] = [{ id: "actual-food", name: "Food" }];
+  categories: ActualCategory[] = [
+    { group_id: "actual-group", hidden: false, id: "actual-food", is_income: false, name: "Food" },
+  ];
   payees: ActualPayee[] = [];
   transactions: ActualTransaction[] = [];
   syncs = 0;
@@ -116,6 +118,7 @@ class MemoryActual implements ActualClient {
         ...value,
         id: `actual-${this.transactions.length + 1}`,
         payee: null,
+        subtransactions: undefined,
       });
       result.added.push(this.transactions.at(-1)!.id);
     }
@@ -243,7 +246,8 @@ describe("sync engine", () => {
       failed: 1,
       issue: "up-unavailable",
     });
-    expect(actual.syncs).toBe(1);
+    // One refresh before reading and one publication after writing.
+    expect(actual.syncs).toBe(2);
     expect(JSON.stringify(result)).not.toContain("sensitive");
     expect(progress).toHaveBeenLastCalledWith({
       completed: 2,
@@ -254,7 +258,10 @@ describe("sync engine", () => {
 
   it("retains account results when publishing fails", async () => {
     const actual = new MemoryActual();
-    vi.spyOn(actual, "sync").mockRejectedValue(new Error("sensitive response"));
+    // The refresh before reading succeeds; publishing afterwards fails.
+    vi.spyOn(actual, "sync")
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error("sensitive response"));
     const { value } = engine(actual, new StubUp([transaction()]));
     expect(await value.reconcile()).toMatchObject({
       imported: 1,

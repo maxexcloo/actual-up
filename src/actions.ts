@@ -4,37 +4,30 @@ import type { Logger } from "pino";
 
 import type { ActionResponse } from "./api.js";
 import type { AppConfig } from "./config.js";
-import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import type { JobRunner } from "./job-runner.js";
 import type { Runtime } from "./runtime.js";
 import { syncForm, testForm } from "./schemas.js";
-import type { SyncEngine } from "./sync-engine.js";
 
-/** Queue connection tests, syncs, validation and discovery from the dashboard. */
+/** Queue connection tests, syncs and validation from the dashboard. */
 export function registerActions(
   server: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>,
   config: AppConfig,
-  runner: JobRunner,
-  engine: SyncEngine,
-  runtime: Pick<Runtime, "actual" | "clients">,
+  { actual, clients, engine, runner }: Runtime,
 ) {
   server.post("/actions/test", async (request, reply) => {
     const parsed = testForm.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Invalid connection test" });
     const { target, connection } = parsed.data;
-    if (
-      (target === "actual" && connection) ||
-      (target === "up" && !runtime.clients.has(connection))
-    )
+    if ((target === "actual" && connection) || (target === "up" && !clients.has(connection)))
       return reply.code(400).send({ error: "Unknown connection" });
     const id = target === "actual" ? "actual" : `up-${connection}`;
     const accepted = runner.enqueue(
       `test:${id}`,
       "test-connection",
       async () => {
-        if (target === "actual") await runtime.actual.getServerVersion();
-        else await runtime.clients.get(connection)!.ping();
+        if (target === "actual") await actual.getServerVersion();
+        else await clients.get(connection)!.ping();
         return { ok: true };
       },
       { target: id },
@@ -61,7 +54,7 @@ export function registerActions(
     let trigger = action;
     if (action === "sync") {
       const parsed = syncForm.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: "Invalid action" });
+      if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]!.message });
       const { account, connection, since, mode } = parsed.data;
       if (
         (account && connection) ||
@@ -71,14 +64,6 @@ export function registerActions(
       if (account && !config.mappings.some((mapping) => mapping.alias === account))
         return reply.code(400).send({ error: "Unknown account" });
       const accountId = config.mappings.find((mapping) => mapping.alias === account)?.upAccountId;
-      if (
-        since &&
-        (!/^\d{4}-\d{2}-\d{2}$/.test(since) ||
-          !Number.isFinite(Date.parse(since)) ||
-          new Date(since).toISOString().slice(0, 10) !== since ||
-          since > new Date().toISOString().slice(0, 10))
-      )
-        return reply.code(400).send({ error: "Choose a valid date in the past" });
       trigger = mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual";
       scope = { account, connection, mode, since };
       queueKey = `manual:${JSON.stringify(scope)}`;
@@ -88,8 +73,6 @@ export function registerActions(
           : undefined;
         if (accountId && !mapping)
           throw new ConfigError("The account was disconnected before this sync started.");
-        progress({ stage: "Refresh Actual" });
-        await runtime.actual.sync();
         return engine.reconcile({
           dryRun: mode === "dry-run",
           mappingAliases: mapping
@@ -105,24 +88,8 @@ export function registerActions(
       };
     } else if (action === "validate") {
       operation = async () => {
-        for (const client of runtime.clients.values()) await client.ping();
+        for (const client of clients.values()) await client.ping();
         return { ok: true, ...(await engine.validate()) };
-      };
-    } else if (action === "discover") {
-      operation = async () => {
-        const up = [];
-        for (const [connection, client] of runtime.clients) {
-          up.push({
-            connection,
-            accounts: await discoverUpAccounts(client),
-          });
-        }
-        const accounts = await discoverActualAccounts(runtime.actual);
-        const categories = (await runtime.actual.getCategories()).map(({ id, name }) => ({
-          id,
-          name,
-        }));
-        return { up, actual: { accounts, categories } };
       };
     } else {
       return reply.code(404).send({ error: "Unknown action" });

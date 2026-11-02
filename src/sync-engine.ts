@@ -16,8 +16,6 @@ import type {
 
 const IMPORT_PREFIX = "up:";
 const END_DATE = "2999-12-31";
-/** A `since` value that reads full history, which also proves deletions. */
-export { HISTORY_START } from "./schemas.js";
 
 type Change = {
   converted: ActualImportTransaction;
@@ -89,6 +87,10 @@ export class SyncEngine {
     );
     report.preview = Boolean(options.dryRun);
     report.publication = options.dryRun ? "not-required" : "pending";
+    // Read the latest budget before reconciling against it.
+    options.progress?.({ stage: "Refresh Actual" });
+    await this.actual.sync();
+    const transferPayees = await this.transferPayees();
     let completed = 0;
     for (const mapping of mappings) {
       const accountReport = {
@@ -107,8 +109,6 @@ export class SyncEngine {
         });
       };
       try {
-        progress("Read Actual");
-        const transferPayees = await this.transferPayees();
         await this.reconcileMapping(
           mapping,
           since,

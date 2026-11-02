@@ -5,7 +5,6 @@ import { Command } from "commander";
 import { loadConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
-import { JobRunner } from "./job-runner.js";
 import { createRuntime } from "./runtime.js";
 import { startService } from "./server.js";
 
@@ -25,15 +24,7 @@ program
     const config = await loadConfig(program.opts<{ config: string }>().config);
     const runtime = await createRuntime(config);
     try {
-      const runner = new JobRunner(runtime.metrics, runtime.logger);
-      const service = await startService(
-        config,
-        runtime.engine,
-        runner,
-        runtime.metrics,
-        runtime.logger,
-        runtime,
-      );
+      const service = await startService(config, runtime);
       await waitForSignal();
       await service.close();
     } finally {
@@ -95,8 +86,6 @@ program
     const config = await loadConfig(program.opts<{ config: string }>().config);
     const runtime = await createRuntime(config);
     try {
-      // Match the service: read the latest budget before reconciling against it.
-      await runtime.actual.sync();
       const report = await runtime.engine.reconcile({
         dryRun: options.dryRun,
         mappingAliases: options.account,
