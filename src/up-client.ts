@@ -17,15 +17,6 @@ const collectionSchema = z.object({
   links: z.object({ next: z.string().nullable(), prev: z.string().nullable() }),
 });
 
-export class UpApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-  }
-}
-
 export class UpClient implements UpClientLike {
   constructor(
     private readonly token: string,
@@ -66,19 +57,13 @@ export class UpClient implements UpClientLike {
     return output;
   }
 
-  private async request(path: string, init: RequestInit = {}): Promise<unknown> {
+  private async request(path: string): Promise<unknown> {
     const url = this.url(path);
     for (let attempt = 0; attempt < 5; attempt += 1) {
       let response: Response;
       try {
         response = await this.fetcher(url, {
-          ...init,
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${this.token}`,
-            "Content-Type": "application/json",
-            ...init.headers,
-          },
+          headers: { Accept: "application/json", Authorization: `Bearer ${this.token}` },
           signal: AbortSignal.timeout(20_000),
         });
       } catch (error) {
@@ -96,7 +81,7 @@ export class UpClient implements UpClientLike {
         await this.backoff(attempt, response.headers.get("retry-after"));
         continue;
       }
-      throw new UpApiError(`Up API returned ${response.status}`, response.status);
+      throw new Error(`Up API returned ${response.status}`);
     }
     throw new Error("Up API retry loop ended unexpectedly");
   }

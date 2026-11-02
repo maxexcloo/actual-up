@@ -2,6 +2,7 @@ import pino, { type Logger } from "pino";
 
 import { ActualBudgetClient } from "./actual-client.js";
 import type { AppConfig } from "./config.js";
+import { JobRunner } from "./job-runner.js";
 import { Metrics } from "./metrics.js";
 import { SyncEngine } from "./sync-engine.js";
 import type { ActualClient, UpClientLike } from "./types.js";
@@ -14,6 +15,7 @@ export type Runtime = {
   engine: SyncEngine;
   logger: Logger;
   metrics: Metrics;
+  runner: JobRunner;
 };
 
 export function createLogger(): Logger {
@@ -40,5 +42,6 @@ export async function createRuntime(config: AppConfig): Promise<Runtime> {
   );
   const actual = new ActualBudgetClient(config);
   const engine = new SyncEngine(config, actual, clients, metrics, logger);
-  return { actual, clients, engine, logger, metrics };
+  const runner = new JobRunner(metrics, logger);
+  return { actual, clients, engine, logger, metrics, runner };
 }

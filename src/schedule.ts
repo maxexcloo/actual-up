@@ -2,32 +2,24 @@ import { Cron } from "croner";
 
 import type { AppConfig } from "./config.js";
 import type { JobRunner } from "./job-runner.js";
-import { HISTORY_START, type SyncEngine } from "./sync-engine.js";
-import type { ActualClient } from "./types.js";
+import { HISTORY_START } from "./schemas.js";
+import type { SyncEngine } from "./sync-engine.js";
 
 /** Full history repairs interrupted imports without a separate cursor database. */
 export function startSchedule(
   config: AppConfig,
   engine: SyncEngine,
   runner: JobRunner,
-  actual: Pick<ActualClient, "sync">,
 ): () => void {
   if (!config.schedule.enabled) return () => {};
   const reconcile = (backfill: boolean) => {
     if (!config.mappings.length) return;
-    runner.enqueue(
-      backfill ? "automatic-backfill" : "schedule",
-      backfill ? "automatic-backfill" : "schedule",
-      async (progress) => {
-        progress({ stage: "Refresh Actual" });
-        await actual.sync();
-        return engine.reconcile({
-          ...(backfill ? { since: HISTORY_START } : {}),
-          progress,
-        });
-      },
-      { mode: "live", since: backfill ? HISTORY_START : undefined },
-    );
+    const trigger = backfill ? "automatic-backfill" : "schedule";
+    const since = backfill ? { since: HISTORY_START } : {};
+    runner.enqueue(trigger, trigger, (progress) => engine.reconcile({ ...since, progress }), {
+      mode: "live",
+      ...since,
+    });
   };
   const options = { paused: true, timezone: config.schedule.timezone };
   const recent = new Cron(config.schedule.cron, options, () => reconcile(false));

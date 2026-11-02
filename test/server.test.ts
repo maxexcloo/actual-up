@@ -68,17 +68,14 @@ async function fixture() {
       },
     ]),
   };
-  const server = await createServer(
-    config,
-    engine as unknown as SyncEngine,
-    runner,
-    metrics,
+  const server = await createServer(config, {
+    actual: actual as unknown as ActualClient,
+    clients: new Map([["max", client as unknown as UpClientLike]]),
+    engine: engine as unknown as SyncEngine,
     logger,
-    {
-      actual: actual as unknown as ActualClient,
-      clients: new Map([["max", client as unknown as UpClientLike]]),
-    },
-  );
+    metrics,
+    runner,
+  });
   servers.push(server);
   const login = await server.inject({
     method: "POST",
@@ -303,8 +300,8 @@ describe("operator app", () => {
     expect(runner.depth).toBe(0);
   });
 
-  it("queues dry runs with account selection and backfill, refreshing Actual first", async () => {
-    const { server, runner, engine, actual } = await fixture();
+  it("queues dry runs with account selection and backfill", async () => {
+    const { server, runner, engine } = await fixture();
     const response = await server.inject({
       headers,
       method: "POST",
@@ -323,9 +320,6 @@ describe("operator app", () => {
       since: "2025-01-01",
       mappingAliases: ["spending"],
     });
-    expect(actual.sync.mock.invocationCallOrder[0]).toBeLessThan(
-      engine.reconcile.mock.invocationCallOrder[0]!,
-    );
     expect(runner.history[0]?.state).toBe("success");
   });
 
@@ -443,20 +437,6 @@ describe("operator app", () => {
         })
       ).statusCode,
     ).toBe(400);
-  });
-
-  it("keeps discovery balances out of results", async () => {
-    const { server, runner } = await fixture();
-    await server.inject({
-      headers,
-      method: "POST",
-      url: "/actions/discover",
-    });
-    await runner.drain();
-    const response = await server.inject({ headers, url: "/state" });
-    expect(response.body).not.toContain("sensitive-balance");
-    // Names stay data; the browser renders them as text.
-    expect(JSON.stringify(response.json().jobs)).toContain("<script>alert(1)</script>");
   });
 
   it("derives connection-test progress from the queue and coalesces duplicate requests", async () => {

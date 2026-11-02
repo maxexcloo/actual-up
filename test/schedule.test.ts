@@ -13,7 +13,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 function fixture(enabled = true, mapped = true) {
-  vi.useFakeTimers();
+  // Croner schedules with timeouts; the metrics client's event-loop interval stays real.
+  vi.useFakeTimers({ toFake: ["Date", "clearTimeout", "setTimeout"] });
   vi.setSystemTime(new Date("2026-10-08T15:59:50Z")); // 02:59:50 in Sydney.
   const config = parseConfig({
     version: 1,
@@ -34,24 +35,20 @@ function fixture(enabled = true, mapped = true) {
         ]
       : [],
   });
-  const actual = { sync: vi.fn().mockResolvedValue(undefined) };
   const engine = { reconcile: vi.fn().mockResolvedValue({ failed: 0 }) };
   const runner = new JobRunner(new Metrics(), pino({ enabled: false }));
-  stop = startSchedule(config, engine as unknown as SyncEngine, runner, actual);
-  return { actual, engine, runner };
+  stop = startSchedule(config, engine as unknown as SyncEngine, runner);
+  return { engine, runner };
 }
 
 describe("automatic reconciliation", () => {
   it("backfills on startup and nightly, and syncs recent transactions every 15 minutes", async () => {
-    const { actual, engine, runner } = fixture();
+    const { engine, runner } = fixture();
     await runner.drain();
     expect(engine.reconcile).toHaveBeenCalledWith({
       since: "1970-01-01",
       progress: expect.any(Function),
     });
-    expect(actual.sync.mock.invocationCallOrder[0]).toBeLessThan(
-      engine.reconcile.mock.invocationCallOrder[0]!,
-    );
     engine.reconcile.mockClear();
     await vi.advanceTimersByTimeAsync(10_000);
     await runner.drain();

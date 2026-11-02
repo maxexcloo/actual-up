@@ -6,20 +6,16 @@ import { extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { LogController } from "fastify";
 import { LRUCache } from "lru-cache";
-import type { Logger } from "pino";
 
 import { registerActions } from "./actions.js";
 import { LoginAttempts } from "./auth.js";
 import { environmentValue, type AppConfig } from "./config.js";
 import { ConfigError } from "./errors.js";
-import type { JobRunner } from "./job-runner.js";
-import type { Metrics } from "./metrics.js";
 import type { Runtime } from "./runtime.js";
 import { loginForm } from "./schemas.js";
 import { encryptionKey } from "./settings-store.js";
 import { registerSettings } from "./settings.js";
 import { startSchedule } from "./schedule.js";
-import type { SyncEngine } from "./sync-engine.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -60,36 +56,22 @@ export type Service = {
   close(): Promise<void>;
 };
 
-export async function startService(
-  config: AppConfig,
-  engine: SyncEngine,
-  runner: JobRunner,
-  metrics: Metrics,
-  logger: Logger,
-  runtime: Pick<Runtime, "actual" | "clients">,
-): Promise<Service> {
-  const server = await createServer(config, engine, runner, metrics, logger, runtime);
+export async function startService(config: AppConfig, runtime: Runtime): Promise<Service> {
+  const server = await createServer(config, runtime);
   await server.listen({ host: config.server.host, port: config.server.port });
-  const stopSchedule = startSchedule(config, engine, runner, runtime.actual);
-  logger.info({ port: config.server.port }, "Service started");
+  const stopSchedule = startSchedule(config, runtime.engine, runtime.runner);
+  runtime.logger.info({ port: config.server.port }, "Service started");
   return {
     async close() {
       stopSchedule();
       await server.close();
-      await runner.close();
+      await runtime.runner.close();
     },
   };
 }
 
-export async function createServer(
-  config: AppConfig,
-  engine: SyncEngine,
-  runner: JobRunner,
-  metrics: Metrics,
-  logger: Logger,
-  runtime: Pick<Runtime, "actual" | "clients">,
-  makeUpClient?: Parameters<typeof registerSettings>[6],
-) {
+export async function createServer(config: AppConfig, runtime: Runtime) {
+  const { logger, metrics } = runtime;
   encryptionKey(); // Fail at startup, not on first save, when the key is missing.
   const username = environmentValue("ACTUAL_UP_USERNAME");
   const password = environmentValue("ACTUAL_UP_PASSWORD");
@@ -110,10 +92,11 @@ export async function createServer(
 
   server.decorateRequest("styleNonce", "");
 
+  // MemoryStore only calls get, set and delete, which the bounded cache provides.
   const sessionData = new LRUCache<string, import("fastify").Session>({
     max: 100,
     ttl: sessionLifetime,
-  });
+  }) as unknown as Map<string, import("fastify").Session>;
   await server.register(cookie);
   await server.register(session, {
     cookie: {
@@ -126,17 +109,7 @@ export async function createServer(
     rolling: false,
     saveUninitialized: false,
     secret: randomBytes(32).toString("hex"),
-    store: {
-      destroy: (id, done) => {
-        sessionData.delete(id);
-        done();
-      },
-      get: (id, done) => done(null, sessionData.get(id)),
-      set: (id, value, done) => {
-        sessionData.set(id, value);
-        done();
-      },
-    },
+    store: new session.MemoryStore(sessionData),
   });
 
   // The app only accepts JSON bodies; a JSON content type also forces a CORS preflight.
@@ -212,8 +185,8 @@ export async function createServer(
     return reply.clearCookie(sessionCookie, { path: "/" }).code(204).send();
   });
 
-  registerSettings(server, config, runner, engine, runtime, logger, makeUpClient);
-  registerActions(server, config, runner, engine, runtime);
+  registerSettings(server, config, runtime);
+  registerActions(server, config, runtime);
 
   for (const [path, [type, body]] of assets)
     server.get(path, async (_request, reply) => {

@@ -1,6 +1,6 @@
 {
   "name": "actual-up",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Synchronise Up transactions into Actual Budget.",
   "license": "AGPL-3.0-only",
   "bin": {
@@ -11,15 +11,15 @@
     "build": "tsc -p tsconfig.build.json && vite build"
   },
   "dependencies": {
-    "@actual-app/api": "26.10.0",
+    "@actual-app/api": "26.11.0",
     "@fastify/cookie": "11.1.3",
-    "@fastify/session": "11.1.5",
+    "@fastify/session": "11.1.6",
+    "@prometheus-io/client": "0.16.1",
     "commander": "15.0.0",
     "croner": "11.0.0",
     "fastify": "5.12.7",
     "lru-cache": "11.5.3",
     "pino": "10.4.0",
-    "prom-client": "15.1.3",
     "yaml": "2.9.1",
     "zod": "4.6.7"
   },

@@ -1,3 +1,5 @@
+import type * as actual from "@actual-app/api";
+
 export type UpAccount = {
   id: string;
   attributes: {
@@ -38,61 +40,21 @@ export type UpTransaction = {
   };
 };
 
-export type ActualAccount = {
-  closed?: boolean;
-  id: string;
-  name: string;
-  offbudget?: boolean;
-};
+type Item<T extends (...args: never[]) => Promise<unknown[]>> = Awaited<ReturnType<T>>[number];
 
-export type ActualCategory = {
-  hidden?: boolean;
-  id: string;
-  name: string;
-};
-
-export type ActualPayee = {
-  id: string;
-  name: string;
-  transfer_acct?: string;
-};
-
-export type ActualTransaction = {
-  account: string;
+export type ActualAccount = Item<typeof actual.getAccounts>;
+export type ActualCategory = Item<typeof actual.getCategories>;
+export type ActualPayee = Item<typeof actual.getPayees>;
+export type ActualTransaction = Item<typeof actual.getTransactions>;
+/** Every Up import carries its amount and `up:` identity. */
+export type ActualImportTransaction = Parameters<typeof actual.importTransactions>[1][number] & {
   amount: number;
-  category?: string;
-  cleared?: boolean;
-  date: string;
-  id: string;
-  imported_id?: string;
-  imported_payee?: string;
-  is_child?: boolean;
-  is_parent?: boolean;
-  notes?: string;
-  payee?: string | null;
-  reconciled?: boolean;
-  subtransactions?: ActualTransaction[];
-  transfer_id?: string;
-};
-
-export type ActualImportTransaction = {
-  account: string;
-  amount: number;
-  category?: string;
-  cleared: boolean;
-  date: string;
   imported_id: string;
-  imported_payee: string;
-  notes?: string;
-  payee?: string | null;
-  payee_name?: string;
 };
-
-export type ActualImportResult = {
-  added: string[];
-  errors: Array<{ message: string }>;
-  updated: string[];
-};
+export type ActualImportResult = Pick<
+  Awaited<ReturnType<typeof actual.importTransactions>>,
+  "added" | "errors" | "updated"
+>;
 
 export interface ActualClient {
   close(): Promise<void>;

@@ -36,7 +36,6 @@ describe("Up client", () => {
     const client = new UpClient("token", pino({ level: "silent" }), fetcher);
     await expect(client.ping()).rejects.toMatchObject({
       message: "Up API returned 400",
-      status: 400,
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });

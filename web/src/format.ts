@@ -30,7 +30,6 @@ export const stateColour = (state: JobState | "idle") =>
 const triggers: Record<string, string> = {
   "automatic-backfill": "Automatic Backfill",
   backfill: "Backfill",
-  discover: "Account Discovery",
   "dry-run": "Preview",
   manual: "Manual Sync",
   schedule: "Scheduled Sync",
