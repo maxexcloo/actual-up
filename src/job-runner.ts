@@ -5,8 +5,6 @@ import { ConfigError } from "./errors.js";
 import type { Metrics } from "./metrics.js";
 import type { Job, JobProgress, JobScope, SyncReport } from "./api.js";
 
-export type { Job, JobProgress, JobScope } from "./api.js";
-
 /** One queue owns complete operations, including reads and manual actions. */
 export class JobRunner {
   private chain = Promise.resolve();
