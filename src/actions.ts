@@ -5,7 +5,6 @@ import type { Logger } from "pino";
 import type { ActionResponse } from "./api.js";
 import type { AppConfig } from "./config.js";
 import { ConfigError } from "./errors.js";
-import type { JobRunner } from "./job-runner.js";
 import type { Runtime } from "./runtime.js";
 import { syncForm, testForm } from "./schemas.js";
 
@@ -46,28 +45,28 @@ export function registerActions(
     return reply.code(response.accepted ? 202 : 409).send(response);
   });
 
-  server.post<{ Params: { action: string } }>("/actions/:action", async (request, reply) => {
-    const action = request.params.action;
-    let operation: Parameters<JobRunner["enqueue"]>[2];
-    let scope: Parameters<JobRunner["enqueue"]>[3];
-    let queueKey = "manual";
-    let trigger = action;
-    if (action === "sync") {
-      const parsed = syncForm.safeParse(request.body);
-      if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]!.message });
-      const { account, connection, since, mode } = parsed.data;
-      if (
-        (account && connection) ||
-        (connection && !config.up.connections.some(({ id }) => id === connection))
-      )
-        return reply.code(400).send({ error: "Unknown connection or ambiguous scope" });
-      if (account && !config.mappings.some((mapping) => mapping.alias === account))
-        return reply.code(400).send({ error: "Unknown account" });
-      const accountId = config.mappings.find((mapping) => mapping.alias === account)?.upAccountId;
-      trigger = mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual";
-      scope = { account, connection, mode, since };
-      queueKey = `manual:${JSON.stringify(scope)}`;
-      operation = async (progress) => {
+  const queued = (accepted: boolean): ActionResponse =>
+    accepted
+      ? { accepted, message: "Queued. Follow progress in Sync Status." }
+      : { accepted, message: "An action is already queued, or the queue is full. Please wait." };
+
+  server.post("/actions/sync", async (request, reply) => {
+    const parsed = syncForm.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]!.message });
+    const { account, connection, since, mode } = parsed.data;
+    if (
+      (account && connection) ||
+      (connection && !config.up.connections.some(({ id }) => id === connection))
+    )
+      return reply.code(400).send({ error: "Unknown connection or ambiguous scope" });
+    if (account && !config.mappings.some((mapping) => mapping.alias === account))
+      return reply.code(400).send({ error: "Unknown account" });
+    const accountId = config.mappings.find((mapping) => mapping.alias === account)?.upAccountId;
+    const scope = { account, connection, mode, since };
+    const accepted = runner.enqueue(
+      `manual:${JSON.stringify(scope)}`,
+      mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual",
+      async (progress) => {
         const mapping = accountId
           ? config.mappings.find(({ upAccountId }) => upAccountId === accountId)
           : undefined;
@@ -85,19 +84,17 @@ export function registerActions(
           since: since || undefined,
           progress,
         });
-      };
-    } else if (action === "validate") {
-      operation = async () => {
-        for (const client of clients.values()) await client.ping();
-        return { ok: true, ...(await engine.validate()) };
-      };
-    } else {
-      return reply.code(404).send({ error: "Unknown action" });
-    }
-    const accepted = runner.enqueue(queueKey, trigger, operation, scope);
-    const response: ActionResponse = accepted
-      ? { accepted, message: "Queued. Follow progress in Sync Status." }
-      : { accepted, message: "An action is already queued, or the queue is full. Please wait." };
-    return reply.code(accepted ? 202 : 409).send(response);
+      },
+      scope,
+    );
+    return reply.code(accepted ? 202 : 409).send(queued(accepted));
+  });
+
+  server.post("/actions/validate", async (_request, reply) => {
+    const accepted = runner.enqueue("manual", "validate", async () => {
+      for (const client of clients.values()) await client.ping();
+      return { ok: true, ...(await engine.validate()) };
+    });
+    return reply.code(accepted ? 202 : 409).send(queued(accepted));
   });
 }

@@ -1,19 +1,9 @@
-import {
-  Accordion,
-  Alert,
-  Badge,
-  Button,
-  Card,
-  List,
-  SimpleGrid,
-  Stack,
-  Text,
-} from "@mantine/core";
+import { Accordion, Alert, Badge, Card, List, SimpleGrid, Stack, Text } from "@mantine/core";
 import { useInterval } from "@mantine/hooks";
 import { useEffect, useState } from "react";
 import type { AppState, Job, SyncReport } from "../../src/api.js";
 import { HISTORY_START } from "../../src/schemas.js";
-import { run } from "./api";
+import { ActionButton } from "./ActionButton";
 import {
   accountIssues,
   connectionName,
@@ -149,21 +139,20 @@ function JobDetails({
       )}
       {job.result !== undefined && <JobResult result={job.result} />}
       {retryable && (
-        <Button
+        <ActionButton
+          path="/actions/sync"
+          body={{
+            mode: scope.mode ?? "live",
+            account: scope.account ?? "",
+            connection: scope.connection ?? "",
+            since: scope.since ?? (job.trigger === "automatic-backfill" ? HISTORY_START : ""),
+          }}
+          refresh={refresh}
           variant="default"
           w="fit-content"
-          onClick={async () => {
-            await run("/actions/sync", {
-              mode: scope.mode ?? "live",
-              account: scope.account ?? "",
-              connection: scope.connection ?? "",
-              since: scope.since ?? (job.trigger === "automatic-backfill" ? HISTORY_START : ""),
-            });
-            refresh();
-          }}
         >
           Retry {scope.account || "Sync"}
-        </Button>
+        </ActionButton>
       )}
     </Stack>
   );

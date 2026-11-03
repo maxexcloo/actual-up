@@ -20,7 +20,6 @@ import { Fragment, useState } from "react";
 import type { AppState } from "../../src/api.js";
 import { connectionForm, HISTORY_START, mappingForm } from "../../src/schemas.js";
 import { ActionButton } from "./ActionButton";
-import { run } from "./api";
 import { connectionName, plural } from "./format";
 import { SectionHeader } from "./SectionHeader";
 import { confirm, save, StatusBadge, TestResult } from "./settings";
@@ -397,13 +396,6 @@ function Backfill({
 }) {
   const [since, setSince] = useState(HISTORY_START);
   const [today] = useState(() => new Date().toISOString().slice(0, 10));
-  const [pending, setPending] = useState<string>();
-  const queue = async (mode: "dry-run" | "live") => {
-    setPending(mode);
-    await run("/actions/sync", { mode, account: alias, since });
-    setPending(undefined);
-    refresh();
-  };
   return (
     <Stack gap="xs">
       <Group align="flex-end">
@@ -414,12 +406,21 @@ function Backfill({
           max={today}
           onChange={(event) => setSince(event.currentTarget.value)}
         />
-        <Button variant="default" loading={pending === "dry-run"} onClick={() => queue("dry-run")}>
+        <ActionButton
+          path="/actions/sync"
+          body={{ mode: "dry-run", account: alias, since }}
+          refresh={refresh}
+          variant="default"
+        >
           Preview
-        </Button>
-        <Button loading={pending === "live"} onClick={() => queue("live")}>
+        </ActionButton>
+        <ActionButton
+          path="/actions/sync"
+          body={{ mode: "live", account: alias, since }}
+          refresh={refresh}
+        >
           Backfill
-        </Button>
+        </ActionButton>
       </Group>
       <Text size="sm" c="dimmed">
         Preview or import from this date. Regular Sync checks the last {lookbackDays} days.

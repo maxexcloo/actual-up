@@ -121,9 +121,7 @@ export async function createServer(config: AppConfig, runtime: Runtime) {
   );
 
   server.get("/livez", async () => ({ status: "ok" }));
-  server.get("/readyz", async () => {
-    return { status: "ready" };
-  });
+  server.get("/readyz", async () => ({ status: "ready" }));
   server.get("/metrics", async (_request, reply) => {
     reply.header("Content-Type", metrics.registry.contentType);
     return metrics.registry.metrics();
