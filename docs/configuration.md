@@ -41,8 +41,7 @@ Results appear inline without importing bank transactions.
 Account changes save independently, so you can connect several accounts without
 waiting for backfill. Only the affected account rows refresh, and drafts in other
 rows stay where they are. Shared account rows update together. Actual operations and
-backfills still run through one serial queue. The Actual API runs in a single
-worker thread so its synchronous database work cannot block the web server.
+backfills still run through one serial queue.
 
 Leaving credentials blank on the Actual edit form keeps the saved values.
 Existing keys are never sent back to the browser. A replacement Up key must still access its
@@ -52,8 +51,7 @@ existing Actual transactions; review them before reconnecting elsewhere.
 
 Connecting a new mapping starts a full backfill when automation is enabled.
 Editing an existing mapping does not start another backfill. An unavailable
-existing fallback key can be retained if another selected key works. Configuration
-changes, connection checks and imports all run through one serial queue.
+existing fallback key can be retained if another selected key works.
 
 Connection setup rejects an Actual server version the app doesn't support
 before saving. The app starts without an upstream connection so

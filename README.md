@@ -40,11 +40,7 @@ mise run dev -- --config ./config.local.yaml
 
 Open `http://localhost:3000` and sign in with the app credentials. Open
 **Accounts & Sync**, enter your Actual credentials, add Up API keys and connect
-accounts. When automation is on, connecting a new mapping backfills its history;
-editing an existing mapping doesn't start another backfill. Automatic sync is on
-by default. A full-history backfill runs on startup and nightly at 03:00, and
-recent changes sync every 15 minutes. Set `schedule.enabled: false` to pause
-automation while you use discovery or dry runs.
+accounts.
 
 ## Deploy
 
