@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { Server, IncomingMessage, ServerResponse } from "node:http";
 import { Cron } from "croner";
 import type { Logger } from "pino";
+import type { z } from "zod";
 import type { AccountUpdate, ActionResponse, AppState, JobState } from "./api.js";
 import { parseConfig, type AppConfig } from "./config.js";
 import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
@@ -19,6 +20,8 @@ type Discovery = {
   up: Array<{ id: string; name: string; connections: string[] }>;
   unavailable: string[];
 };
+
+type Command<Action> = Extract<z.infer<typeof settingsCommand>, { action: Action }>;
 
 export function registerSettings(
   server: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>,
@@ -165,6 +168,190 @@ export function registerSettings(
     if (request.headers["if-none-match"] === etag) return reply.code(304).send();
     return current;
   });
+  const finish = (accountId: string | undefined, text: string, failed: boolean) => {
+    if (accountId) accountUpdates.set(accountId, { failed, message: text, pending: false });
+    else {
+      busy = false;
+      message = text;
+    }
+  };
+  const draft = () => {
+    const next = parseConfig(config);
+    next.secrets = structuredClone(config.secrets);
+    return next;
+  };
+
+  const saveActual = async (command: Command<"actual">) => {
+    const next = draft();
+    if (
+      config.mappings.length &&
+      (command.syncId !== config.actual.syncId || command.serverUrl !== config.actual.serverUrl)
+    )
+      throw new ConfigError(
+        "Disconnect account mappings before switching Actual servers or budgets. Existing transactions remain in the previous budget.",
+      );
+    const previousCredentials = config.secrets.actual;
+    const credential =
+      command.credential ||
+      (previousCredentials?.method === command.method ? previousCredentials.credential : "");
+    if (!credential) throw new ConfigError("Enter the Actual session token or password.");
+    next.actual = {
+      cacheDirectory: config.actual.cacheDirectory,
+      serverUrl: command.serverUrl,
+      syncId: command.syncId,
+    };
+    next.secrets.actual = {
+      credential,
+      method: command.method,
+      encryptionPassword: command.clearEncryption
+        ? undefined
+        : command.encryptionPassword || previousCredentials?.encryptionPassword,
+    };
+    const previous = { actual: config.actual, secrets: config.secrets };
+    await runtime.actual.close();
+    config.actual = next.actual;
+    config.secrets = next.secrets;
+    try {
+      await runtime.actual.open();
+      await saveSettings(next);
+      changeSettingsVersion();
+    } catch (error) {
+      await runtime.actual.close();
+      Object.assign(config, previous);
+      // Version mismatches and missing setup explain themselves; upstream errors stay hidden.
+      if (error instanceof ConfigError) throw error;
+      throw new ConfigError(
+        "Could not connect to Actual or save settings. Check the server, budget ID, credentials and storage. Previous settings were retained.",
+      );
+    }
+    discovery = await discover();
+    return "Actual connection checked and saved.";
+  };
+
+  const checkMappingAccess = async (command: Command<"mapping">) => {
+    const existing = config.mappings.find(({ upAccountId }) => upAccountId === command.upAccountId);
+    if (existing && existing.actualAccountId !== command.actualAccountId)
+      throw new ConfigError(
+        "Disconnect the mapping before changing its Actual destination. Existing transactions will remain in the old account.",
+      );
+    if (
+      existing &&
+      existing.connections.length === command.connections.length &&
+      existing.connections.every((id, index) => id === command.connections[index])
+    )
+      return;
+    const current = await discover();
+    discovery = current;
+    const account = current.up.find(({ id }) => id === command.upAccountId);
+    if (
+      !account ||
+      !command.connections.length ||
+      new Set(command.connections).size !== command.connections.length ||
+      !command.connections.every(
+        (id) =>
+          account.connections.includes(id) ||
+          (current.unavailable.includes(id) && existing?.connections.includes(id)),
+      ) ||
+      !command.connections.some((id) => account.connections.includes(id)) ||
+      !current.actual.some(({ id }) => id === command.actualAccountId)
+    )
+      throw new ConfigError(
+        "The selected keys cannot access these accounts. Refresh accounts and choose an available key and destination.",
+      );
+  };
+
+  const queueBackfill = (command: Command<"mapping">) => {
+    const queued = runner.enqueue(
+      `backfill:${command.upAccountId}`,
+      "automatic-backfill",
+      async (progress) => {
+        const mapping = config.mappings.find(
+          ({ upAccountId }) => upAccountId === command.upAccountId,
+        );
+        if (!mapping) return { ok: true };
+        return engine.reconcile({
+          since: HISTORY_START,
+          mappingAliases: [mapping.alias],
+          progress,
+        });
+      },
+      { account: command.alias, mode: "live", since: HISTORY_START },
+    );
+    return queued
+      ? "Saved. History backfill queued; you can continue with other accounts."
+      : "Saved. Automatic sync will backfill this account.";
+  };
+
+  const saveChange = async (
+    command: Command<"connection" | "remove-connection" | "mapping" | "remove-mapping">,
+    accountId: string | undefined,
+  ) => {
+    const next = draft();
+    let newClient: UpClientLike | undefined;
+    if (command.action === "connection") {
+      newClient = makeClient(command.token, command.id);
+      await newClient.ping();
+      const assigned = config.mappings.filter(({ connections }) =>
+        connections.includes(command.id),
+      );
+      if (assigned.length) {
+        const accessible = new Set((await newClient.listAccounts()).map(({ id }) => id));
+        if (assigned.some(({ upAccountId }) => !accessible.has(upAccountId)))
+          throw new ConfigError(
+            "This key cannot access all its mapped accounts. Update those mappings before replacing the key.",
+          );
+      }
+      if (!next.up.connections.some(({ id }) => id === command.id))
+        next.up.connections.push({ id: command.id });
+      next.secrets.tokens[command.id] = command.token;
+    } else if (command.action === "remove-connection") {
+      if (next.mappings.some(({ connections }) => connections.includes(command.id)))
+        throw new ConfigError("This key is still in use. Update or disconnect its mappings first.");
+      delete next.secrets.tokens[command.id];
+      next.up.connections = next.up.connections.filter(({ id }) => id !== command.id);
+    } else {
+      if (command.action === "mapping") await checkMappingAccess(command);
+      next.mappings = next.mappings.filter(
+        ({ upAccountId }) => upAccountId !== command.upAccountId,
+      );
+      if (command.action === "mapping")
+        next.mappings.push({
+          actualAccountId: command.actualAccountId,
+          alias: command.alias,
+          connections: command.connections,
+          upAccountId: command.upAccountId,
+        });
+    }
+    // Cross-field validation also prevents deleting keys still used by a mapping.
+    try {
+      parseConfig(next);
+    } catch {
+      throw new ConfigError(
+        "Account names must be unique, and each Up and Actual account can only be mapped once.",
+      );
+    }
+    const newMapping =
+      command.action === "mapping" &&
+      !config.mappings.some(({ upAccountId }) => upAccountId === command.upAccountId);
+    await saveSettings(next);
+    config.up = next.up;
+    config.mappings = next.mappings;
+    config.secrets = next.secrets;
+    changeSettingsVersion(accountId);
+    try {
+      if (command.action === "connection" && newClient) runtime.clients.set(command.id, newClient);
+      if (command.action === "remove-connection") runtime.clients.delete(command.id);
+      if (!accountId) discovery = await discover();
+      if (command.action === "mapping" && config.schedule.enabled && newMapping)
+        return queueBackfill(command);
+      return "Settings saved.";
+    } catch {
+      throw new ConfigError(
+        "Settings saved, but accounts could not refresh. Reload the page to retry.",
+      );
+    }
+  };
+
   server.post("/settings", async (request, reply) => {
     const parsed = settingsCommand.safeParse(request.body);
     const accountId =
@@ -195,224 +382,32 @@ export function registerSettings(
       accountId ? `settings:${accountId}` : "settings",
       "settings",
       async () => {
-        let operationMessage = "Settings saved.";
+        let text = "Settings saved.";
         let failed = false;
-        let saved = false;
         try {
           if (command.revision !== revision())
             throw new ConfigError("Settings changed. Reload before saving.");
           if (command.action === "discover") {
             discovery = await discover();
-            operationMessage = discovery.unavailable.length
+            text = discovery.unavailable.length
               ? "Some connections are unavailable. Replace their keys or retry; other connections can still sync."
               : "Accounts refreshed. Select the accounts to connect below.";
-            return { ok: true };
-          }
-          const next = parseConfig(config);
-          next.secrets = structuredClone(config.secrets);
-          if (command.action === "actual") {
-            if (
-              config.mappings.length &&
-              (command.syncId !== config.actual.syncId ||
-                command.serverUrl !== config.actual.serverUrl)
-            )
-              throw new ConfigError(
-                "Disconnect account mappings before switching Actual servers or budgets. Existing transactions remain in the previous budget.",
-              );
-            const previousCredentials = config.secrets.actual;
-            const credential =
-              command.credential ||
-              (previousCredentials?.method === command.method
-                ? previousCredentials.credential
-                : "");
-            if (!credential) throw new ConfigError("Enter the Actual session token or password.");
-            next.actual = {
-              cacheDirectory: config.actual.cacheDirectory,
-              serverUrl: command.serverUrl,
-              syncId: command.syncId,
-            };
-            next.secrets.actual = {
-              credential,
-              method: command.method,
-              encryptionPassword: command.clearEncryption
-                ? undefined
-                : command.encryptionPassword || previousCredentials?.encryptionPassword,
-            };
-            const previous = { actual: config.actual, secrets: config.secrets };
-            await runtime.actual.close();
-            config.actual = next.actual;
-            config.secrets = next.secrets;
-            try {
-              await runtime.actual.open();
-              await saveSettings(next);
-              changeSettingsVersion();
-            } catch (error) {
-              await runtime.actual.close();
-              Object.assign(config, previous);
-              // Version mismatches and missing setup explain themselves; upstream errors stay hidden.
-              if (error instanceof ConfigError) throw error;
-              throw new ConfigError(
-                "Could not connect to Actual or save settings. Check the server, budget ID, credentials and storage. Previous settings were retained.",
-              );
-            }
-            discovery = await discover();
-            operationMessage = "Actual connection checked and saved.";
-            return { ok: true };
-          }
-          let newClient: UpClientLike | undefined;
-          if (command.action === "connection") {
-            newClient = makeClient(command.token, command.id);
-            await newClient.ping();
-            const assigned = config.mappings.filter(({ connections }) =>
-              connections.includes(command.id),
-            );
-            if (assigned.length) {
-              const accessible = new Set((await newClient.listAccounts()).map(({ id }) => id));
-              if (assigned.some(({ upAccountId }) => !accessible.has(upAccountId)))
-                throw new ConfigError(
-                  "This key cannot access all its mapped accounts. Update those mappings before replacing the key.",
-                );
-            }
-            if (!next.up.connections.some(({ id }) => id === command.id))
-              next.up.connections.push({ id: command.id });
-            next.secrets.tokens[command.id] = command.token;
-          } else if (command.action === "remove-connection") {
-            if (next.mappings.some(({ connections }) => connections.includes(command.id)))
-              throw new ConfigError(
-                "This key is still in use. Update or disconnect its mappings first.",
-              );
-            delete next.secrets.tokens[command.id];
-            next.up.connections = next.up.connections.filter(({ id }) => id !== command.id);
-          } else if (command.action === "mapping") {
-            const existing = next.mappings.find(
-              ({ upAccountId }) => upAccountId === command.upAccountId,
-            );
-            if (existing && existing.actualAccountId !== command.actualAccountId)
-              throw new ConfigError(
-                "Disconnect the mapping before changing its Actual destination. Existing transactions will remain in the old account.",
-              );
-            const accessUnchanged =
-              existing &&
-              existing.connections.length === command.connections.length &&
-              existing.connections.every((id, index) => id === command.connections[index]);
-            if (!accessUnchanged) {
-              discovery = await discover();
-              const account = discovery.up.find(({ id }) => id === command.upAccountId);
-              if (
-                !account ||
-                !command.connections.length ||
-                new Set(command.connections).size !== command.connections.length ||
-                !command.connections.every(
-                  (id) =>
-                    account.connections.includes(id) ||
-                    (discovery!.unavailable.includes(id) &&
-                      config.mappings.some(
-                        (mapping) =>
-                          mapping.upAccountId === command.upAccountId &&
-                          mapping.connections.includes(id),
-                      )),
-                ) ||
-                !command.connections.some((id) => account.connections.includes(id)) ||
-                !discovery.actual.some(({ id }) => id === command.actualAccountId)
-              )
-                throw new ConfigError(
-                  "The selected keys cannot access these accounts. Refresh accounts and choose an available key and destination.",
-                );
-            }
-            const mapping = {
-              actualAccountId: command.actualAccountId,
-              alias: command.alias,
-              connections: command.connections,
-              upAccountId: command.upAccountId,
-            };
-            next.mappings = [
-              ...next.mappings.filter(({ upAccountId }) => upAccountId !== command.upAccountId),
-              mapping,
-            ];
-          } else {
-            next.mappings = next.mappings.filter(
-              ({ upAccountId }) => upAccountId !== command.upAccountId,
-            );
-          }
-          // Cross-field validation also prevents deleting keys still used by a mapping.
-          try {
-            parseConfig(next);
-          } catch {
-            throw new ConfigError(
-              "Account names must be unique, and each Up and Actual account can only be mapped once.",
-            );
-          }
-          const newMapping =
-            command.action === "mapping" &&
-            !config.mappings.some(({ upAccountId }) => upAccountId === command.upAccountId);
-          await saveSettings(next);
-          config.up = next.up;
-          config.mappings = next.mappings;
-          config.secrets = next.secrets;
-          changeSettingsVersion(accountId);
-          saved = true;
-          if (command.action === "connection" && newClient)
-            runtime.clients.set(command.id, newClient);
-          if (command.action === "remove-connection") runtime.clients.delete(command.id);
-          if (!accountId) discovery = await discover();
-          operationMessage = "Settings saved.";
-          if (command.action === "mapping" && config.schedule.enabled && newMapping) {
-            const queued = runner.enqueue(
-              `backfill:${command.upAccountId}`,
-              "automatic-backfill",
-              async (progress) => {
-                const mapping = config.mappings.find(
-                  ({ upAccountId }) => upAccountId === command.upAccountId,
-                );
-                if (!mapping) return { ok: true };
-                return engine.reconcile({
-                  since: HISTORY_START,
-                  mappingAliases: [mapping.alias],
-                  progress,
-                });
-              },
-              { account: command.alias, mode: "live", since: HISTORY_START },
-            );
-            operationMessage = queued
-              ? "Saved. History backfill queued; you can continue with other accounts."
-              : "Saved. Automatic sync will backfill this account.";
-          }
+          } else if (command.action === "actual") text = await saveActual(command);
+          else text = await saveChange(command, accountId);
           return { ok: true };
         } catch (error) {
           failed = true;
-          operationMessage =
+          text =
             error instanceof ConfigError
               ? error.message
-              : saved
-                ? "Settings saved, but accounts could not refresh. Reload the page to retry."
-                : "Setup could not complete. Check the API key, Actual connection and writable storage, then retry.";
-          throw new ConfigError(operationMessage);
+              : "Setup could not complete. Check the API key, Actual connection and writable storage, then retry.";
+          throw new ConfigError(text);
         } finally {
-          if (accountId)
-            accountUpdates.set(accountId, {
-              failed,
-              message: operationMessage,
-              pending: false,
-            });
-          else {
-            busy = false;
-            message = operationMessage;
-          }
+          finish(accountId, text, failed);
         }
       },
     );
-    if (!accepted) {
-      if (accountId)
-        accountUpdates.set(accountId, {
-          failed: true,
-          message: "The queue is full. Please try again shortly.",
-          pending: false,
-        });
-      else {
-        busy = false;
-        message = "The queue is full. Please try again shortly.";
-      }
-    }
+    if (!accepted) finish(accountId, "The queue is full. Please try again shortly.", true);
     const response: ActionResponse = accepted
       ? { accepted, message: accountId ? "Save queued." : "Applying your changes…" }
       : { accepted, message: "The queue is full. Please try again shortly." };
