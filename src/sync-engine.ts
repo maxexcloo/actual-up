@@ -87,7 +87,6 @@ export class SyncEngine {
     );
     report.preview = Boolean(options.dryRun);
     report.publication = options.dryRun ? "not-required" : "pending";
-    // Read the latest budget before reconciling against it.
     options.progress?.({ stage: "Refresh Actual" });
     await this.actual.sync();
     const transferPayees = await this.transferPayees();
