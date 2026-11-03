@@ -13,8 +13,6 @@ import { changeSettingsVersion, saveSettings, settingsVersion } from "./settings
 import { UpClient } from "./up-client.js";
 import type { UpClientLike } from "./types.js";
 
-class SettingsError extends ConfigError {}
-
 type Discovery = {
   actual: Array<{ id: string; name: string }>;
   actualUnavailable: boolean;
@@ -202,7 +200,7 @@ export function registerSettings(
         let saved = false;
         try {
           if (command.revision !== revision())
-            throw new SettingsError("Settings changed. Reload before saving.");
+            throw new ConfigError("Settings changed. Reload before saving.");
           if (command.action === "discover") {
             discovery = await discover();
             operationMessage = discovery.unavailable.length
@@ -218,7 +216,7 @@ export function registerSettings(
               (command.syncId !== config.actual.syncId ||
                 command.serverUrl !== config.actual.serverUrl)
             )
-              throw new SettingsError(
+              throw new ConfigError(
                 "Disconnect account mappings before switching Actual servers or budgets. Existing transactions remain in the previous budget.",
               );
             const previousCredentials = config.secrets.actual;
@@ -227,7 +225,7 @@ export function registerSettings(
               (previousCredentials?.method === command.method
                 ? previousCredentials.credential
                 : "");
-            if (!credential) throw new SettingsError("Enter the Actual session token or password.");
+            if (!credential) throw new ConfigError("Enter the Actual session token or password.");
             next.actual = {
               cacheDirectory: config.actual.cacheDirectory,
               serverUrl: command.serverUrl,
@@ -253,7 +251,7 @@ export function registerSettings(
               Object.assign(config, previous);
               // Version mismatches and missing setup explain themselves; upstream errors stay hidden.
               if (error instanceof ConfigError) throw error;
-              throw new SettingsError(
+              throw new ConfigError(
                 "Could not connect to Actual or save settings. Check the server, budget ID, credentials and storage. Previous settings were retained.",
               );
             }
@@ -271,7 +269,7 @@ export function registerSettings(
             if (assigned.length) {
               const accessible = new Set((await newClient.listAccounts()).map(({ id }) => id));
               if (assigned.some(({ upAccountId }) => !accessible.has(upAccountId)))
-                throw new SettingsError(
+                throw new ConfigError(
                   "This key cannot access all its mapped accounts. Update those mappings before replacing the key.",
                 );
             }
@@ -280,7 +278,7 @@ export function registerSettings(
             next.secrets.tokens[command.id] = command.token;
           } else if (command.action === "remove-connection") {
             if (next.mappings.some(({ connections }) => connections.includes(command.id)))
-              throw new SettingsError(
+              throw new ConfigError(
                 "This key is still in use. Update or disconnect its mappings first.",
               );
             delete next.secrets.tokens[command.id];
@@ -290,7 +288,7 @@ export function registerSettings(
               ({ upAccountId }) => upAccountId === command.upAccountId,
             );
             if (existing && existing.actualAccountId !== command.actualAccountId)
-              throw new SettingsError(
+              throw new ConfigError(
                 "Disconnect the mapping before changing its Actual destination. Existing transactions will remain in the old account.",
               );
             const accessUnchanged =
@@ -317,7 +315,7 @@ export function registerSettings(
                 !command.connections.some((id) => account.connections.includes(id)) ||
                 !discovery.actual.some(({ id }) => id === command.actualAccountId)
               )
-                throw new SettingsError(
+                throw new ConfigError(
                   "The selected keys cannot access these accounts. Refresh accounts and choose an available key and destination.",
                 );
             }
@@ -340,7 +338,7 @@ export function registerSettings(
           try {
             parseConfig(next);
           } catch {
-            throw new SettingsError(
+            throw new ConfigError(
               "Account names must be unique, and each Up and Actual account can only be mapped once.",
             );
           }
