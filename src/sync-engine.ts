@@ -78,15 +78,18 @@ export class SyncEngine {
   }
 
   async reconcile(options: SyncOptions = {}): Promise<SyncReport> {
-    const report = emptyReport();
+    const report: SyncReport = {
+      ...emptyCounts(),
+      accounts: [],
+      preview: Boolean(options.dryRun),
+      publication: options.dryRun ? "not-required" : "pending",
+    };
     const since = normaliseSince(
       options.since ?? lookbackTimestamp(this.config.schedule.lookbackDays),
     );
     const mappings = this.config.mappings.filter(
       ({ alias }) => !options.mappingAliases || options.mappingAliases.includes(alias),
     );
-    report.preview = Boolean(options.dryRun);
-    report.publication = options.dryRun ? "not-required" : "pending";
     options.progress?.({ stage: "Refresh Actual" });
     await this.actual.sync();
     const transferPayees = await this.transferPayees();
@@ -167,8 +170,7 @@ export class SyncEngine {
       client.listTransactions(mapping.upAccountId, since),
     );
     progress("Read Actual");
-    // Settlement and Actual rules can move dates outside the Up creation window.
-    const existing = await this.existingTransactions(mapping, HISTORY_START);
+    const existing = await this.existingTransactions(mapping);
     const seen = new Set(transactions.map(({ id }) => importedId(id)));
 
     transactions.sort((left, right) => {
@@ -281,7 +283,7 @@ export class SyncEngine {
   ): Promise<void> {
     if (!updates.length) return;
     // Read once after import rules have run, including any date or category edits.
-    const refreshed = await this.existingTransactions(mapping, HISTORY_START);
+    const refreshed = await this.existingTransactions(mapping);
     for (const update of updates) {
       const transaction = refreshed.get(update.importedId);
       if (!transaction || transaction.category) continue;
@@ -325,11 +327,15 @@ export class SyncEngine {
     });
   }
 
+  /** Read all history: settlement and Actual rules can move dates outside the Up window. */
   private async existingTransactions(
     mapping: AccountMapping,
-    startDate: string,
   ): Promise<Map<string, ActualTransaction>> {
-    const values = await this.actual.getTransactions(mapping.actualAccountId, startDate, END_DATE);
+    const values = await this.actual.getTransactions(
+      mapping.actualAccountId,
+      HISTORY_START,
+      END_DATE,
+    );
     return new Map(
       values
         .filter(({ imported_id }) => imported_id?.startsWith(IMPORT_PREFIX))
@@ -464,14 +470,5 @@ function emptyCounts(): SyncCounts {
     inspected: 0,
     unchanged: 0,
     updated: 0,
-  };
-}
-
-function emptyReport(): SyncReport {
-  return {
-    ...emptyCounts(),
-    accounts: [],
-    preview: false,
-    publication: "not-required",
   };
 }

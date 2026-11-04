@@ -99,4 +99,3 @@ export type AppState = {
 };
 
 export type ActionResponse = { accepted: boolean; message: string };
-export type ErrorResponse = { error: string };
