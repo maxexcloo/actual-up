@@ -59,9 +59,8 @@ export function registerActions(
       (connection && !config.up.connections.some(({ id }) => id === connection))
     )
       return reply.code(400).send({ error: "Unknown connection or ambiguous scope" });
-    if (account && !config.mappings.some((mapping) => mapping.alias === account))
-      return reply.code(400).send({ error: "Unknown account" });
     const accountId = config.mappings.find((mapping) => mapping.alias === account)?.upAccountId;
+    if (account && !accountId) return reply.code(400).send({ error: "Unknown account" });
     const scope = { account, connection, mode, since };
     const accepted = runner.enqueue(
       `manual:${JSON.stringify(scope)}`,
