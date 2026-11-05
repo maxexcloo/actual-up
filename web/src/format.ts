@@ -30,11 +30,11 @@ export const stateColour = (state: JobState | "idle") =>
 const triggers: Record<string, string> = {
   "automatic-backfill": "Automatic Backfill",
   backfill: "Backfill",
+  discover: "Account Refresh",
   "dry-run": "Preview",
   manual: "Manual Sync",
   schedule: "Scheduled Sync",
-  settings: "Account Setup",
-  "test-connection": "Connection Test",
+  settings: "Settings Save",
   validate: "Connection Check",
 };
 export const triggerLabel = (trigger: string) => triggers[trigger] ?? trigger;

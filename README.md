@@ -7,12 +7,12 @@ no separate application database or workflow platform.
 ## Features
 
 - Apply Actual reconciliation and rules, optional category mappings and transfers.
-- Check connections and inspect the last 20 runs. Transaction amounts, payees
-  and messages stay out of logs and run results.
+- Check connections and inspect the last 20 runs and recent logs in the app.
+  Transaction amounts, payees and messages stay out of logs and run results.
 - Import held transactions as uncleared, update them when they settle and handle
   cancelled holds without losing edits made in Actual.
-- Manage connections, API keys and nested account mappings on one page, with
-  encrypted credential storage. Sync an account, a connection or everything.
+- Set up Actual and Up keys in one form and map accounts in one list, with
+  encrypted credential storage. Sync or preview everything or one account.
 - Preview imports, run a sync, backfill from a date and discover account IDs.
 - Serve a responsive Mantine interface from the same process, using MantineHub's
   shadcn theme, with password sign-in, same-origin checks and a light/dark toggle

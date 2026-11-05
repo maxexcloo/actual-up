@@ -46,21 +46,19 @@ export type SyncReport = SyncCounts & {
   publication: "not-required" | "pending" | "published" | "failed";
 };
 
-export type AccountUpdate = {
-  pending: boolean;
+export type LogEntry = {
+  time: string;
+  level: "debug" | "info" | "warn" | "error";
   message: string;
-  failed?: boolean;
+  /** Safe context fields, such as the account alias or connection. */
+  context?: string;
 };
-
-export type ConnectionStatus = "connected" | "attention" | "configured" | "setup" | "unchecked";
 
 export type AppState = {
   /** Changes whenever any other field changes. */
   version: string;
-  /** Settings revision for connection and Actual changes. */
-  revision: string;
-  busy: boolean;
-  message: string;
+  /** Form revisions; a save from an older revision is rejected. */
+  revisions: { mappings: string; settings: string };
   schedule: {
     enabled: boolean;
     lookbackDays: number;
@@ -75,27 +73,21 @@ export type AppState = {
     method: "session" | "password";
     configured: boolean;
     encryptionPassword: boolean;
-    status: ConnectionStatus;
-    test?: JobState;
   };
+  connections: string[];
   /** Unset until discovery has read Actual. */
   actualAccounts?: Array<{ id: string; name: string }>;
-  connections: Array<{ id: string; status: ConnectionStatus; test?: JobState }>;
+  /** Set when the last discovery could not read Actual or these connections. */
+  unavailable: { actual: boolean; connections: string[] };
   accounts: Array<{
     id: string;
     name: string;
     /** Every connection that can read the account, mapped or discovered. */
     connections: string[];
-    revision: string;
-    mapping?: {
-      alias: string;
-      actualAccountId: string;
-      actualAccountName?: string;
-      connections: string[];
-    };
-    update?: AccountUpdate;
+    mapping?: { alias: string; actualAccountId: string; connections: string[] };
   }>;
   jobs: Job[];
+  logs: LogEntry[];
 };
 
 export type ActionResponse = { accepted: boolean; message: string };

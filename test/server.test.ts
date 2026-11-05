@@ -2,6 +2,7 @@ import pino from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseConfig } from "../src/config.js";
 import { JobRunner } from "../src/job-runner.js";
+import { LogBuffer } from "../src/logs.js";
 import { Metrics } from "../src/metrics.js";
 import { createServer } from "../src/server.js";
 import type { SyncEngine } from "../src/sync-engine.js";
@@ -73,6 +74,7 @@ async function fixture() {
     clients: new Map([["max", client as unknown as UpClientLike]]),
     engine: engine as unknown as SyncEngine,
     logger,
+    logs: new LogBuffer(),
     metrics,
     runner,
   });
@@ -293,7 +295,7 @@ describe("operator app", () => {
           method: "POST",
           url: "/settings",
           headers: { ...headers, origin: "https://attacker.example" },
-          payload: { action: "discover" },
+          payload: {},
         })
       ).statusCode,
     ).toBe(403);
@@ -356,128 +358,14 @@ describe("operator app", () => {
     },
   );
 
-  it("limits connection syncs to their mapped accounts and includes shared accounts once", async () => {
-    const { server, runner, engine, config } = await fixture();
-    config.up.connections.push({ id: "partner" });
-    config.mappings[0]!.connections.push("partner");
-    config.mappings.push({
-      actualAccountId: "savings",
-      alias: "savings",
-      upAccountId: "22222222-2222-4222-8222-222222222222",
-      connections: ["partner"],
+  it("shows only safe log fields in the browser", async () => {
+    const logs = new LogBuffer();
+    pino(logs).warn({ account: "spending", payee: "Cafe", status: 503 }, "Retrying Up API");
+    await vi.waitFor(() => expect(logs.entries).toHaveLength(1));
+    expect(logs.entries[0]).toMatchObject({
+      level: "warn",
+      message: "Retrying Up API",
+      context: "account=spending status=503",
     });
-    for (const [connection, aliases] of [
-      ["max", ["spending"]],
-      ["partner", ["spending", "savings"]],
-    ] as const) {
-      await server.inject({
-        headers,
-        method: "POST",
-        payload: { mode: "live", connection },
-        url: "/actions/sync",
-      });
-      await runner.drain();
-      expect(engine.reconcile).toHaveBeenLastCalledWith({
-        dryRun: false,
-        progress: expect.any(Function),
-        mappingAliases: aliases,
-        since: undefined,
-      });
-    }
-    for (const scope of [{ connection: "missing" }, { connection: "max", account: "spending" }])
-      expect(
-        (
-          await server.inject({
-            headers,
-            method: "POST",
-            payload: { mode: "live", ...scope },
-            url: "/actions/sync",
-          })
-        ).statusCode,
-      ).toBe(400);
-  });
-
-  it("tests Actual and individual Up connections without importing, and reports safe failures", async () => {
-    const { server, runner, actual, client, engine } = await fixture();
-    for (const payload of [{ target: "actual" }, { target: "up", connection: "max" }]) {
-      const queued = await server.inject({
-        headers,
-        method: "POST",
-        payload,
-        url: "/actions/test",
-      });
-      expect(queued.statusCode).toBe(202);
-      await runner.drain();
-    }
-    expect(actual.getServerVersion).toHaveBeenCalledOnce();
-    expect(client.ping).toHaveBeenCalledOnce();
-    expect(engine.reconcile).not.toHaveBeenCalled();
-    expect(actual.sync).not.toHaveBeenCalled();
-    const state = async () => (await server.inject({ headers, url: "/state" })).json();
-    expect((await state()).connections[0].test).toBe("success");
-    expect((await state()).actual.test).toBe("success");
-    client.ping.mockRejectedValueOnce(new Error("sensitive-token"));
-    await server.inject({
-      headers,
-      method: "POST",
-      payload: { target: "up", connection: "max" },
-      url: "/actions/test",
-    });
-    await runner.drain();
-    const failed = await server.inject({ headers, url: "/state" });
-    expect(failed.json().connections[0].test).toBe("failure");
-    expect(failed.body).not.toContain("sensitive-token");
-    expect(
-      (
-        await server.inject({
-          headers,
-          method: "POST",
-          payload: { target: "up", connection: "missing" },
-          url: "/actions/test",
-        })
-      ).statusCode,
-    ).toBe(400);
-  });
-
-  it("derives connection-test progress from the queue and coalesces duplicate requests", async () => {
-    const { server, runner, client } = await fixture();
-    let releaseQueue!: () => void;
-    let releaseTest!: () => void;
-    const queueGate = new Promise<void>((resolve) => {
-      releaseQueue = resolve;
-    });
-    const testGate = new Promise<void>((resolve) => {
-      releaseTest = resolve;
-    });
-    runner.enqueue("block", "manual", () => queueGate);
-    client.ping.mockReturnValue(testGate);
-    const request = () =>
-      server.inject({
-        headers,
-        method: "POST",
-        payload: { target: "up", connection: "max" },
-        url: "/actions/test",
-      });
-    const test = async () =>
-      (await server.inject({ headers, url: "/state" })).json().connections[0].test;
-    try {
-      expect((await request()).json()).toEqual({
-        accepted: true,
-        message: "Testing connection…",
-      });
-      expect(runner.history[0]).toMatchObject({ state: "queued", scope: { target: "up-max" } });
-      expect((await request()).statusCode).toBe(202);
-      expect(runner.depth).toBe(2);
-      releaseQueue();
-      await vi.waitFor(() => expect(client.ping).toHaveBeenCalledOnce());
-      expect(await test()).toBe("running");
-      releaseTest();
-      await runner.drain();
-      expect(await test()).toBe("success");
-    } finally {
-      releaseQueue();
-      releaseTest();
-      await runner.drain();
-    }
   });
 });

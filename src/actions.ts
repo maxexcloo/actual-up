@@ -6,45 +6,14 @@ import type { ActionResponse } from "./api.js";
 import type { AppConfig } from "./config.js";
 import { ConfigError } from "./errors.js";
 import type { Runtime } from "./runtime.js";
-import { syncForm, testForm } from "./schemas.js";
+import { syncForm } from "./schemas.js";
 
-/** Queue connection tests, syncs and validation from the dashboard. */
+/** Queue syncs and connection checks from the dashboard. */
 export function registerActions(
   server: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>,
   config: AppConfig,
-  { actual, clients, engine, runner }: Runtime,
+  { clients, engine, runner }: Runtime,
 ) {
-  server.post("/actions/test", async (request, reply) => {
-    const parsed = testForm.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Invalid connection test" });
-    const { target, connection } = parsed.data;
-    if ((target === "actual" && connection) || (target === "up" && !clients.has(connection)))
-      return reply.code(400).send({ error: "Unknown connection" });
-    const id = target === "actual" ? "actual" : `up-${connection}`;
-    const accepted = runner.enqueue(
-      `test:${id}`,
-      "test-connection",
-      async () => {
-        if (target === "actual") await actual.getServerVersion();
-        else await clients.get(connection)!.ping();
-        return { ok: true };
-      },
-      { target: id },
-    );
-    // A duplicate request joins the test that is already queued or running.
-    const pending = runner.history.some(
-      (job) =>
-        job.trigger === "test-connection" &&
-        job.scope?.target === id &&
-        (job.state === "queued" || job.state === "running"),
-    );
-    const response: ActionResponse =
-      accepted || pending
-        ? { accepted: true, message: "Testing connection…" }
-        : { accepted: false, message: "The queue is busy. Try again shortly." };
-    return reply.code(response.accepted ? 202 : 409).send(response);
-  });
-
   const queued = (accepted: boolean): ActionResponse =>
     accepted
       ? { accepted, message: "Queued. Follow progress in Sync Status." }
@@ -53,15 +22,10 @@ export function registerActions(
   server.post("/actions/sync", async (request, reply) => {
     const parsed = syncForm.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]!.message });
-    const { account, connection, since, mode } = parsed.data;
-    if (
-      (account && connection) ||
-      (connection && !config.up.connections.some(({ id }) => id === connection))
-    )
-      return reply.code(400).send({ error: "Unknown connection or ambiguous scope" });
+    const { account, since, mode } = parsed.data;
     const accountId = config.mappings.find((mapping) => mapping.alias === account)?.upAccountId;
     if (account && !accountId) return reply.code(400).send({ error: "Unknown account" });
-    const scope = { account, connection, mode, since };
+    const scope = { account, mode, since };
     const accepted = runner.enqueue(
       `manual:${JSON.stringify(scope)}`,
       mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual",
@@ -73,13 +37,7 @@ export function registerActions(
           throw new ConfigError("The account was disconnected before this sync started.");
         return engine.reconcile({
           dryRun: mode === "dry-run",
-          mappingAliases: mapping
-            ? [mapping.alias]
-            : connection
-              ? config.mappings
-                  .filter(({ connections }) => connections.includes(connection))
-                  .map(({ alias }) => alias)
-              : undefined,
+          mappingAliases: mapping ? [mapping.alias] : undefined,
           since: since || undefined,
           progress,
         });

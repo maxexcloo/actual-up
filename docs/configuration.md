@@ -27,41 +27,36 @@ address; without a proxy, clients could choose their own address.
 
 ## Browser Setup
 
-1. Enter the Actual server URL, budget sync ID and session token or password.
-   An encrypted budget also needs its encryption password. Use a session token
-   for an OIDC-backed Actual deployment.
-2. Add each Up API key under a short connection name. Keys are checked before
-   saving. Replace or remove them here without editing YAML or restarting.
-3. Refresh accounts and connect each Up account to its Actual destination.
-   Shared accounts use one mapping; select both partners' keys for fallback access.
+1. Open **Settings** and enter the Actual server URL, budget sync ID and session
+   token or password. An encrypted budget also needs its encryption password.
+   Use a session token for an OIDC-backed Actual deployment.
+2. Add each Up API key under a short name, then **Test & Save**. Saving checks
+   only what changed: a changed Actual connection is opened, and new keys are
+   pinged. Leaving a credential or key blank keeps the saved value; existing
+   keys are never sent back to the browser.
+3. Under **Accounts**, choose an Actual account for each Up account you want to
+   sync, then **Save Accounts**. A shared 2Up account appears once; tick both
+   partners' keys for fallback access.
 
-Use **Test Connection** on Actual or an Up connection to check its saved credentials.
-Results appear inline without importing bank transactions.
+Settings saves wait for any running sync, because they reopen Actual. Account
+saves are checked against the last account discovery and apply straight away.
+Each form rejects a save made from an outdated copy; reload and retry.
 
-Account changes save independently, so you can connect several accounts without
-waiting for backfill. Only the affected account rows refresh, and drafts in other
-rows stay where they are. Shared account rows update together. Actual operations and
-backfills still run through one serial queue.
+A replacement Up key must still access its connected accounts. Disconnect
+accounts before removing a key they use, switching Actual budgets or servers, or
+choosing another Actual account for them. Clearing an account's Actual account
+stops syncing it and keeps its existing Actual transactions.
 
-Leaving credentials blank on the Actual edit form keeps the saved values.
-Existing keys are never sent back to the browser. A replacement Up key must still access its
-mapped accounts. Remove mappings before removing a key they use, switching
-Actual budgets/servers or changing a mapping's destination. Disconnecting keeps
-existing Actual transactions; review them before reconnecting elsewhere.
+Connecting a new account starts a full backfill when automation is enabled.
+Renaming or changing keys does not start another backfill. Settings saves reject
+an Actual server version the app doesn't support. The app starts without an
+upstream connection, so the browser is still available for first-time setup and
+repairs.
 
-Connecting a new mapping starts a full backfill when automation is enabled.
-Editing an existing mapping does not start another backfill. An unavailable
-existing fallback key can be retained if another selected key works.
-
-Connection setup rejects an Actual server version the app doesn't support
-before saving. The app starts without an upstream connection so
-the browser is still available for first-time setup and repairs.
-
-Each Up connection lists the accounts it can access, which are discovered
-automatically after you save a key. **Sync** imports one account; a connection's **Sync All** imports its
-mapped accounts; the page-level **Sync All** imports every mapping. A shared
-account may appear beneath both connections but retains one mapping and one
-import identity. Key settings, mapping edits and backfill controls stay visible.
+**Sync Status** runs a sync or preview for all accounts or one, over the
+recent window or from a chosen date. **Check Connections** pings every key and
+validates the mappings without importing. **Logs** shows the app's latest 200
+log lines, which never include bank data and reset on restart.
 
 ## Encrypted Storage
 

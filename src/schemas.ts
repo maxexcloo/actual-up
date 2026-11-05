@@ -22,31 +22,65 @@ export const loginForm = z
   })
   .strict();
 
-export const actualForm = z.object({
-  serverUrl: httpUrl,
-  syncId: z.string().trim().min(1, "Enter the budget sync ID"),
-  method: z.enum(["session", "password"]),
-  credential: z.string().max(8192).default(""),
-  encryptionPassword: z.string().max(8192).default(""),
-  clearEncryption: z.boolean().default(false),
-});
+export const settingsForm = z
+  .object({
+    actual: z
+      .object({
+        serverUrl: httpUrl,
+        syncId: z.string().trim().min(1, "Enter the budget sync ID"),
+        method: z.enum(["session", "password"]),
+        credential: z.string().max(8192).default(""),
+        encryptionPassword: z.string().max(8192).default(""),
+        clearEncryption: z.boolean().default(false),
+      })
+      .strict(),
+    /** A blank token keeps the saved key; a missing connection removes it. */
+    connections: z.array(
+      z
+        .object({
+          id: connectionId.max(80),
+          token: z.string().trim().max(8192).default(""),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
 
-export const connectionForm = z.object({
-  id: connectionId.max(80),
-  token: z.string().trim().min(1, "Enter an Up API key").max(8192),
-});
+export const mappingsForm = z
+  .object({
+    /** Every listed Up account; a row without an Actual account is not synced. */
+    mappings: z.array(
+      z
+        .object({
+          upAccountId: z.uuid(),
+          actualAccountId: z.string().min(1).nullable(),
+          alias: z.string().trim().max(80),
+          connections: z.array(z.string()),
+        })
+        .strict()
+        .superRefine((row, context) => {
+          if (!row.actualAccountId) return;
+          if (!row.alias)
+            context.addIssue({ code: "custom", message: "Enter an account name", path: ["alias"] });
+          if (!row.connections.length)
+            context.addIssue({
+              code: "custom",
+              message: "Choose at least one key",
+              path: ["connections"],
+            });
+        }),
+    ),
+  })
+  .strict();
 
-export const mappingForm = z.object({
-  alias: z.string().trim().min(1, "Enter an account name").max(80),
-  actualAccountId: z.string().min(1, "Choose an Actual account"),
-  connections: z.array(z.string()).min(1, "Choose at least one connection"),
-});
+const revision = { revision: z.string() };
+export const settingsRequest = settingsForm.extend(revision).strict();
+export const mappingsRequest = mappingsForm.extend(revision).strict();
 
 export const syncForm = z
   .object({
     mode: z.enum(["dry-run", "live"]),
     account: z.string().default(""),
-    connection: z.string().default(""),
     since: z
       .union([
         z.literal(""),
@@ -60,23 +94,3 @@ export const syncForm = z
       .default(""),
   })
   .strict();
-
-export const testForm = z
-  .object({
-    target: z.enum(["actual", "up"]),
-    connection: z.string().default(""),
-  })
-  .strict();
-
-const revision = { revision: z.string() };
-const account = { upAccountId: z.uuid() };
-
-export const settingsCommand = z.discriminatedUnion("action", [
-  actualForm.extend({ ...revision, action: z.literal("actual") }).strict(),
-  z.object({ ...revision, action: z.literal("discover") }).strict(),
-  connectionForm.extend({ ...revision, action: z.literal("connection") }).strict(),
-  z.object({ ...revision, action: z.literal("remove-connection"), id: z.string() }).strict(),
-  mappingForm.extend({ ...revision, ...account, action: z.literal("mapping") }).strict(),
-  z.object({ ...revision, ...account, action: z.literal("remove-mapping") }).strict(),
-]);
-export type SettingsCommand = z.input<typeof settingsCommand>;

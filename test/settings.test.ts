@@ -4,16 +4,18 @@ import { join } from "node:path";
 import Fastify from "fastify";
 import pino from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AppState } from "../src/api.js";
 import { parseConfig } from "../src/config.js";
 import { JobRunner } from "../src/job-runner.js";
+import { LogBuffer } from "../src/logs.js";
 import { Metrics } from "../src/metrics.js";
 import { registerSettings } from "../src/settings.js";
-import { connectionToken, loadSettings, settingsVersion } from "../src/settings-store.js";
+import { connectionToken, loadSettings } from "../src/settings-store.js";
 import type { SyncEngine } from "../src/sync-engine.js";
-import type { AppState } from "../src/api.js";
 import type { ActualClient, UpClientLike } from "../src/types.js";
 
 const upId = "11111111-1111-4111-8111-111111111111";
+const secondId = "22222222-2222-4222-8222-222222222222";
 const cleanups: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
@@ -23,43 +25,38 @@ afterEach(async () => {
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "actual-up-settings-"));
   cleanups.push(() => rm(directory, { force: true, recursive: true }));
-  vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "test-encryption-key-at-least-32-characters");
+  vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "k".repeat(40));
   const config = parseConfig({
     version: 1,
     settingsFile: join(directory, "settings.json"),
-    actual: {
-      serverUrl: "http://actual",
-      syncId: "budget",
-    },
+    actual: { serverUrl: "http://actual", syncId: "budget" },
     up: { connections: [{ id: "max" }] },
   });
   config.secrets.tokens.max = "test-secret-never-render";
+  config.secrets.actual = { method: "session", credential: "actual-token-never-render" };
   const logger = pino({ enabled: false });
   const runner = new JobRunner(new Metrics(), logger);
-  const accounts = [
-    {
-      id: upId,
-      attributes: {
-        displayName: "<script>bad</script>",
-        balance: { value: "private-balance" },
-      },
-    },
-  ];
+  const upAccount = (id: string, displayName: string) => ({
+    id,
+    attributes: { displayName, balance: { value: "private-balance" } },
+  });
   const client = {
     ping: vi.fn().mockResolvedValue(undefined),
-    listAccounts: vi.fn().mockResolvedValue(accounts),
+    listAccounts: vi
+      .fn()
+      .mockResolvedValue([upAccount(upId, "<script>bad</script>"), upAccount(secondId, "Savings")]),
   };
   const clients = new Map<string, UpClientLike>([["max", client as unknown as UpClientLike]]);
   const actual = {
     open: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
-    getServerVersion: vi.fn().mockResolvedValue("26.10.0"),
     sync: vi.fn().mockResolvedValue(undefined),
-    getAccounts: vi.fn().mockResolvedValue([{ id: "actual-id", name: "Spending" }]),
+    getAccounts: vi.fn().mockResolvedValue([
+      { id: "actual-id", name: "Spending" },
+      { id: "actual-2", name: "Savings" },
+    ]),
   };
-  const engine = {
-    reconcile: vi.fn().mockResolvedValue({ failed: 0, imported: 1 }),
-  };
+  const engine = { reconcile: vi.fn().mockResolvedValue({ failed: 0, imported: 1 }) };
   const makeClient = vi.fn().mockReturnValue(client);
   const server = Fastify({ loggerInstance: logger });
   registerSettings(
@@ -70,6 +67,7 @@ async function fixture() {
       clients,
       engine: engine as unknown as SyncEngine,
       logger,
+      logs: new LogBuffer(),
       metrics: new Metrics(),
       runner,
     },
@@ -79,31 +77,40 @@ async function fixture() {
     await runner.close();
     await server.close();
   });
-  const post = async (data: Record<string, unknown>, drain = true) => {
-    const result = await server.inject({
+  const state = async () => (await server.inject("/state")).json() as AppState;
+  const saveSettings = async (body: Record<string, unknown> = {}) => {
+    const { revisions } = await state();
+    return server.inject({
       method: "POST",
       url: "/settings",
       payload: {
-        revision: settingsVersion(
-          typeof data.upAccountId === "string" ? data.upAccountId : undefined,
-        ),
-        ...data,
+        revision: revisions.settings,
+        actual: { serverUrl: "http://actual", syncId: "budget", method: "session" },
+        connections: [{ id: "max" }],
+        ...body,
       },
     });
-    if (drain) await runner.drain();
-    return result;
   };
-  const update = async (id: string) =>
-    ((await server.inject("/state")).json() as AppState).accounts.find(
-      (account) => account.id === id,
-    )?.update;
-  const mapping = {
-    action: "mapping",
+  const row = (overrides: Record<string, unknown> = {}) => ({
+    upAccountId: upId,
     actualAccountId: "actual-id",
     alias: "spending",
-    upAccountId: upId,
     connections: ["max"],
+    ...overrides,
+  });
+  const saveMappings = async (mappings: unknown[], drain = true) => {
+    const { revisions } = await state();
+    const response = await server.inject({
+      method: "POST",
+      url: "/mappings",
+      payload: { revision: revisions.mappings, mappings },
+    });
+    if (drain) await runner.drain();
+    return response;
   };
+  // The first visit discovers accounts.
+  await server.inject("/state");
+  await runner.drain();
   return {
     actual,
     client,
@@ -111,334 +118,193 @@ async function fixture() {
     config,
     engine,
     makeClient,
-    mapping,
-    post,
+    row,
     runner,
+    saveMappings,
+    saveSettings,
     server,
-    update,
+    state,
   };
 }
 
 describe("browser setup", () => {
-  it("rejects invalid account submissions without changing the mapping", async () => {
+  it("lists discovered accounts without balances or keys and discovers on first visit", async () => {
     const f = await fixture();
-    await f.post({
-      action: "connection",
-      id: "partner",
-      token: "test-partner",
-    });
-    await f.post({ ...f.mapping, connections: ["max", "partner"] });
-    const { connections: _connections, ...mapping } = f.mapping;
-    const response = await f.server.inject({
-      method: "POST",
-      url: "/settings",
-      payload: { ...mapping, revision: settingsVersion(upId) },
-    });
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ error: "Invalid settings. Reload the page and try again." });
-    expect(f.config.mappings[0]?.connections).toEqual(["max", "partner"]);
-  });
-
-  it("discovers accounts without balances and never exposes keys", async () => {
-    const f = await fixture();
-    await f.post({ action: "discover" });
-    const page = await f.server.inject("/state");
-    expect(page.json().accounts[0].name).toBe("<script>bad</script>");
-    expect(page.body).not.toContain("private-balance");
-    expect(page.body).not.toContain("test-secret-never-render");
-  });
-
-  it("discovers automatically on first visit and after adding a connection", async () => {
-    const f = await fixture();
-    await f.server.inject("/state");
-    await f.runner.drain();
     expect(f.client.listAccounts).toHaveBeenCalledOnce();
-    const page = (await f.server.inject("/state")).json();
-    expect(page.connections.map(({ id }: { id: string }) => id)).toEqual(["max"]);
-    expect(page.accounts[0]).toMatchObject({ id: upId, connections: ["max"] });
-    await f.post({
-      action: "connection",
-      id: "partner",
-      token: "partner-secret",
-    });
-    const updated = await f.server.inject("/state");
-    expect(updated.json().connections.map(({ id }: { id: string }) => id)).toEqual([
-      "max",
-      "partner",
-    ]);
-    expect(updated.body).not.toContain("partner-secret");
+    const page = await f.server.inject("/state");
+    const body = page.json() as AppState;
+    expect(body.accounts.map(({ name }) => name)).toEqual(["<script>bad</script>", "Savings"]);
+    expect(body.actualAccounts).toHaveLength(2);
+    expect(page.body).not.toContain("private-balance");
+    expect(page.body).not.toContain("never-render");
+    const refresh = await f.server.inject({ method: "POST", url: "/actions/discover" });
+    expect(refresh.statusCode).toBe(202);
+    await f.runner.drain();
+    expect(f.client.listAccounts).toHaveBeenCalledTimes(2);
   });
 
-  it("persists mappings before backfill, restores them on restart and rejects stale writes", async () => {
+  it("persists mappings before backfill, ignores unsynced rows and restores them on restart", async () => {
     const f = await fixture();
-    const revision = settingsVersion(upId);
     f.engine.reconcile.mockImplementation(async () => {
       expect((await loadSettings(f.config)).mappings).toHaveLength(1);
       return { failed: 0, imported: 1 };
     });
-    expect((await f.post(f.mapping)).statusCode).toBe(202);
+    const response = await f.saveMappings([
+      f.row(),
+      f.row({ upAccountId: secondId, actualAccountId: null, alias: "" }),
+    ]);
+    expect(response.statusCode).toBe(200);
+    expect(response.json().message).toContain("backfill queued");
     expect(f.engine.reconcile).toHaveBeenCalledWith({
       since: "1970-01-01",
       progress: expect.any(Function),
       mappingAliases: ["spending"],
     });
     const restored = await loadSettings(parseConfig({ ...f.config, mappings: [] }));
-    expect(restored.mappings[0]?.upAccountId).toBe(upId);
+    expect(restored.mappings.map(({ upAccountId }) => upAccountId)).toEqual([upId]);
     expect((await stat(f.config.settingsFile)).mode & 0o777).toBe(0o600);
-    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("test-secret");
-    expect(
-      (await f.post({ action: "remove-mapping", revision, upAccountId: upId })).statusCode,
-    ).toBe(409);
-    expect(f.config.mappings).toHaveLength(1);
+    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("never-render");
   });
 
-  it("does not backfill again when an existing account name is edited", async () => {
+  it("rejects stale, invalid, duplicate and inaccessible mappings without changing them", async () => {
     const f = await fixture();
-    await f.post(f.mapping);
-    f.engine.reconcile.mockClear();
-    f.client.listAccounts.mockClear().mockRejectedValue(new Error("unavailable"));
-    f.actual.getAccounts.mockClear().mockRejectedValue(new Error("unavailable"));
-    await f.post({ ...f.mapping, alias: "renamed" });
+    const { revisions } = await f.state();
+    await f.saveMappings([f.row()]);
+    const stale = await f.server.inject({
+      method: "POST",
+      url: "/mappings",
+      payload: { revision: revisions.mappings, mappings: [] },
+    });
+    expect(stale.statusCode).toBe(400);
+    expect(stale.json().error).toContain("Reload");
+    for (const mappings of [
+      [f.row({ alias: "" })],
+      [f.row(), f.row({ upAccountId: secondId })],
+      [f.row({ actualAccountId: "actual-2" })],
+      [f.row(), f.row({ upAccountId: secondId, actualAccountId: "missing", alias: "savings" })],
+    ])
+      expect((await f.saveMappings(mappings)).statusCode).toBe(400);
+    expect(f.config.mappings).toEqual([
+      { actualAccountId: "actual-id", alias: "spending", connections: ["max"], upAccountId: upId },
+    ]);
+    expect(f.engine.reconcile).toHaveBeenCalledOnce();
+  });
+
+  it("renames without upstream calls or another backfill, and honours paused automation", async () => {
+    const f = await fixture();
+    f.config.schedule.enabled = false;
+    await f.saveMappings([f.row()]);
+    f.client.listAccounts.mockClear();
+    f.actual.getAccounts.mockClear();
+    await f.saveMappings([f.row({ alias: "renamed" })]);
     expect(f.config.mappings[0]?.alias).toBe("renamed");
     expect(f.client.listAccounts).not.toHaveBeenCalled();
     expect(f.actual.getAccounts).not.toHaveBeenCalled();
     expect(f.engine.reconcile).not.toHaveBeenCalled();
   });
 
-  it("checks new keys, encrypts them and rejects invalid keys or deleting keys in use", async () => {
-    const f = await fixture();
-    await f.post({
-      action: "connection",
-      id: "partner",
-      token: "another-secret",
-    });
-    expect(f.makeClient).toHaveBeenCalledWith("another-secret", "partner");
-    expect(f.clients.has("partner")).toBe(true);
-    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("another-secret");
-    const restored = await loadSettings(f.config);
-    expect(
-      connectionToken(
-        restored,
-        restored.up.connections.find(({ id }) => id === "partner")!,
-      ),
-    ).toBe("another-secret");
-    f.client.ping.mockRejectedValueOnce(new Error("bad-key-secret"));
-    await f.post({ action: "connection", id: "bad", token: "bad-key-secret" });
-    expect(f.clients.has("bad")).toBe(false);
-    await f.post(f.mapping);
-    await f.post({ action: "remove-connection", id: "max" });
-    expect(f.config.up.connections.some(({ id }) => id === "max")).toBe(true);
-    expect(f.runner.history[0]?.state).toBe("failure");
-  });
-
-  it("keeps one shared mapping and preserves unavailable fallback keys", async () => {
-    const f = await fixture();
-    await f.post({
-      action: "connection",
-      id: "partner",
-      token: "another-secret",
-    });
-    await f.post({ ...f.mapping, connections: ["max", "partner"] });
-    const page = (await f.server.inject("/state")).json();
-    expect(page.accounts).toHaveLength(1);
-    expect(page.accounts[0]).toMatchObject({
-      connections: ["max", "partner"],
-      mapping: {
-        alias: "spending",
-        actualAccountName: "Spending",
-        connections: ["max", "partner"],
-      },
-    });
-    f.clients.set("max", {
-      listAccounts: vi.fn().mockRejectedValue(new Error("unavailable")),
-    } as unknown as UpClientLike);
-    await f.post({ ...f.mapping, connections: ["max", "partner"] });
-    expect(f.runner.history[0]?.state).toBe("success");
-    expect(f.config.mappings).toHaveLength(1);
-    expect(f.config.mappings[0]?.connections).toEqual(["max", "partner"]);
-  });
-
-  it("rejects inaccessible mappings and failed saves without changing live settings", async () => {
-    const f = await fixture();
-    await f.post({ ...f.mapping, actualAccountId: "missing" });
-    expect(f.config.mappings).toEqual([]);
-    await writeFile(f.config.settingsFile, "not a directory");
-    f.config.settingsFile += "/settings.json";
-    await f.post(f.mapping);
-    expect(f.config.mappings).toEqual([]);
-    expect(f.engine.reconcile).not.toHaveBeenCalled();
-  });
-
-  it("serialises setup behind active work and honours paused automation", async () => {
+  it("saves accounts immediately while a sync is running", async () => {
     const f = await fixture();
     let release!: () => void;
-    f.runner.enqueue(
-      "test",
-      "test",
-      () =>
-        new Promise<void>((resolve) => {
-          release = resolve;
-        }),
-    );
-    await Promise.resolve();
-    f.config.schedule.enabled = false;
-    await f.post(f.mapping, false);
-    expect(f.config.mappings).toEqual([]);
-    expect((await f.post({ action: "discover" }, false)).statusCode).toBe(409);
-    release();
+    f.runner.enqueue("hold", "manual", () => new Promise<void>((resolve) => (release = resolve)));
+    try {
+      expect((await f.saveMappings([f.row()], false)).statusCode).toBe(200);
+      expect(f.config.mappings).toHaveLength(1);
+    } finally {
+      release();
+    }
     await f.runner.drain();
-    expect(f.config.mappings).toHaveLength(1);
-    expect(f.engine.reconcile).not.toHaveBeenCalled();
-    await f.post({ action: "remove-mapping", upAccountId: upId });
-    expect((await loadSettings(f.config)).mappings).toEqual([]);
   });
 
-  it("saves Actual credentials encrypted, supports replacement and rolls back a failed connection", async () => {
+  it("checks new keys, encrypts them and rejects invalid keys or removing keys in use", async () => {
     const f = await fixture();
-    const command = {
-      action: "actual",
+    const added = await f.saveSettings({
+      connections: [{ id: "max" }, { id: "partner", token: "partner-secret" }],
+    });
+    expect(added.json()).toEqual({ accepted: true, message: "Settings saved." });
+    expect(f.makeClient).toHaveBeenCalledWith("partner-secret", "partner");
+    expect(f.clients.has("partner")).toBe(true);
+    expect(f.actual.open).not.toHaveBeenCalled();
+    expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("partner-secret");
+    const restored = await loadSettings(f.config);
+    expect(connectionToken(restored, { id: "partner" })).toBe("partner-secret");
+    expect((await f.state()).accounts[0]?.connections).toEqual(["max", "partner"]);
+
+    f.client.ping.mockRejectedValueOnce(new Error("bad-key-secret"));
+    const bad = await f.saveSettings({
+      connections: [{ id: "max" }, { id: "bad", token: "bad-key-secret" }],
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.body).not.toContain("bad-key-secret");
+    expect(f.clients.has("bad")).toBe(false);
+    expect((await f.saveSettings({ connections: [{ id: "new" }] })).statusCode).toBe(400);
+
+    await f.saveMappings([f.row()]);
+    const inUse = await f.saveSettings({ connections: [{ id: "partner" }] });
+    expect(inUse.json().error).toContain("Disconnect spending");
+    expect(f.config.up.connections.map(({ id }) => id)).toEqual(["max", "partner"]);
+    await f.saveSettings({ connections: [{ id: "max" }] });
+    expect(f.clients.has("partner")).toBe(false);
+  });
+
+  it("keeps one shared mapping that falls back across keys", async () => {
+    const f = await fixture();
+    await f.saveSettings({ connections: [{ id: "max" }, { id: "partner", token: "another" }] });
+    await f.saveMappings([f.row({ connections: ["max", "partner"] })]);
+    const page = await f.state();
+    expect(page.accounts[0]).toMatchObject({
+      connections: ["max", "partner"],
+      mapping: { alias: "spending", connections: ["max", "partner"] },
+    });
+    expect(f.config.mappings).toHaveLength(1);
+  });
+
+  it("saves Actual credentials encrypted, keeps blank ones and rolls back a failed connection", async () => {
+    const f = await fixture();
+    const actual = {
       serverUrl: "http://new-actual",
       syncId: "new-budget",
       method: "session",
       credential: "actual-secret-token",
     };
-    await f.post(command);
-    expect(f.runner.history[0]?.state).toBe("success");
+    expect((await f.saveSettings({ actual })).statusCode).toBe(200);
+    expect(f.actual.open).toHaveBeenCalledOnce();
     expect(f.config.actual.serverUrl).toBe("http://new-actual");
     expect((await loadSettings(f.config)).secrets.actual?.credential).toBe("actual-secret-token");
     expect(await readFile(f.config.settingsFile, "utf8")).not.toContain("actual-secret-token");
     const page = await f.server.inject("/state");
     expect(page.json().actual).toMatchObject({ configured: true, method: "session" });
     expect(page.body).not.toContain("actual-secret-token");
-    await f.post({ ...command, credential: "" });
+
+    await f.saveSettings({ actual: { ...actual, credential: "" } });
     expect(f.config.secrets.actual?.credential).toBe("actual-secret-token");
     f.actual.open.mockRejectedValueOnce(new Error("upstream contains secret"));
-    await f.post({ ...command, credential: "replacement-secret" });
-    expect(f.runner.history[0]?.state).toBe("failure");
+    const failed = await f.saveSettings({ actual: { ...actual, credential: "replacement" } });
+    expect(failed.statusCode).toBe(400);
+    expect(failed.body).not.toContain("upstream contains secret");
     expect(f.config.secrets.actual?.credential).toBe("actual-secret-token");
     expect((await loadSettings(f.config)).secrets.actual?.credential).toBe("actual-secret-token");
-    await f.post(f.mapping);
-    await f.post({ ...command, syncId: "other-budget" });
+
+    await f.saveMappings([f.row()]);
+    expect((await f.saveSettings({ actual: { ...actual, syncId: "other" } })).statusCode).toBe(400);
     expect(f.config.actual.syncId).toBe("new-budget");
   });
 
-  it("accepts independent account saves from the same page and rejects duplicate destinations", async () => {
+  it("keeps live settings when storage fails", async () => {
     const f = await fixture();
-    const secondId = "22222222-2222-4222-8222-222222222222";
-    f.client.listAccounts.mockResolvedValue([
-      {
-        id: upId,
-        attributes: { displayName: "Everyday", balance: { value: "private" } },
-      },
-      {
-        id: secondId,
-        attributes: { displayName: "Savings", balance: { value: "private" } },
-      },
-    ]);
-    f.actual.getAccounts.mockResolvedValue([
-      { id: "actual-id", name: "Spending" },
-      { id: "actual-2", name: "Savings" },
-    ]);
-    await f.post({ action: "discover" });
-    let release!: () => void;
-    f.runner.enqueue(
-      "hold",
-      "test",
-      () =>
-        new Promise<void>((resolve) => {
-          release = resolve;
-        }),
-    );
-    await Promise.resolve();
-    const submit = (id: string, destination: string) =>
-      f.server.inject({
-        method: "POST",
-        url: "/settings",
-        payload: {
-          ...f.mapping,
-          alias: id === upId ? "Everyday" : "Savings",
-          upAccountId: id,
-          actualAccountId: destination,
-          revision: settingsVersion(id),
-        },
-      });
-    try {
-      const first = await submit(upId, "actual-id");
-      const second = await submit(secondId, "actual-2");
-      expect(first.statusCode).toBe(202);
-      expect(second.statusCode).toBe(202);
-      expect(first.json()).toEqual({ accepted: true, message: "Save queued." });
-      expect((await submit(upId, "actual-id")).statusCode).toBe(409);
-      expect((await f.update(secondId))?.pending).toBe(true);
-    } finally {
-      release();
-    }
-    await f.runner.drain();
-    expect(f.config.mappings).toHaveLength(2);
-    expect(f.engine.reconcile).toHaveBeenCalledTimes(2);
-    expect((await f.update(secondId))?.message).toContain("Saved.");
-    await f.post({ action: "remove-mapping", upAccountId: secondId });
-    await submit(secondId, "actual-id");
-    await f.runner.drain();
-    expect(f.config.mappings).toHaveLength(1);
-    expect((await f.update(secondId))?.message).toContain("only be mapped once");
-  });
-
-  it("keeps other account saves available while history backfills", async () => {
-    const f = await fixture();
-    const secondId = "22222222-2222-4222-8222-222222222222";
-    f.client.listAccounts.mockResolvedValue([
-      {
-        id: upId,
-        attributes: { displayName: "Everyday", balance: { value: "private" } },
-      },
-      {
-        id: secondId,
-        attributes: { displayName: "Savings", balance: { value: "private" } },
-      },
-    ]);
-    f.actual.getAccounts.mockResolvedValue([
-      { id: "actual-id", name: "Spending" },
-      { id: "actual-2", name: "Savings" },
-    ]);
-    const revision = settingsVersion(secondId);
-    let release!: () => void;
-    f.engine.reconcile.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          release = () => resolve({ failed: 0, imported: 1 });
-        }),
-    );
-    await f.post(f.mapping, false);
-    await vi.waitFor(() => expect(release).toBeDefined());
-    try {
-      expect((await f.update(upId))?.message).toContain("backfill queued");
-      expect((await f.server.inject("/state")).json().busy).toBe(false);
-      const second = await f.post(
-        {
-          ...f.mapping,
-          alias: "Savings",
-          upAccountId: secondId,
-          actualAccountId: "actual-2",
-          revision,
-        },
-        false,
-      );
-      expect(second.statusCode).toBe(202);
-      expect(f.config.mappings).toHaveLength(1);
-    } finally {
-      release();
-    }
-    await f.runner.drain();
-    expect(f.config.mappings).toHaveLength(2);
+    await writeFile(f.config.settingsFile, "not a directory");
+    f.config.settingsFile += "/settings.json";
+    expect((await f.saveMappings([f.row()])).statusCode).toBe(500);
+    expect(f.config.mappings).toEqual([]);
+    expect(f.engine.reconcile).not.toHaveBeenCalled();
   });
 
   it("fails closed on corrupt persisted settings", async () => {
     const f = await fixture();
-    await f.post(f.mapping);
-    vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "wrong-encryption-key-at-least-32-characters");
+    await f.saveMappings([f.row()]);
+    vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "w".repeat(40));
     await expect(loadSettings(f.config)).rejects.toThrow();
-    vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "test-encryption-key-at-least-32-characters");
+    vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "k".repeat(40));
     const envelope = JSON.parse(await readFile(f.config.settingsFile, "utf8"));
     const data = Buffer.from(envelope.data, "base64");
     data[0] = data[0]! ^ 1;
