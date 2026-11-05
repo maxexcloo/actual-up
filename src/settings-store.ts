@@ -62,17 +62,16 @@ export function connectionToken(config: AppConfig, connection: UpConnectionConfi
 }
 
 // Random revisions detect stale forms without deriving anything from saved settings.
-let revision = randomUUID();
-const mappingRevisions = new Map<string, string>();
+// Each form has its own, so saving one does not invalidate an edit in the other.
+const revisions = { mappings: randomUUID(), settings: randomUUID() };
+export type Revision = keyof typeof revisions;
 
-/** Unrelated account saves do not invalidate an account form; uniqueness is validated on save. */
-export function settingsVersion(accountId?: string): string {
-  return accountId ? `${revision}:${mappingRevisions.get(accountId) ?? ""}` : revision;
+export function settingsVersion(form: Revision): string {
+  return revisions[form];
 }
 
-export function changeSettingsVersion(accountId?: string): void {
-  if (accountId) mappingRevisions.set(accountId, randomUUID());
-  else revision = randomUUID();
+export function changeSettingsVersion(form: Revision): void {
+  revisions[form] = randomUUID();
 }
 
 export async function loadSettings(config: AppConfig): Promise<AppConfig> {

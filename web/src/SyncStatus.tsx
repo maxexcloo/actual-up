@@ -1,4 +1,16 @@
-import { Accordion, Alert, Badge, Card, List, SimpleGrid, Stack, Text } from "@mantine/core";
+import {
+  Accordion,
+  Alert,
+  Badge,
+  Card,
+  Group,
+  List,
+  Select,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { useInterval } from "@mantine/hooks";
 import { useEffect, useState } from "react";
 import type { AppState, Job, SyncReport } from "../../src/api.js";
@@ -6,7 +18,6 @@ import { HISTORY_START } from "../../src/schemas.js";
 import { ActionButton } from "./ActionButton";
 import {
   accountIssues,
-  connectionName,
   elapsed,
   formatTime,
   isReport,
@@ -38,7 +49,6 @@ export function SyncStatus({ state, refresh }: { state: AppState; refresh: () =>
           title={summary.heading}
           description={[
             `Last Successful Sync: ${summary.lastSuccess ? formatTime(summary.lastSuccess.finishedAt, timezone) : "None in recent activity"}`,
-            `Automatic Sync ${state.schedule.enabled ? "On" : "Off"}`,
             state.schedule.nextRun &&
               `Next Recent Sync: ${formatTime(state.schedule.nextRun, timezone)}`,
           ]
@@ -49,6 +59,7 @@ export function SyncStatus({ state, refresh }: { state: AppState; refresh: () =>
             {stateLabel(summary.state)}
           </Badge>
         </SectionHeader>
+        <SyncControls state={state} refresh={refresh} />
         <Stack gap={4} role="status" aria-live="polite">
           {active && (
             <Text>
@@ -106,6 +117,52 @@ export function SyncStatus({ state, refresh }: { state: AppState; refresh: () =>
   );
 }
 
+/** One control for every manual run: all accounts or one, recent or from a date. */
+function SyncControls({ state, refresh }: { state: AppState; refresh: () => void }) {
+  const [account, setAccount] = useState<string | null>(null);
+  const [since, setSince] = useState("");
+  const [today] = useState(() => new Date().toISOString().slice(0, 10));
+  const aliases = state.accounts.flatMap(({ mapping }) => (mapping ? [mapping.alias] : []));
+  const body = { account: account ?? "", since };
+  return (
+    <Group align="flex-end" gap="xs">
+      <Select
+        label="Accounts"
+        placeholder="All Accounts"
+        clearable
+        data={aliases}
+        value={account}
+        onChange={setAccount}
+      />
+      <TextInput
+        label="From Date"
+        description={`Blank checks the last ${state.schedule.lookbackDays} days`}
+        type="date"
+        value={since}
+        max={today}
+        onChange={(event) => setSince(event.currentTarget.value)}
+      />
+      <ActionButton
+        path="/actions/sync"
+        body={{ mode: "dry-run", ...body }}
+        refresh={refresh}
+        variant="default"
+        disabled={!aliases.length}
+      >
+        Preview
+      </ActionButton>
+      <ActionButton
+        path="/actions/sync"
+        body={{ mode: "live", ...body }}
+        refresh={refresh}
+        disabled={!aliases.length}
+      >
+        Sync
+      </ActionButton>
+    </Group>
+  );
+}
+
 function JobDetails({
   job,
   timezone,
@@ -122,9 +179,7 @@ function JobDetails({
       <Text>
         {[
           triggerLabel(job.trigger),
-          scope.account ||
-            (scope.connection && connectionName(scope.connection)) ||
-            (syncTriggers.has(job.trigger) ? "All Accounts" : "Connections"),
+          scope.account || (syncTriggers.has(job.trigger) ? "All Accounts" : undefined),
           formatTime(job.finishedAt ?? job.startedAt, timezone),
           scope.since && `From ${scope.since}`,
         ]
@@ -144,7 +199,6 @@ function JobDetails({
           body={{
             mode: scope.mode ?? "live",
             account: scope.account ?? "",
-            connection: scope.connection ?? "",
             since: scope.since ?? (job.trigger === "automatic-backfill" ? HISTORY_START : ""),
           }}
           refresh={refresh}

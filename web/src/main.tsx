@@ -3,7 +3,6 @@ import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
 import "./vendor/mantinehub/shadcn-styles.css";
 import { MantineProvider } from "@mantine/core";
-import { ModalsProvider } from "@mantine/modals";
 import { Notifications } from "@mantine/notifications";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -23,10 +22,8 @@ createRoot(document.getElementById("root")!).render(
       defaultColorScheme="auto"
       getStyleNonce={() => nonce}
     >
-      <ModalsProvider>
-        <Notifications position="bottom-right" />
-        <App />
-      </ModalsProvider>
+      <Notifications position="bottom-right" />
+      <App />
     </MantineProvider>
   </StrictMode>,
 );
