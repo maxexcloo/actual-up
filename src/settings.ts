@@ -31,6 +31,18 @@ export function registerSettings(
   const { engine, runner } = runtime;
   let discovery: Discovery | undefined;
   let discoveryQueued = false;
+  let saving = false;
+
+  // Both forms replace the same file; keep validation and live-state updates together.
+  const save = async (operation: () => Promise<string>) => {
+    if (saving) throw new ConfigError("Settings are already being saved. Please wait.");
+    saving = true;
+    try {
+      return await operation();
+    } finally {
+      saving = false;
+    }
+  };
 
   const discover = async () => {
     let actual: Discovery["actual"];
@@ -261,7 +273,7 @@ export function registerSettings(
     new Promise<string>((resolve, reject) => {
       const accepted = runner.enqueue("settings", "settings", async () => {
         try {
-          resolve(await operation());
+          resolve(await save(operation));
           return { ok: true };
         } catch (error) {
           reject(error);
@@ -306,7 +318,7 @@ export function registerSettings(
     const parsed = mappingsRequest.safeParse(request.body);
     if (!parsed.success)
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid accounts" });
-    return respond(reply, () => applyMappings(parsed.data));
+    return respond(reply, () => save(() => applyMappings(parsed.data)));
   });
 
   server.post("/actions/discover", async (_request, reply) => {

@@ -11,6 +11,7 @@ import { LogBuffer } from "../src/logs.js";
 import { Metrics } from "../src/metrics.js";
 import { registerSettings } from "../src/settings.js";
 import { connectionToken, loadSettings } from "../src/settings-store.js";
+import * as settingsStore from "../src/settings-store.js";
 import type { SyncEngine } from "../src/sync-engine.js";
 import type { ActualClient, UpClientLike } from "../src/types.js";
 
@@ -20,6 +21,7 @@ const cleanups: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 async function fixture() {
@@ -216,6 +218,67 @@ describe("browser setup", () => {
     await f.runner.drain();
   });
 
+  it.each(["mappings", "settings"])(
+    "rejects overlapping %s saves while accounts are being persisted",
+    async (form) => {
+      const f = await fixture();
+      let signalStarted!: () => void;
+      let release!: () => void;
+      const started = new Promise<void>((resolve) => (signalStarted = resolve));
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const persist = settingsStore.saveSettings;
+      vi.spyOn(settingsStore, "saveSettings").mockImplementationOnce(async (config) => {
+        signalStarted();
+        await gate;
+        await persist(config);
+      });
+      const saving = f.saveMappings([f.row()], false);
+      await started;
+      try {
+        const response =
+          form === "mappings"
+            ? await f.saveMappings([], false)
+            : await f.saveSettings({ connections: [] });
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error).toContain("already being saved");
+      } finally {
+        release();
+        await saving;
+      }
+      expect((await loadSettings(f.config)).mappings).toEqual([f.row()]);
+      expect(f.config.up.connections).toEqual([{ id: "max" }]);
+      expect((await f.saveMappings([], false)).statusCode).toBe(200);
+      expect((await loadSettings(f.config)).mappings).toEqual([]);
+    },
+  );
+
+  it("rejects account saves while switching Actual budgets", async () => {
+    const f = await fixture();
+    let signalStarted!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => (signalStarted = resolve));
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    f.actual.open.mockImplementationOnce(async () => {
+      signalStarted();
+      await gate;
+    });
+    const saving = f.saveSettings({
+      actual: { serverUrl: "http://actual", syncId: "new-budget", method: "session" },
+    });
+    await started;
+    try {
+      const response = await f.saveMappings([f.row()], false);
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toContain("already being saved");
+    } finally {
+      release();
+      await saving;
+    }
+    const restored = await loadSettings(f.config);
+    expect(restored.actual.syncId).toBe("new-budget");
+    expect(restored.mappings).toEqual([]);
+  });
+
   it("checks new keys, encrypts them and rejects invalid keys or removing keys in use", async () => {
     const f = await fixture();
     const added = await f.saveSettings({
@@ -297,6 +360,8 @@ describe("browser setup", () => {
     expect((await f.saveMappings([f.row()])).statusCode).toBe(500);
     expect(f.config.mappings).toEqual([]);
     expect(f.engine.reconcile).not.toHaveBeenCalled();
+    f.config.settingsFile = join(f.config.settingsFile, "..", "..", "recovered.json");
+    expect((await f.saveMappings([f.row()])).statusCode).toBe(200);
   });
 
   it("fails closed on corrupt persisted settings", async () => {

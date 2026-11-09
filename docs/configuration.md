@@ -40,7 +40,9 @@ address; without a proxy, clients could choose their own address.
 
 Settings saves wait for any running sync, because they reopen Actual. Account
 saves are checked against the last account discovery and apply straight away.
-Each form rejects a save made from an outdated copy; reload and retry.
+Overlapping settings and account saves are rejected; wait for the current save
+to finish before retrying. Each form rejects a save made from an outdated copy;
+reload and retry.
 
 A replacement Up key must still access its connected accounts. Disconnect
 accounts before removing a key they use, switching Actual budgets or servers, or
