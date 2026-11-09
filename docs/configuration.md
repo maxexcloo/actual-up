@@ -3,7 +3,8 @@
 Deployment settings come from the version 1 YAML file. Start from
 [config.example.yaml](../config.example.yaml); optional settings and their
 defaults are defined in [src/config.ts](../src/config.ts). Actual credentials,
-Up API keys and account mappings are managed in the browser under **Accounts & Sync**. Never commit credentials to either repository.
+Up API keys and account mappings are managed in the browser under
+**Accounts & Sync**. Never commit credentials to either repository.
 
 ## Authentication
 
@@ -65,17 +66,16 @@ authenticated ciphertext.
 
 Supply `ACTUAL_UP_ENCRYPTION_KEY` as a randomly generated secret of at least
 32 characters. It is separate from the app password and never written to the
-settings file. The encrypted file
-is authoritative for browser-managed settings on startup, including CLI commands.
-Schedules, note options and category mappings stay in deployment configuration.
+settings file. The encrypted file is authoritative for browser-managed settings
+on startup, including CLI commands. Schedules, note options and category
+mappings stay in deployment configuration.
 
 Persist and back up the configured settings file (`/data/settings.json` in
-production) and retain its matching encryption key.
-Don't just rotate that key, because existing settings will become unreadable.
-Corrupt, tampered or incorrectly keyed settings stop startup instead of silently
-resetting.
-Stop the service before restoring a backup or resetting setup by removing the file.
-A reset returns to the YAML defaults and requires re-entering saved credentials.
+production) and retain its matching encryption key. Don't just rotate that key,
+because existing settings will become unreadable. Corrupt, tampered or
+incorrectly keyed settings stop startup instead of silently resetting. Stop the
+service before restoring a backup or resetting setup by removing the file. A
+reset returns to the YAML defaults and requires re-entering saved credentials.
 Actual's budget cache is separate and is not encrypted by this settings mechanism.
 
 ## Deployment Defaults
