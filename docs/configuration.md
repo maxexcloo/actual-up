@@ -1,22 +1,20 @@
 # Configuration
 
 Deployment settings come from the version 1 YAML file. Start from
-[config.example.yaml](../config.example.yaml); optional settings use the defaults
-below. Actual credentials, Up API keys and account mappings are managed in the
-browser under **Accounts & Sync**. Never commit credentials to either repository.
+[config.example.yaml](../config.example.yaml); optional settings and their
+defaults are defined in [src/config.ts](../src/config.ts). Actual credentials,
+Up API keys and account mappings are managed in the browser under **Accounts & Sync**. Never commit credentials to either repository.
 
 ## Authentication
 
-The app login comes from `ACTUAL_UP_USERNAME` and `ACTUAL_UP_PASSWORD`. Kubelab generates a strong production password. The app
-uses a normal sign-in page and opaque server-side sessions, with HttpOnly,
-SameSite=Strict cookies and an eight-hour lifetime. Sessions reset on restart;
-signing out invalidates the session. Failed sign-ins are rate-limited.
+The app login comes from `ACTUAL_UP_USERNAME` and `ACTUAL_UP_PASSWORD`.
+Sessions reset on restart; signing out invalidates the session. Failed sign-ins
+are rate-limited.
 
 Use a private HTTPS route in production. Set `server.publicUrl` to the external
 HTTPS URL, or supply `ACTUAL_UP_PUBLIC_URL` to override it through the environment.
-The override goes through the same HTTP/HTTPS URL validation and rejects empty
-or invalid values. The effective URL sets the expected origin and turns on Secure
-cookies. Without it, actions must match the request's own origin. All POSTs, including sign-in,
+The effective URL sets the expected origin and turns on Secure cookies. Without
+it, actions must match the request's own origin. All POSTs, including sign-in,
 require a matching Origin. The app shell and its built assets are public;
 state and operations require a session. `/livez`, `/readyz` and `/metrics` remain available
 for cluster probes and monitoring.
@@ -55,22 +53,22 @@ repairs.
 
 **Sync Status** runs a sync or preview for all accounts or one, over the
 recent window or from a chosen date. **Check Connections** pings every key and
-validates the mappings without importing. **Logs** shows the app's latest 200
+validates the mappings without importing. **Logs** shows recent
 log lines, which never include bank data and reset on restart.
 
 ## Encrypted Storage
 
-`settingsFile` defaults to `/data/settings.json`. The app encrypts credentials,
-account IDs and mappings together with AES-256-GCM, a fresh 96-bit nonce per save
-and authenticated version context. Files are replaced atomically with mode 0600.
-No application database is needed.
+`settingsFile` stores credentials, account IDs and mappings together as
+authenticated ciphertext.
 
-Supply `ACTUAL_UP_ENCRYPTION_KEY` as a randomly generated secret of at least 32 characters; Kubelab generates 48. It is separate
-from the app password and never written to the settings file. The encrypted file
+Supply `ACTUAL_UP_ENCRYPTION_KEY` as a randomly generated secret of at least
+32 characters. It is separate from the app password and never written to the
+settings file. The encrypted file
 is authoritative for browser-managed settings on startup, including CLI commands.
 Schedules, note options and category mappings stay in deployment configuration.
 
-Persist and back up `/data/settings.json` and retain its matching encryption key.
+Persist and back up the configured settings file (`/data/settings.json` in
+production) and retain its matching encryption key.
 Don't just rotate that key, because existing settings will become unreadable.
 Corrupt, tampered or incorrectly keyed settings stop startup instead of silently
 resetting.
@@ -80,9 +78,8 @@ Actual's budget cache is separate and is not encrypted by this settings mechanis
 
 ## Deployment Defaults
 
-- `actual.cacheDirectory` defaults to `/tmp/actual-cache`.
-- `actual.serverUrl` prefills the Actual setup form; prefer its internal cluster URL.
-- `up.connections: []` starts with browser setup.
+`actual.serverUrl` prefills the Actual setup form; prefer a server URL reachable
+from the service. Leave `up.connections` empty for browser setup, as in the example.
 
 Aliases are non-sensitive labels used in logs. Each Up and Actual account may
 appear in only one mapping. Shared connections follow the displayed fallback order.
@@ -93,11 +90,12 @@ flags control create-only enrichment. Existing notes are never overwritten.
 
 ## Schedule
 
-`schedule.enabled` defaults to `true`. Mapped accounts are backfilled on startup,
-with recent syncs every 15 minutes (`schedule.cron`) and full-history backfills
-nightly at 03:00 (`schedule.backfillCron`). The timezone defaults to
-`Australia/Sydney`; `lookbackDays` defaults to 30 for recent syncs. No work is
-scheduled until at least one account is mapped. Stable import IDs prevent duplicates.
+Mapped accounts are backfilled on startup. `schedule.cron` controls recent
+syncs, `schedule.backfillCron` controls full-history backfills and
+`schedule.timezone` sets their timezone. `schedule.lookbackDays` sets the recent
+window. No work is scheduled until at least one account is mapped. Stable import
+IDs prevent duplicates.
+
 Set `schedule.enabled: false` to disable automatic writes while retaining manual
 preview and sync. Restart after changing deployment configuration.
 
@@ -110,14 +108,8 @@ storage.
 
 ## Kubelab & 1Password
 
-The `Actual Up` item in `Kubelab SYD` follows Kubelab's usual item
-reconciliation and `ClusterSecretStore/onepassword` convention:
+Kubelab provisions the app login and settings encryption key in the `Actual Up`
+item in `Kubelab SYD`. It preserves existing non-empty fields.
 
-| Field            | Environment Variable       | Source                   |
-| ---------------- | -------------------------- | ------------------------ |
-| `encryption-key` | `ACTUAL_UP_ENCRYPTION_KEY` | Generated by Kubelab     |
-| `password`       | `ACTUAL_UP_PASSWORD`       | Generated by Kubelab     |
-| `username`       | `ACTUAL_UP_USERNAME`       | Default `max@excloo.com` |
-
-Existing non-empty fields are preserved. Actual and Up credentials are entered
-in the app; the app does not receive a 1Password API credential or vault access.
+Actual and Up credentials are entered in the app; the app does not receive a
+1Password API credential or vault access.
