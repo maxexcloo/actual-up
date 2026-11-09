@@ -1,25 +1,18 @@
 # Actual Up
 
 A small private web app that synchronises Up transactions into Actual Budget.
-One Node service runs the UI, polling and a serial operation queue, so there's
-no separate application database or workflow platform.
 
 ## Features
 
 - Apply Actual reconciliation and rules, optional category mappings and transfers.
-- Check connections and inspect the last 20 runs and recent logs in the app.
-  Transaction amounts, payees and messages stay out of logs and run results.
 - Import held transactions as uncleared, update them when they settle and handle
   cancelled holds without losing edits made in Actual.
-- Set up Actual and Up keys in one form and map accounts in one list, with
-  encrypted credential storage. Sync or preview everything or one account.
-- Preview imports, run a sync, backfill from a date and discover account IDs.
-- Serve a responsive Mantine interface from the same process, using MantineHub's
-  shadcn theme, with password sign-in, same-origin checks and a light/dark toggle
-  that follows the browser by default.
-- Support multiple API keys, personal accounts and shared 2Up accounts. Each bank
-  account is mapped once, with partner keys in fallback order, and imported with
-  an `up:` identity.
+- Connect personal and shared 2Up accounts with multiple API keys and fallback access.
+- Preview or sync all accounts or one, backfill from a date and discover account IDs.
+- Manage credentials and account mappings in the app with encrypted storage and
+  password sign-in. Check connections, recent runs and logs without exposing
+  transaction amounts, payees or messages.
+- Follow the browser's light/dark preference or choose a theme.
 
 ## Run Locally
 
@@ -44,25 +37,13 @@ accounts.
 
 ## Deploy
 
-Production runs from Kubelab (`kubelab/apps/base/actual-up`) using
-`bjw-s/app-template`, a private route and External Secrets. Its `Actual Up`
-1Password item holds the app login and settings encryption key. Merging here
-publishes an image but doesn't deploy it. To release, update the image tag in
-Kubelab.
+Images are published to `ghcr.io/maxexcloo/actual-up`. Tag the matching package
+version (for example `v0.1.0`) to publish a versioned image.
 
-The image runs `serve`, listens on port 3000 and needs writable `/data` and `/tmp`
-directories. Persist `/data`, since browser settings live in
-`/data/settings.json`. Use one replica with `Recreate`; only the Actual cache can
-be rebuilt. Put the app behind one private HTTPS reverse proxy. The app login and
-settings encryption key come from environment variables, and upstream
-credentials are managed in the browser.
-
-The GitHub Container workflow builds and smoke-tests the image before
-publishing it to `ghcr.io/maxexcloo/actual-up`. Pushes to `main` that change more
-than Markdown, `.gitignore` or `LICENSE` publish `latest` and `sha-<full-commit>`. Version tags such as `v0.1.0`
-publish `0.1.0` and `0.1`. Pull requests test and verify the image without
-publishing it. Images include OCI labels, provenance and an SBOM. Publishing uses
-the repository's `GITHUB_TOKEN`, so no registry password is needed.
+Kubelab owns production deployment. To release, update its image tag; publishing
+an image here does not deploy it. The image runs `serve` on port 3000 and needs
+writable `/data` and `/tmp` directories. Persist `/data`, use one replica with
+`Recreate` updates and put it behind a private HTTPS reverse proxy.
 
 See [configuration](docs/configuration.md) and [operations](docs/operations.md).
 
@@ -71,8 +52,7 @@ See [configuration](docs/configuration.md) and [operations](docs/operations.md).
 Install the [shared Mise configuration](https://github.com/maxexcloo/dotfiles#shared-tools--tasks)
 before running local Mise tasks.
 
-The UI in `web/` is a React app built from Mantine components with
-[MantineHub's shadcn theme](web/src/vendor/mantinehub/README.md), light and dark.
+For UI changes, see the [theme provenance](web/src/vendor/mantinehub/README.md).
 
 ```sh
 mise run check
