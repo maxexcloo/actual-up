@@ -29,7 +29,7 @@
     "@mantine/form": "9.7.5",
     "@mantine/hooks": "9.7.5",
     "@mantine/notifications": "9.7.5",
-    "@tabler/icons-react": "3.50.0",
+    "@tabler/icons-react": "3.51.0",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
