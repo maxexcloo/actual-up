@@ -2,21 +2,11 @@
 
 A small private web app that synchronises Up transactions into Actual Budget.
 
-## Features
-
-- Apply Actual reconciliation and rules, optional category mappings and transfers.
-- Import held transactions as uncleared, update them when they settle and handle
-  cancelled holds without losing edits made in Actual.
-- Connect personal and shared 2Up accounts with multiple API keys and fallback access.
-- Preview or sync all accounts or one, backfill from a date and discover account IDs.
-- Manage credentials and account mappings in the app with encrypted storage and
-  password sign-in. Check connections, recent runs and logs without exposing
-  transaction amounts, payees or messages.
-- Follow the browser's light/dark preference or choose a theme.
-
 ## Run Locally
 
-Requires the Node.js version in `package.json` `engines`. Install the dependencies:
+Requires the Node.js version in `package.json` `engines` and the
+[shared Mise configuration](https://github.com/maxexcloo/dotfiles). Install the
+dependencies:
 
 ```sh
 mise run setup
@@ -31,31 +21,42 @@ Then run:
 mise run dev -- --config ./config.local.yaml
 ```
 
-Open `http://localhost:3000` and sign in with the app credentials. Open
-**Accounts & Sync**, enter your Actual credentials, add Up API keys and connect
-accounts.
+Open `http://localhost:3000`, sign in with the app credentials and set up Actual,
+Up keys and account mappings under **Accounts & Sync**. Optional settings and
+their defaults are defined in [src/config.ts](src/config.ts).
 
 ## Deploy
 
 Images are published to `ghcr.io/maxexcloo/actual-up`. Tag the matching package
-version (for example `v0.1.0`) to publish a versioned image.
+version (for example `v0.1.0`) to publish a versioned image. Kubelab owns
+production deployment and provisions the app login and encryption key in the
+`Actual Up` item in `Kubelab SYD`; to release, update its image tag.
 
-Kubelab owns production deployment. To release, update its image tag; publishing
-an image here does not deploy it. The image runs `serve` on port 3000 and needs
-writable `/data` and `/tmp` directories. Persist `/data`, use one replica with
-`Recreate` updates and put it behind a private HTTPS reverse proxy.
+The image runs `serve` on port 3000 and needs writable `/data` and `/tmp`
+directories. Persist `/data`, keep `actual.cacheDirectory` on local storage rather
+than NFS, use one replica with `Recreate` updates and serve it behind exactly one
+private HTTPS reverse proxy. Set `server.publicUrl` (or `ACTUAL_UP_PUBLIC_URL`) to
+the external URL.
 
-See [configuration](docs/configuration.md) and [operations](docs/operations.md).
+`ACTUAL_UP_ENCRYPTION_KEY` must be a random secret of at least 32 characters.
 
-## Development
+## Operate
 
-Install the [shared Mise configuration](https://github.com/maxexcloo/dotfiles#shared-tools--tasks)
-before running local Mise tasks.
-
-For UI changes, see the [theme provenance](web/src/vendor/mantinehub/README.md).
+- Set `schedule.enabled: false` before adding mappings to preview changes first;
+  saving a mapping otherwise starts a backfill.
+- Back up `/data/settings.json` together with its encryption key. Changing the
+  key makes existing settings unreadable. Stop the service before restoring a
+  backup or removing the file to reset setup.
+- Rotating the app login needs a rollout after External Secrets refreshes.
+- `/metrics` exposes `actual_up_last_success_timestamp_seconds` by trigger; watch
+  `schedule` and `automatic-backfill` for unattended imports.
+- With the service stopped, the CLI covers maintenance. Never run it alongside
+  the service.
 
 ```sh
-mise run check
+node dist/cli.js --config config.yaml validate
+node dist/cli.js --config config.yaml discover
+node dist/cli.js --config config.yaml sync --dry-run --since 2026-01-01
 ```
 
 ## Licence
