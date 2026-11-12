@@ -7,7 +7,6 @@ const font = "Geist Variable, ui-sans-serif, system-ui, sans-serif";
 // The preset only generates contrast variables for palette names, so the primary colour is
 // "zinc" (the palette behind its "primary" alias) and status colours use green, red and amber.
 // The preset also shrinks container sizes (md is 500px), so Container keeps Mantine's own scale.
-// Apart from that, the only app-specific styling is the locally bundled Geist font.
 export const theme = mergeThemeOverrides(
   shadcnTheme,
   createTheme({
