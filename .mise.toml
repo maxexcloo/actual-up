@@ -31,9 +31,6 @@ tsc --noEmit -p web
 run = "fnox exec -- node dist/cli.js serve"
 depends = ["build"]
 
-[tasks.fmt]
-depends = ["fmt:mise", "fmt:oxfmt"]
-
 [tasks.test]
 run = "vitest run"
 depends = ["build"]

@@ -28,9 +28,9 @@ their defaults are defined in [src/config.ts](src/config.ts).
 ## Deploy
 
 Images are published to `ghcr.io/maxexcloo/actual-up`. Tag the matching package
-version (for example `v0.1.0`) to publish a versioned image. Kubelab owns
-production deployment and provisions the app login and encryption key in the
-`Actual Up` item in `Kubelab SYD`; to release, update its image tag.
+version (for example `v0.1.0`) to publish a versioned image, then update the
+image tag in Kubelab. Kubelab provisions the app login and encryption key in the
+`Actual Up` item in `Kubelab SYD`.
 
 The image runs `serve` on port 3000 and needs writable `/data` and `/tmp`
 directories. Persist `/data`, keep `actual.cacheDirectory` on local storage rather
