@@ -75,8 +75,8 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           cache-from: type=gha
-          # Other refs' caches are not restored elsewhere and would evict the default branch's cache.
-          cache-to: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'type=gha,mode=max,ignore-error=true' || '' }}
+          # Other refs' caches are not restored elsewhere and would evict main's cache.
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,mode=max,ignore-error=true' || '' }}
           context: .
           load: true
           platforms: linux/amd64
