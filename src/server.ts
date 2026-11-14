@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Cron } from "croner";
 import Fastify, { LogController } from "fastify";
 import { LRUCache } from "lru-cache";
 
@@ -28,7 +29,7 @@ declare module "fastify" {
 
 const sessionCookie = "actual_up_session";
 const sessionLifetime = 8 * 60 * 60 * 1000;
-const probePaths = new Set(["/livez", "/readyz", "/metrics"]);
+const probePaths = new Set(["/livez", "/readyz", "/syncz", "/metrics"]);
 const contentTypes: Record<string, string> = {
   ".css": "text/css",
   ".html": "text/html",
@@ -122,6 +123,26 @@ export async function createServer(config: AppConfig, runtime: Runtime) {
 
   server.get("/livez", async () => ({ status: "ok" }));
   server.get("/readyz", async () => ({ status: "ready" }));
+  const started = Date.now() / 1000;
+  server.get("/syncz", async (_request, reply) => {
+    const cron = new Cron(config.schedule.cron, {
+      paused: true,
+      timezone: config.schedule.timezone,
+    });
+    // Unattended sync is stale once three scheduled runs pass without a success.
+    const due = cron.previousRuns(3).at(-1)!.getTime() / 1000;
+    cron.stop();
+    const successes = (await metrics.lastSuccess.get()).values
+      .filter(
+        ({ labels }) => labels.trigger === "schedule" || labels.trigger === "automatic-backfill",
+      )
+      .map(({ value }) => value);
+    const stale =
+      config.schedule.enabled &&
+      config.mappings.length > 0 &&
+      Math.max(started, ...successes) < due;
+    return reply.code(stale ? 503 : 200).send({ status: stale ? "stale" : "ok" });
+  });
   server.get("/metrics", async (_request, reply) => {
     reply.header("Content-Type", metrics.registry.contentType);
     return metrics.registry.metrics();

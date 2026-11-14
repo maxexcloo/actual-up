@@ -48,8 +48,8 @@ the external URL.
   key makes existing settings unreadable. Stop the service before restoring a
   backup or removing the file to reset setup.
 - Rotating the app login needs a rollout after External Secrets refreshes.
-- `/metrics` exposes `actual_up_last_success_timestamp_seconds` by trigger; watch
-  `schedule` and `automatic-backfill` for unattended imports.
+- `/syncz` returns 503 once three scheduled runs pass without a successful
+  unattended import; point monitoring at it rather than at `/livez`.
 - With the service stopped, the CLI covers maintenance. Never run it alongside
   the service.
 
