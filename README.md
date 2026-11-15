@@ -4,7 +4,8 @@ A small private web app that synchronises Up transactions into Actual Budget.
 
 ## Run Locally
 
-Requires the Node.js version in `package.json` `engines` and the
+Requires the Node.js version in `package.json` `engines`, a C/C++ toolchain
+(`make` and `g++`) to build `better-sqlite3`, and the
 [shared Mise configuration](https://github.com/maxexcloo/dotfiles). Install the
 dependencies:
 
@@ -18,7 +19,7 @@ cp config.example.yaml config.local.yaml
 Then run:
 
 ```sh
-mise run dev -- --config ./config.local.yaml
+mise run dev
 ```
 
 Open `http://localhost:3000`, sign in with the app credentials and set up Actual,
