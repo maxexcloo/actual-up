@@ -82,7 +82,6 @@ export class SyncEngine {
       ...emptyCounts(),
       accounts: [],
       preview: Boolean(options.dryRun),
-      publication: options.dryRun ? "not-required" : "pending",
     };
     const since = normaliseSince(
       options.since ?? lookbackTimestamp(this.config.schedule.lookbackDays),
@@ -163,7 +162,7 @@ export class SyncEngine {
     transferPayees: Map<string, ActualPayee>,
     report: SyncCounts,
     dryRun = false,
-    progress: (stage: string) => void = () => {},
+    progress: (stage: string) => void,
   ): Promise<void> {
     progress("Read Up");
     const transactions = await this.withConnectionFallback(mapping, (client) =>
@@ -364,7 +363,7 @@ export class SyncEngine {
         this.logger.warn({ account: mapping.alias, connection: id }, "Up connection failed");
       }
     }
-    throw lastError ?? new Error(`No Up connection is configured for ${mapping.alias}`);
+    throw lastError;
   }
 
   private client(id: string): UpClientLike {

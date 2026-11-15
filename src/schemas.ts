@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-// Shared by the server and the browser, so this module may only import zod.
-
 /** Backfills from this date read an account's full Up history. */
 export const HISTORY_START = "1970-01-01";
 

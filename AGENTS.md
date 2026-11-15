@@ -4,19 +4,18 @@
 
 - `src/api.ts` and `src/schemas.ts` are shared with the browser and may only import zod.
 - `web/src/vendor/mantinehub/` is an unmodified upstream copy, kept because upstream
-  publishes no package; see its README for provenance and override instructions.
+  publishes no package; see its README.
 
 ## Conventions
 
 - Build the UI only from Mantine components and props with the MantineHub shadcn
-  theme; add no CSS, raw HTML elements, `className` or `style` (oxlint enforces this).
+  theme; add no CSS, raw HTML elements, `className` or `style` (oxlint enforces the
+  element and prop bans).
 - Validate forms with the shared zod schemas and keep server responses JSON.
-- Use palette colour names (green, red, amber, gray) rather than semantic aliases;
-  the theme only generates text contrast for palette names.
+- Use palette colour names (green, red, amber, gray) rather than semantic aliases.
 - Keep Up and Actual API field names unchanged.
 - Treat Up IDs as immutable bank identities and prefix Actual import IDs with `up:`.
-- Infer deletions from missing Up IDs only after a full-history read; partial
-  transaction windows do not prove deletion.
+- Infer deletions from missing Up IDs only after a full-history read.
 - Never log transaction amounts, payees, messages or credentials.
 - Serialise Actual API access; do not add replicas or parallel budget writers.
 - Keep the service configuration-driven with one operation queue and no application database.

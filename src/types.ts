@@ -2,12 +2,7 @@ import type * as actual from "@actual-app/api";
 
 export type UpAccount = {
   id: string;
-  attributes: {
-    accountType: "HOME_LOAN" | "SAVER" | "TRANSACTIONAL";
-    balance: UpMoney;
-    displayName: string;
-    ownershipType: "INDIVIDUAL" | "JOINT";
-  };
+  attributes: { displayName: string };
 };
 
 export type UpMoney = {
@@ -24,12 +19,10 @@ export type UpTransaction = {
     createdAt: string;
     description: string;
     foreignAmount?: UpMoney | null;
-    holdInfo?: { amount: UpMoney; foreignAmount?: UpMoney | null } | null;
     message?: string | null;
-    note?: { text: string } | string | null;
     performingCustomer?: { displayName: string } | null;
     rawText?: string | null;
-    roundUp?: { amount: UpMoney; boostPortion?: UpMoney | null } | null;
+    roundUp?: { amount: UpMoney } | null;
     settledAt?: string | null;
     status: "HELD" | "SETTLED";
   };

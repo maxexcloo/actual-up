@@ -3,19 +3,19 @@ import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "@pro
 export class Metrics {
   readonly registry = new Registry();
   readonly jobs = new Counter({
-    help: "Completed sync jobs by trigger and outcome.",
+    help: "Completed queued operations by trigger and outcome.",
     name: "actual_up_jobs_total",
     labelNames: ["outcome", "trigger"],
     registers: [this.registry],
   });
   readonly jobDuration = new Histogram({
-    help: "Sync job duration in seconds.",
+    help: "Queued operation duration in seconds.",
     name: "actual_up_job_duration_seconds",
     labelNames: ["trigger"],
     registers: [this.registry],
   });
   readonly lastSuccess = new Gauge({
-    help: "Unix timestamp of the last successful sync.",
+    help: "Unix timestamp of the last successful operation by trigger.",
     name: "actual_up_last_success_timestamp_seconds",
     labelNames: ["trigger"],
     registers: [this.registry],
@@ -27,7 +27,7 @@ export class Metrics {
     registers: [this.registry],
   });
   readonly queueDepth = new Gauge({
-    help: "Number of queued sync jobs.",
+    help: "Number of queued operations.",
     name: "actual_up_queue_depth",
     registers: [this.registry],
   });

@@ -149,12 +149,7 @@ class StubUp implements UpClientLike {
     return [
       {
         id: upAccountId,
-        attributes: {
-          accountType: "TRANSACTIONAL",
-          displayName: "2Up",
-          ownershipType: "JOINT",
-          balance: { currencyCode: "AUD", value: "0.00", valueInBaseUnits: 0 },
-        },
+        attributes: { displayName: "2Up" },
       },
     ];
   }
@@ -207,7 +202,6 @@ describe("sync engine", () => {
       updated: 0,
       unchanged: 1,
       preview: true,
-      publication: "not-required",
     });
     expect(write).not.toHaveBeenCalled();
     up.transactions[0] = transaction("SETTLED");

@@ -53,7 +53,7 @@ async function loadAssets(): Promise<Map<string, [type: string, body: Buffer]>> 
   return assets;
 }
 
-export type Service = {
+type Service = {
   close(): Promise<void>;
 };
 
@@ -125,13 +125,9 @@ export async function createServer(config: AppConfig, runtime: Runtime) {
   server.get("/readyz", async () => ({ status: "ready" }));
   const started = Date.now() / 1000;
   server.get("/syncz", async (_request, reply) => {
-    const cron = new Cron(config.schedule.cron, {
-      paused: true,
-      timezone: config.schedule.timezone,
-    });
+    const cron = new Cron(config.schedule.cron, { timezone: config.schedule.timezone });
     // Unattended sync is stale once three scheduled runs pass without a success.
     const due = cron.previousRuns(3).at(-1)!.getTime() / 1000;
-    cron.stop();
     const successes = (await metrics.lastSuccess.get()).values
       .filter(
         ({ labels }) => labels.trigger === "schedule" || labels.trigger === "automatic-backfill",

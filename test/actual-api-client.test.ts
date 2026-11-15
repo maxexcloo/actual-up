@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "@actual-app/api";
-import { ActualApiClient as ActualBudgetClient } from "../src/actual-api-client.js";
+import { ActualApiClient } from "../src/actual-api-client.js";
 import { parseConfig } from "../src/config.js";
 import packageManifest from "../package.json" with { type: "json" };
 
@@ -33,7 +33,7 @@ async function fixture() {
     actual: { cacheDirectory, serverUrl: "http://actual", syncId: "budget" },
     up: { connections: [] },
   });
-  return { config, client: new ActualBudgetClient(config) };
+  return { config, client: new ActualApiClient(config) };
 }
 describe("Actual connection lifecycle", () => {
   it("waits for browser setup, opens lazily and reconnects with changed credentials", async () => {

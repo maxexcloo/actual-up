@@ -225,7 +225,7 @@ function JobResult({ result }: { result: unknown }) {
     return null;
   }
   const report: SyncReport = result;
-  const preview = report.preview === true;
+  const { preview } = report;
   return (
     <Stack gap="sm">
       {preview && (
@@ -235,18 +235,16 @@ function JobResult({ result }: { result: unknown }) {
         </Text>
       )}
       <SimpleGrid cols={{ base: 3, xs: 4 }} spacing="xs">
-        {reportFields
-          .filter((key) => typeof report[key] === "number")
-          .map((key) => (
-            <Stack key={key} gap={0}>
-              <Text size="xs" c="dimmed">
-                {preview && proposed[key]
-                  ? proposed[key]
-                  : key.charAt(0).toUpperCase() + key.slice(1)}
-              </Text>
-              <Text fw={600}>{report[key]}</Text>
-            </Stack>
-          ))}
+        {reportFields.map((key) => (
+          <Stack key={key} gap={0}>
+            <Text size="xs" c="dimmed">
+              {preview && proposed[key]
+                ? proposed[key]
+                : key.charAt(0).toUpperCase() + key.slice(1)}
+            </Text>
+            <Text fw={600}>{report[key]}</Text>
+          </Stack>
+        ))}
       </SimpleGrid>
       {report.publication === "published" && (
         <Alert color="green">Changes published to Actual.</Alert>
@@ -257,26 +255,24 @@ function JobResult({ result }: { result: unknown }) {
           them.
         </Alert>
       )}
-      {Number(report.conflicts) > 0 && (
+      {report.conflicts > 0 && (
         <Alert color="amber" role="status">
           Protected Actual edits were retained. Review the affected accounts in Actual; retrying
           will preserve those edits again.
         </Alert>
       )}
-      {report.accounts && (
-        <List size="sm">
-          {report.accounts.map((entry) => (
-            <List.Item key={entry.account}>
-              {entry.account}:{" "}
-              {entry.failed
-                ? ((entry.issue && accountIssues[entry.issue]) ??
-                  "Sync failed; test connections and retry.")
-                : `${entry.imported} ${preview ? "would import" : "imported"}, ${entry.updated} ${preview ? "would update" : "updated"}, ${entry.unchanged} unchanged, ${entry.deleted} ${preview ? "would delete" : "deleted"}`}
-              {entry.conflicts ? ` · ${entry.conflicts} protected deletion conflicts` : ""}
-            </List.Item>
-          ))}
-        </List>
-      )}
+      <List size="sm">
+        {report.accounts.map((entry) => (
+          <List.Item key={entry.account}>
+            {entry.account}:{" "}
+            {entry.failed
+              ? ((entry.issue && accountIssues[entry.issue]) ??
+                "Sync failed; test connections and retry.")
+              : `${entry.imported} ${preview ? "would import" : "imported"}, ${entry.updated} ${preview ? "would update" : "updated"}, ${entry.unchanged} unchanged, ${entry.deleted} ${preview ? "would delete" : "deleted"}`}
+            {entry.conflicts ? ` · ${entry.conflicts} protected deletion conflicts` : ""}
+          </List.Item>
+        ))}
+      </List>
     </Stack>
   );
 }
