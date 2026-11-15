@@ -128,7 +128,6 @@ export function SettingsCard({ state, refresh }: { state: AppState; refresh: () 
                       <TextInput
                         label="Name"
                         placeholder="e.g. max"
-                        maxLength={80}
                         readOnly={saved}
                         key={form.key(`connections.${index}.id`)}
                         {...form.getInputProps(`connections.${index}.id`)}
@@ -138,7 +137,6 @@ export function SettingsCard({ state, refresh }: { state: AppState; refresh: () 
                         label={saved ? "Replace Key" : "API Key"}
                         placeholder={saved ? "Leave blank to keep" : undefined}
                         autoComplete="new-password"
-                        maxLength={8192}
                         key={form.key(`connections.${index}.token`)}
                         {...form.getInputProps(`connections.${index}.token`)}
                       />

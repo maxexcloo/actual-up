@@ -70,17 +70,7 @@ export function summarise(jobs: readonly Job[]) {
   const syncs = jobs.filter((job) => syncTriggers.has(job.trigger));
   const active = jobs.find((job) => job.state === "running");
   const latest = syncs[0];
-  const lastSuccess = syncs.find(
-    (job) =>
-      job.state === "success" &&
-      job.trigger !== "dry-run" &&
-      !(
-        typeof job.result === "object" &&
-        job.result !== null &&
-        "publication" in job.result &&
-        job.result.publication === "not-required"
-      ),
-  );
+  const lastSuccess = syncs.find((job) => job.state === "success" && job.trigger !== "dry-run");
   const heading = active
     ? triggerLabel(active.trigger)
     : latest?.state === "failure" || latest?.state === "warning"

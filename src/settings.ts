@@ -10,7 +10,12 @@ import { discoverActualAccounts, discoverUpAccounts } from "./discovery.js";
 import { ConfigError } from "./errors.js";
 import type { Runtime } from "./runtime.js";
 import { HISTORY_START, mappingsRequest, settingsRequest } from "./schemas.js";
-import { changeSettingsVersion, saveSettings, settingsVersion } from "./settings-store.js";
+import {
+  changeSettingsVersion,
+  type Revision,
+  saveSettings,
+  settingsVersion,
+} from "./settings-store.js";
 import { UpClient } from "./up-client.js";
 import type { UpClientLike } from "./types.js";
 
@@ -49,9 +54,7 @@ export function registerSettings(
     try {
       await runtime.actual.sync();
       actual = await discoverActualAccounts(runtime.actual);
-    } catch {
-      actual = undefined;
-    }
+    } catch {}
     const up: Discovery["up"] = new Map();
     const unavailable: string[] = [];
     for (const [connection, client] of runtime.clients) {
@@ -88,12 +91,11 @@ export function registerSettings(
       account.mapping = { alias, actualAccountId, connections };
       accounts.set(upAccountId, account);
     }
-    const cron = new Cron(config.schedule.cron, {
-      paused: true,
-      timezone: config.schedule.timezone,
-    });
-    const nextRun = config.schedule.enabled ? cron.nextRun()?.toISOString() : undefined;
-    cron.stop();
+    const nextRun = config.schedule.enabled
+      ? new Cron(config.schedule.cron, { timezone: config.schedule.timezone })
+          .nextRun()
+          ?.toISOString()
+      : undefined;
     const body: Omit<AppState, "version"> = {
       revisions: { mappings: settingsVersion("mappings"), settings: settingsVersion("settings") },
       schedule: { ...config.schedule, nextRun },
@@ -118,7 +120,7 @@ export function registerSettings(
     return { version: createHash("sha256").update(json).digest("base64url"), ...body };
   };
 
-  const checkRevision = (form: "mappings" | "settings", revision: string) => {
+  const checkRevision = (form: Revision, revision: string) => {
     if (revision !== settingsVersion(form))
       throw new ConfigError("Settings changed elsewhere. Reload before saving.");
   };

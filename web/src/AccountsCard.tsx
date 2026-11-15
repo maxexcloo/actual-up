@@ -123,7 +123,6 @@ export function AccountsCard({ state, refresh }: { state: AppState; refresh: () 
                           <Table.Td>
                             <TextInput
                               aria-label={`Name for ${account.name}`}
-                              maxLength={80}
                               key={form.key(`mappings.${index}.alias`)}
                               {...form.getInputProps(`mappings.${index}.alias`)}
                             />

@@ -21,7 +21,7 @@ it("shows the active job while a newer job waits, and follows intermediate progr
     },
     { account: "spending" },
   );
-  runner.enqueue("b", "test-connection", async () => ({ ok: true }));
+  runner.enqueue("b", "validate", async () => ({ ok: true }));
   await Promise.resolve();
   update({ account: "spending", completed: 0, stage: "Read Up", total: 1 });
   const running = summarise(runner.history);
@@ -46,10 +46,9 @@ it("counts only previous activity", async () => {
   expect(plural(summarise(runner.history).recent.length, "Run")).toBe("1 Run");
 });
 
-it("flags failed syncs and ignores previews and unpublished runs as last success", async () => {
+it("flags failed syncs and ignores previews as last success", async () => {
   const runner = new JobRunner(new Metrics(), pino({ enabled: false }));
   runner.enqueue("preview", "dry-run", async () => ({ inspected: 1 }));
-  runner.enqueue("quiet", "schedule", async () => ({ inspected: 0, publication: "not-required" }));
   runner.enqueue("broken", "manual", async () => {
     throw new Error("upstream");
   });

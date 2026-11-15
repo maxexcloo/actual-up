@@ -11,10 +11,8 @@ export type JobProgress = {
 
 export type JobScope = {
   account?: string;
-  connection?: string;
   mode?: "dry-run" | "live";
   since?: string;
-  target?: string;
 };
 
 export type Job = {
@@ -43,7 +41,8 @@ export type AccountIssue = "actual-unavailable" | "actual-write-failed" | "up-un
 export type SyncReport = SyncCounts & {
   accounts: Array<SyncCounts & { account: string; issue?: AccountIssue }>;
   preview: boolean;
-  publication: "not-required" | "pending" | "published" | "failed";
+  /** Set on live runs only. */
+  publication?: "published" | "failed";
 };
 
 export type LogEntry = {

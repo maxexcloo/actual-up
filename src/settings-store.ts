@@ -110,7 +110,6 @@ export async function loadSettings(config: AppConfig): Promise<AppConfig> {
   });
   loaded.actual.cacheDirectory = config.actual.cacheDirectory;
   loaded.secrets = { actual: saved.actualCredentials, tokens: saved.tokens };
-  for (const connection of loaded.up.connections) connectionToken(loaded, connection);
   return loaded;
 }
 

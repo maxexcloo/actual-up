@@ -24,7 +24,7 @@ describe("sync command", () => {
     { failed: 0, publication: "published", exitCode: 0 },
     { failed: 0, publication: "failed", exitCode: 1 },
     { failed: 1, publication: "published", exitCode: 1 },
-    { failed: 0, publication: "not-required", exitCode: 0 },
+    { failed: 0, publication: undefined, exitCode: 0 },
   ])(
     "exits with $exitCode for $failed account failures and $publication publication",
     async ({ exitCode, ...report }) => {

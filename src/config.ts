@@ -59,7 +59,7 @@ const configSchema = z.object({
 });
 
 /** Browser-managed credentials travel beside the YAML settings, never inside them. */
-export type Secrets = { actual?: ActualCredentials; tokens: Record<string, string> };
+type Secrets = { actual?: ActualCredentials; tokens: Record<string, string> };
 export type AppConfig = z.infer<typeof configSchema> & { secrets: Secrets };
 export type AccountMapping = AppConfig["mappings"][number];
 export type UpConnectionConfig = AppConfig["up"]["connections"][number];
@@ -134,7 +134,7 @@ function validateConfig(config: AppConfig): void {
 
   for (const pattern of [config.schedule.cron, config.schedule.backfillCron]) {
     try {
-      new Cron(pattern, { paused: true, timezone: config.schedule.timezone }).stop();
+      new Cron(pattern, { timezone: config.schedule.timezone });
     } catch {
       throw new ConfigError(`Invalid schedule ${pattern}`);
     }
