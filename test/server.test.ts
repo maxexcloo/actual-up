@@ -87,7 +87,7 @@ async function fixture() {
   });
   expect(login.statusCode).toBe(204);
   headers.cookie = String(login.headers["set-cookie"]).split(";")[0]!;
-  return { actual, client, config, engine, runner, server };
+  return { actual, client, config, engine, metrics, runner, server };
 }
 
 const headers = {
@@ -165,6 +165,21 @@ describe("operator app", () => {
     expect(state.json().schedule.enabled).toBe(true);
     expect(state.headers["cache-control"]).toBe("no-store");
     expect(state.body).not.toContain(password);
+  });
+
+  it("reports unattended sync as stale after three missed scheduled runs", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-08T01:00:00Z"));
+      const { metrics, server } = await fixture();
+      expect((await server.inject("/syncz")).statusCode).toBe(200);
+      vi.setSystemTime(new Date("2026-10-08T01:50:00Z"));
+      expect((await server.inject("/syncz")).json()).toEqual({ status: "stale" });
+      metrics.lastSuccess.set({ trigger: "schedule" }, Date.now() / 1000);
+      expect((await server.inject("/syncz")).statusCode).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("signs in with JSON, rejects cross-site login and invalidates sessions on logout", async () => {
