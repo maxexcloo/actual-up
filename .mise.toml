@@ -28,7 +28,7 @@ tsc --noEmit -p web
 '''
 
 [tasks.dev]
-run = "op-connect fnox exec -- node dist/cli.js serve"
+run = "fnox exec -- node dist/cli.js serve"
 depends = ["build"]
 
 [tasks.test]
