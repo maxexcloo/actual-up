@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Accordion,
+  Box,
   Button,
   Card,
   Checkbox,
@@ -66,7 +67,8 @@ export function SettingsCard({ state, refresh }: { state: AppState; refresh: () 
             />
           </Accordion.Control>
           <Accordion.Panel>
-            <form
+            <Box
+              component="form"
               onSubmit={submit(async (values, revision) => {
                 const saved = await run("/settings", { ...values, revision });
                 refresh();
@@ -175,7 +177,7 @@ export function SettingsCard({ state, refresh }: { state: AppState; refresh: () 
                   </Button>
                 </Group>
               </Stack>
-            </form>
+            </Box>
           </Accordion.Panel>
         </Accordion.Item>
       </Accordion>

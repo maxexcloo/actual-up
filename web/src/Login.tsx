@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   Card,
   Center,
@@ -24,7 +25,8 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
   return (
     <Center mih="70vh">
       <Card w="100%" maw={420}>
-        <form
+        <Box
+          component="form"
           onSubmit={form.onSubmit(async (values) => {
             const result = await send("/login", values);
             if (result.ok) onSignedIn();
@@ -60,7 +62,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
               Sign In
             </Button>
           </Stack>
-        </form>
+        </Box>
       </Card>
     </Center>
   );
