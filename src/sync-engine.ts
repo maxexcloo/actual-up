@@ -197,13 +197,8 @@ export class SyncEngine {
 
     // A partial Up window cannot prove that an absent transaction was deleted.
     if (since > `${HISTORY_START}T00:00:00.000Z`) return;
-    for (const transaction of existing.values()) {
-      if (
-        !transaction.imported_id?.startsWith(IMPORT_PREFIX) ||
-        seen.has(transaction.imported_id)
-      ) {
-        continue;
-      }
+    for (const [id, transaction] of existing) {
+      if (seen.has(id)) continue;
       await this.mirrorDeletion(mapping, transaction, report, dryRun);
     }
   }
