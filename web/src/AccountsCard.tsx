@@ -1,6 +1,7 @@
 import {
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Checkbox,
@@ -59,7 +60,8 @@ export function AccountsCard({ state, refresh }: { state: AppState; refresh: () 
           </Alert>
         )}
         {state.accounts.length ? (
-          <form
+          <Box
+            component="form"
             onSubmit={submit(async (values, revision) => {
               const saved = await run("/mappings", { ...values, revision });
               refresh();
@@ -160,7 +162,7 @@ export function AccountsCard({ state, refresh }: { state: AppState; refresh: () 
                 </Button>
               </Group>
             </Stack>
-          </form>
+          </Box>
         ) : (
           <Text size="sm" c="dimmed">
             {state.connections.length
