@@ -7,7 +7,7 @@ import { SectionHeader } from "./SectionHeader";
 import { SettingsCard } from "./SettingsCard";
 import { SyncStatus } from "./SyncStatus";
 
-export function Dashboard({ state, refresh }: { state: AppState; refresh: () => void }) {
+export function Dashboard({ state, refresh }: { state: AppState; refresh: () => Promise<void> }) {
   const { schedule } = state;
   return (
     <Stack gap="xl" pt="md">

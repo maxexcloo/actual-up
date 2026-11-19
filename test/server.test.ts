@@ -171,11 +171,15 @@ describe("operator app", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(new Date("2026-10-08T01:00:00Z"));
-      const { metrics, server } = await fixture();
+      const { runner, server } = await fixture();
       expect((await server.inject("/syncz")).statusCode).toBe(200);
       vi.setSystemTime(new Date("2026-10-08T01:50:00Z"));
       expect((await server.inject("/syncz")).json()).toEqual({ status: "stale" });
-      metrics.lastSuccess.set({ trigger: "schedule" }, Date.now() / 1000);
+      runner.enqueue("account", "account-backfill", async () => report);
+      await runner.drain();
+      expect((await server.inject("/syncz")).statusCode).toBe(503);
+      runner.enqueue("schedule", "schedule", async () => report);
+      await runner.drain();
       expect((await server.inject("/syncz")).statusCode).toBe(200);
     } finally {
       vi.useRealTimers();
@@ -327,7 +331,6 @@ describe("operator app", () => {
     });
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({
-      accepted: true,
       message: "Queued. Follow progress in Sync Status.",
     });
     await runner.drain();

@@ -2,7 +2,7 @@ import { notifications } from "@mantine/notifications";
 
 export const signedOutEvent = "actual-up:signed-out";
 
-export type Result = { ok: true; message: string } | { ok: false; error: string };
+type Result = { ok: true; message: string } | { ok: false; error: string };
 
 /** Post JSON to the app and normalise its replies; a lost session returns to sign-in. */
 export async function send(path: string, body: object = {}): Promise<Result> {
@@ -17,9 +17,9 @@ export async function send(path: string, body: object = {}): Promise<Result> {
     return { ok: false, error: "The app is unreachable. Check your connection and retry." };
   }
   if (response.status === 401 && path !== "/login") window.dispatchEvent(new Event(signedOutEvent));
-  const data: { accepted?: boolean; error?: string; message?: string } =
+  const data: { error?: string; message?: string } =
     response.status === 204 ? {} : await response.json().catch(() => ({}));
-  if (!response.ok || data.accepted === false)
+  if (!response.ok)
     return { ok: false, error: data.error ?? data.message ?? "Request failed. Try again." };
   return { ok: true, message: data.message ?? "" };
 }

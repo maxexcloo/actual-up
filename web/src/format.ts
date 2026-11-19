@@ -1,6 +1,7 @@
 import type { AccountIssue, Job, JobState, SyncCounts, SyncReport } from "../../src/api.js";
 
 export const syncTriggers = new Set([
+  "account-backfill",
   "automatic-backfill",
   "backfill",
   "dry-run",
@@ -28,6 +29,7 @@ export const stateColour = (state: JobState | "idle") =>
         : "gray";
 
 const triggers: Record<string, string> = {
+  "account-backfill": "Account Backfill",
   "automatic-backfill": "Automatic Backfill",
   backfill: "Backfill",
   discover: "Account Refresh",

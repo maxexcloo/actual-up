@@ -40,7 +40,7 @@ const storedSchema = z
 
 function settings(config: AppConfig) {
   return {
-    actual: config.actual,
+    actual: { serverUrl: config.actual.serverUrl, syncId: config.actual.syncId },
     actualCredentials: config.secrets.actual,
     connections: config.up.connections,
     mappings: config.mappings,

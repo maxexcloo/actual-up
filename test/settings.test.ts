@@ -218,6 +218,43 @@ describe("browser setup", () => {
     await f.runner.drain();
   });
 
+  it("reports that a saved account will wait for the scheduled backfill when the queue is full", async () => {
+    const f = await fixture();
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => (release = resolve));
+    while (f.runner.enqueue(String(f.runner.depth), "manual", () => hold)) {
+      // Fill the queue through its normal entry point.
+    }
+    try {
+      const response = await f.saveMappings([f.row()], false);
+      expect(response.statusCode).toBe(200);
+      expect(response.json().message).toContain("Scheduled backfill will cover");
+      expect((await loadSettings(f.config)).mappings).toHaveLength(1);
+    } finally {
+      release();
+      await f.runner.drain();
+    }
+    expect(f.engine.reconcile).not.toHaveBeenCalled();
+  });
+
+  it("does not record a successful sync for a disconnected account's backfill", async () => {
+    const f = await fixture();
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => (release = resolve));
+    f.runner.enqueue("hold", "manual", () => hold);
+    try {
+      await f.saveMappings([f.row()], false);
+      await f.saveMappings([], false);
+    } finally {
+      release();
+      await f.runner.drain();
+    }
+    expect(f.engine.reconcile).not.toHaveBeenCalled();
+    expect(f.runner.history.find(({ trigger }) => trigger === "account-backfill")?.state).toBe(
+      "failure",
+    );
+  });
+
   it.each(["mappings", "settings"])(
     "rejects overlapping %s saves while accounts are being persisted",
     async (form) => {
@@ -284,7 +321,7 @@ describe("browser setup", () => {
     const added = await f.saveSettings({
       connections: [{ id: "max" }, { id: "partner", token: "partner-secret" }],
     });
-    expect(added.json()).toEqual({ accepted: true, message: "Settings saved." });
+    expect(added.json()).toEqual({ message: "Settings saved." });
     expect(f.makeClient).toHaveBeenCalledWith("partner-secret", "partner");
     expect(f.clients.has("partner")).toBe(true);
     expect(f.actual.open).not.toHaveBeenCalled();

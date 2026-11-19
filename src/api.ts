@@ -54,8 +54,6 @@ export type LogEntry = {
 };
 
 export type AppState = {
-  /** Changes whenever any other field changes. */
-  version: string;
   /** Form revisions; a save from an older revision is rejected. */
   revisions: { mappings: string; settings: string };
   schedule: {
@@ -89,4 +87,4 @@ export type AppState = {
   logs: LogEntry[];
 };
 
-export type ActionResponse = { accepted: boolean; message: string };
+export type ActionResponse = { message: string };

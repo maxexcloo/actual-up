@@ -7,15 +7,23 @@ export function ActionButton({
   path,
   body,
   refresh,
+  validate,
   children,
   ...props
-}: ButtonProps & { path: string; body?: object; refresh: () => void; children: ReactNode }) {
+}: ButtonProps & {
+  path: string;
+  body?: object;
+  refresh: () => void;
+  validate?: () => boolean;
+  children: ReactNode;
+}) {
   const [loading, setLoading] = useState(false);
   return (
     <Button
       {...props}
       loading={loading}
       onClick={async () => {
+        if (validate && !validate()) return;
         setLoading(true);
         await run(path, body);
         setLoading(false);

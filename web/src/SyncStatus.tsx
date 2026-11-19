@@ -11,10 +11,11 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
+import { schemaResolver, useForm } from "@mantine/form";
 import { useInterval } from "@mantine/hooks";
 import { useEffect, useState } from "react";
 import type { AppState, Job, SyncReport } from "../../src/api.js";
-import { HISTORY_START } from "../../src/schemas.js";
+import { syncForm } from "../../src/schemas.js";
 import { ActionButton } from "./ActionButton";
 import {
   accountIssues,
@@ -119,11 +120,12 @@ export function SyncStatus({ state, refresh }: { state: AppState; refresh: () =>
 
 /** One control for every manual run: all accounts or one, recent or from a date. */
 function SyncControls({ state, refresh }: { state: AppState; refresh: () => void }) {
-  const [account, setAccount] = useState<string | null>(null);
-  const [since, setSince] = useState("");
-  const [today] = useState(() => new Date().toISOString().slice(0, 10));
+  const form = useForm({
+    initialValues: { account: "", since: "" },
+    validate: schemaResolver(syncForm.omit({ mode: true }), { sync: true }),
+  });
   const aliases = state.accounts.flatMap(({ mapping }) => (mapping ? [mapping.alias] : []));
-  const body = { account: account ?? "", since };
+  const validate = () => !form.validate().hasErrors;
   return (
     <Group align="flex-end" gap="xs">
       <Select
@@ -131,21 +133,20 @@ function SyncControls({ state, refresh }: { state: AppState; refresh: () => void
         placeholder="All Accounts"
         clearable
         data={aliases}
-        value={account}
-        onChange={setAccount}
+        value={form.values.account || null}
+        onChange={(account) => form.setFieldValue("account", account ?? "")}
       />
       <TextInput
         label="From Date"
         description={`Blank checks the last ${state.schedule.lookbackDays} days`}
         type="date"
-        value={since}
-        max={today}
-        onChange={(event) => setSince(event.currentTarget.value)}
+        {...form.getInputProps("since")}
       />
       <ActionButton
         path="/actions/sync"
-        body={{ mode: "dry-run", ...body }}
+        body={{ mode: "dry-run", ...form.values }}
         refresh={refresh}
+        validate={validate}
         variant="default"
         disabled={!aliases.length}
       >
@@ -153,8 +154,9 @@ function SyncControls({ state, refresh }: { state: AppState; refresh: () => void
       </ActionButton>
       <ActionButton
         path="/actions/sync"
-        body={{ mode: "live", ...body }}
+        body={{ mode: "live", ...form.values }}
         refresh={refresh}
+        validate={validate}
         disabled={!aliases.length}
       >
         Sync
@@ -199,7 +201,7 @@ function JobDetails({
           body={{
             mode: scope.mode ?? "live",
             account: scope.account ?? "",
-            since: scope.since ?? (job.trigger === "automatic-backfill" ? HISTORY_START : ""),
+            since: scope.since ?? "",
           }}
           refresh={refresh}
           variant="default"

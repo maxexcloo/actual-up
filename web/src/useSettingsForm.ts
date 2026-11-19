@@ -19,23 +19,21 @@ export function useSettingsForm<Values extends Record<string, unknown>>(
   const form = useForm<Values>({
     mode: "uncontrolled",
     initialValues: values,
-    validate: (current) =>
-      Object.fromEntries(
-        Object.entries({ ...resolver(current), ...validate?.(current) }).filter(
-          ([, error]) => error,
-        ),
-      ),
+    validate: (current) => ({
+      ...resolver(current),
+      ...Object.fromEntries(Object.entries(validate?.(current) ?? {}).filter(([, error]) => error)),
+    }),
   });
   const [base, setBase] = useState(revision);
   const snapshot = JSON.stringify(values);
   useEffect(() => {
-    if (form.isDirty()) return;
+    if (form.submitting || form.isDirty()) return;
     form.setInitialValues(values);
     form.reset();
     setBase(revision);
     // The snapshot stands in for the values object, which changes identity every render.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [revision, snapshot]);
+  }, [form.submitting, revision, snapshot]);
   return {
     form,
     /** Submit with the revision the edit started from; clean up after the server accepts it. */

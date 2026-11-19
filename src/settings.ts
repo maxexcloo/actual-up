@@ -96,7 +96,7 @@ export function registerSettings(
           .nextRun()
           ?.toISOString()
       : undefined;
-    const body: Omit<AppState, "version"> = {
+    return {
       revisions: { mappings: settingsVersion("mappings"), settings: settingsVersion("settings") },
       schedule: { ...config.schedule, nextRun },
       actual: {
@@ -116,8 +116,6 @@ export function registerSettings(
       jobs: [...runner.history],
       logs: runtime.logs.entries,
     };
-    const json = JSON.stringify(body);
-    return { version: createHash("sha256").update(json).digest("base64url"), ...body };
   };
 
   const checkRevision = (form: Revision, revision: string) => {
@@ -188,7 +186,6 @@ export function registerSettings(
       actual: { ...form.actual, cacheDirectory: config.actual.cacheDirectory },
       up: { connections: form.connections.map(({ id }) => ({ id })) },
     });
-    checkRevision("settings", form.revision);
     const rollback = { actual: config.actual, secrets: config.secrets };
     if (actualChanged) await runtime.actual.close();
     config.actual = next.actual;
@@ -252,13 +249,15 @@ export function registerSettings(
     config.mappings = next.mappings;
     changeSettingsVersion("mappings");
     if (!config.schedule.enabled || !added.length) return "Accounts saved.";
-    for (const { upAccountId, alias } of added)
-      runner.enqueue(
+    let queuedBackfills = 0;
+    for (const { upAccountId, alias } of added) {
+      const accepted = runner.enqueue(
         `backfill:${upAccountId}`,
-        "automatic-backfill",
+        "account-backfill",
         async (progress) => {
           const mapping = config.mappings.find((entry) => entry.upAccountId === upAccountId);
-          if (!mapping) return { ok: true };
+          if (!mapping)
+            throw new ConfigError("The account was disconnected before this backfill started.");
           return engine.reconcile({
             since: HISTORY_START,
             mappingAliases: [mapping.alias],
@@ -267,7 +266,11 @@ export function registerSettings(
         },
         { account: alias, mode: "live", since: HISTORY_START },
       );
-    return "Accounts saved. History backfill queued for new accounts.";
+      if (accepted) queuedBackfills += 1;
+    }
+    if (queuedBackfills === added.length)
+      return "Accounts saved. History backfill queued for new accounts.";
+    return "Accounts saved. Scheduled backfill will cover new accounts that could not be queued.";
   };
 
   /** Run a settings change in the queue and wait, so the form receives the outcome. */
@@ -287,7 +290,7 @@ export function registerSettings(
 
   const respond = async (reply: FastifyReply, operation: () => Promise<string>) => {
     try {
-      const response: ActionResponse = { accepted: true, message: await operation() };
+      const response: ActionResponse = { message: await operation() };
       return response;
     } catch (error) {
       return reply.code(error instanceof ConfigError ? 400 : 500).send({
@@ -302,11 +305,11 @@ export function registerSettings(
   server.get("/state", async (request, reply) => {
     if (!discoveryQueued && (config.up.connections.length || config.secrets.actual))
       discoveryQueued = queueDiscovery();
-    const current = state();
-    const etag = `"${current.version}"`;
+    const json = JSON.stringify(state());
+    const etag = `"${createHash("sha256").update(json).digest("base64url")}"`;
     reply.header("ETag", etag);
     if (request.headers["if-none-match"] === etag) return reply.code(304).send();
-    return current;
+    return reply.type("application/json; charset=utf-8").send(json);
   });
 
   server.post("/settings", async (request, reply) => {
@@ -326,8 +329,8 @@ export function registerSettings(
   server.post("/actions/discover", async (_request, reply) => {
     const accepted = queueDiscovery();
     const response: ActionResponse = accepted
-      ? { accepted, message: "Refreshing accounts…" }
-      : { accepted, message: "Accounts are already refreshing." };
+      ? { message: "Refreshing accounts…" }
+      : { message: "Accounts are already refreshing." };
     return reply.code(accepted ? 202 : 409).send(response);
   });
 }
