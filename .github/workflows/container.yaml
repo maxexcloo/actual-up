@@ -40,7 +40,7 @@ jobs:
         with:
           tools: actionlint node@24 node@26 npm:renovate oxfmt
       - name: Install Dependencies
-        run: mise run setup
+        run: npm ci
       - name: Run Checks
         run: mise run check
 

@@ -34,7 +34,3 @@ depends = ["build"]
 [tasks.test]
 run = "vitest run"
 depends = ["build"]
-
-# Setup
-[tasks.setup]
-run = "npm ci"
