@@ -10,7 +10,7 @@ Requires the Node.js version in `package.json` `engines`, a C/C++ toolchain
 dependencies:
 
 ```sh
-mise run setup
+npm ci
 cp config.example.yaml config.local.yaml
 ```
 

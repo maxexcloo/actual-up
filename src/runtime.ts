@@ -20,7 +20,10 @@ export type Runtime = {
   runner: JobRunner;
 };
 
-export async function createRuntime(config: AppConfig): Promise<Runtime> {
+export async function createRuntime(
+  config: AppConfig,
+  output: NodeJS.WriteStream = process.stdout,
+): Promise<Runtime> {
   const level = process.env.LOG_LEVEL ?? "info";
   const logs = new LogBuffer();
   const logger = pino(
@@ -32,7 +35,7 @@ export async function createRuntime(config: AppConfig): Promise<Runtime> {
       },
     },
     pino.multistream([
-      { level, stream: process.stdout },
+      { level, stream: output },
       { level, stream: logs },
     ]),
   );

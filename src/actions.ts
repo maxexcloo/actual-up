@@ -16,8 +16,8 @@ export function registerActions(
 ) {
   const queued = (accepted: boolean): ActionResponse =>
     accepted
-      ? { accepted, message: "Queued. Follow progress in Sync Status." }
-      : { accepted, message: "An action is already queued, or the queue is full. Please wait." };
+      ? { message: "Queued. Follow progress in Sync Status." }
+      : { message: "An action is already queued, or the queue is full. Please wait." };
 
   server.post("/actions/sync", async (request, reply) => {
     const parsed = syncForm.safeParse(request.body);

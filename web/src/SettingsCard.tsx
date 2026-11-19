@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Checkbox,
+  Fieldset,
   Group,
   PasswordInput,
   Select,
@@ -23,7 +24,13 @@ import { SectionHeader } from "./SectionHeader";
 import { useSettingsForm } from "./useSettingsForm";
 
 /** Actual and every Up key in one form; saving checks whatever changed. */
-export function SettingsCard({ state, refresh }: { state: AppState; refresh: () => void }) {
+export function SettingsCard({
+  state,
+  refresh,
+}: {
+  state: AppState;
+  refresh: () => Promise<void>;
+}) {
   const { actual } = state;
   const { form, submit } = useSettingsForm(
     settingsForm,
@@ -41,7 +48,7 @@ export function SettingsCard({ state, refresh }: { state: AppState; refresh: () 
     state.revisions.settings,
     (values) => ({
       "actual.credential":
-        actual.configured || values.actual.credential
+        values.actual.credential || (actual.configured && values.actual.method === actual.method)
           ? undefined
           : "Enter the Actual session token or password",
       ...Object.fromEntries(
@@ -71,112 +78,117 @@ export function SettingsCard({ state, refresh }: { state: AppState; refresh: () 
               component="form"
               onSubmit={submit(async (values, revision) => {
                 const saved = await run("/settings", { ...values, revision });
-                refresh();
+                await refresh();
                 return saved;
               })}
             >
-              <Stack>
-                <SimpleGrid cols={{ base: 1, sm: 2 }}>
-                  <TextInput
-                    label="Actual Server URL"
-                    type="url"
-                    key={form.key("actual.serverUrl")}
-                    {...form.getInputProps("actual.serverUrl")}
-                  />
-                  <TextInput
-                    label="Budget Sync ID"
-                    key={form.key("actual.syncId")}
-                    {...form.getInputProps("actual.syncId")}
-                  />
-                  <Select
-                    label="Authentication"
-                    allowDeselect={false}
-                    data={[
-                      { value: "session", label: "Session Token" },
-                      { value: "password", label: "Password" },
-                    ]}
-                    key={form.key("actual.method")}
-                    {...form.getInputProps("actual.method")}
-                  />
-                  <PasswordInput
-                    label="Session Token or Password"
-                    autoComplete="new-password"
-                    placeholder={actual.configured ? "Leave blank to keep" : undefined}
-                    key={form.key("actual.credential")}
-                    {...form.getInputProps("actual.credential")}
-                  />
-                  <PasswordInput
-                    label="Budget Encryption Password"
-                    description="Optional"
-                    autoComplete="new-password"
-                    placeholder={actual.encryptionPassword ? "Leave blank to keep" : undefined}
-                    key={form.key("actual.encryptionPassword")}
-                    {...form.getInputProps("actual.encryptionPassword")}
-                  />
-                  {actual.encryptionPassword && (
-                    <Checkbox
-                      mt="xl"
-                      label="Remove Saved Encryption Password"
-                      key={form.key("actual.clearEncryption")}
-                      {...form.getInputProps("actual.clearEncryption", { type: "checkbox" })}
+              <Fieldset variant="unstyled" disabled={form.submitting}>
+                <Stack>
+                  <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                    <TextInput
+                      label="Actual Server URL"
+                      type="url"
+                      key={form.key("actual.serverUrl")}
+                      {...form.getInputProps("actual.serverUrl")}
                     />
-                  )}
-                </SimpleGrid>
-                <Text fw={600}>Up API Keys</Text>
-                {form.getValues().connections.map(({ id }, index) => {
-                  const saved = state.connections.includes(id);
-                  return (
-                    <Group key={form.key(`connections.${index}`)} align="flex-end" wrap="nowrap">
-                      <TextInput
-                        label="Name"
-                        placeholder="e.g. max"
-                        readOnly={saved}
-                        key={form.key(`connections.${index}.id`)}
-                        {...form.getInputProps(`connections.${index}.id`)}
+                    <TextInput
+                      label="Budget Sync ID"
+                      key={form.key("actual.syncId")}
+                      {...form.getInputProps("actual.syncId")}
+                    />
+                    <Select
+                      label="Authentication"
+                      allowDeselect={false}
+                      data={[
+                        { value: "session", label: "Session Token" },
+                        { value: "password", label: "Password" },
+                      ]}
+                      key={form.key("actual.method")}
+                      {...form.getInputProps("actual.method")}
+                    />
+                    <PasswordInput
+                      label="Session Token or Password"
+                      autoComplete="new-password"
+                      placeholder={
+                        actual.configured ? "Leave blank to keep for the saved method" : undefined
+                      }
+                      key={form.key("actual.credential")}
+                      {...form.getInputProps("actual.credential")}
+                    />
+                    <PasswordInput
+                      label="Budget Encryption Password"
+                      description="Optional"
+                      autoComplete="new-password"
+                      placeholder={actual.encryptionPassword ? "Leave blank to keep" : undefined}
+                      key={form.key("actual.encryptionPassword")}
+                      {...form.getInputProps("actual.encryptionPassword")}
+                    />
+                    {actual.encryptionPassword && (
+                      <Checkbox
+                        mt="xl"
+                        label="Remove Saved Encryption Password"
+                        key={form.key("actual.clearEncryption")}
+                        {...form.getInputProps("actual.clearEncryption", { type: "checkbox" })}
                       />
-                      <PasswordInput
-                        flex={1}
-                        label={saved ? "Replace Key" : "API Key"}
-                        placeholder={saved ? "Leave blank to keep" : undefined}
-                        autoComplete="new-password"
-                        key={form.key(`connections.${index}.token`)}
-                        {...form.getInputProps(`connections.${index}.token`)}
-                      />
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        size="lg"
-                        mb={2}
-                        aria-label={`Remove ${id || "key"}`}
-                        onClick={() => form.removeListItem("connections", index)}
-                      >
-                        <IconTrash size={18} />
-                      </ActionIcon>
-                    </Group>
-                  );
-                })}
-                <Text size="sm" c="dimmed">
-                  Use a short lowercase name for each key. Keys are encrypted and never shown again.
-                </Text>
-                <Group justify="space-between">
-                  <Group gap="xs">
-                    <Button
-                      variant="default"
-                      onClick={() => form.insertListItem("connections", { id: "", token: "" })}
-                    >
-                      Add Key
-                    </Button>
-                    {actual.configured && (
-                      <ActionButton path="/actions/validate" refresh={refresh} variant="default">
-                        Check Connections
-                      </ActionButton>
                     )}
+                  </SimpleGrid>
+                  <Text fw={600}>Up API Keys</Text>
+                  {form.getValues().connections.map(({ id }, index) => {
+                    const saved = state.connections.includes(id);
+                    return (
+                      <Group key={form.key(`connections.${index}`)} align="flex-end" wrap="nowrap">
+                        <TextInput
+                          label="Name"
+                          placeholder="e.g. max"
+                          readOnly={saved}
+                          key={form.key(`connections.${index}.id`)}
+                          {...form.getInputProps(`connections.${index}.id`)}
+                        />
+                        <PasswordInput
+                          flex={1}
+                          label={saved ? "Replace Key" : "API Key"}
+                          placeholder={saved ? "Leave blank to keep" : undefined}
+                          autoComplete="new-password"
+                          key={form.key(`connections.${index}.token`)}
+                          {...form.getInputProps(`connections.${index}.token`)}
+                        />
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          size="lg"
+                          mb={2}
+                          aria-label={`Remove ${id || "key"}`}
+                          onClick={() => form.removeListItem("connections", index)}
+                        >
+                          <IconTrash size={18} />
+                        </ActionIcon>
+                      </Group>
+                    );
+                  })}
+                  <Text size="sm" c="dimmed">
+                    Use a short lowercase name for each key. Keys are encrypted and never shown
+                    again.
+                  </Text>
+                  <Group justify="space-between">
+                    <Group gap="xs">
+                      <Button
+                        variant="default"
+                        onClick={() => form.insertListItem("connections", { id: "", token: "" })}
+                      >
+                        Add Key
+                      </Button>
+                      {actual.configured && (
+                        <ActionButton path="/actions/validate" refresh={refresh} variant="default">
+                          Check Connections
+                        </ActionButton>
+                      )}
+                    </Group>
+                    <Button type="submit" loading={form.submitting}>
+                      Test &amp; Save
+                    </Button>
                   </Group>
-                  <Button type="submit" loading={form.submitting}>
-                    Test &amp; Save
-                  </Button>
-                </Group>
-              </Stack>
+                </Stack>
+              </Fieldset>
             </Box>
           </Accordion.Panel>
         </Accordion.Item>

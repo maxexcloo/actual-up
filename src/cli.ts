@@ -37,7 +37,7 @@ program
   .description("validate configuration, credentials and mappings")
   .action(async () => {
     const config = await loadConfig(program.opts<{ config: string }>().config);
-    const runtime = await createRuntime(config);
+    const runtime = await createRuntime(config, process.stderr);
     try {
       const validation = await runtime.engine.validate();
       process.stdout.write(`${JSON.stringify({ ok: true, ...validation }, null, 2)}\n`);
@@ -51,7 +51,7 @@ program
   .description("list available Up and Actual accounts and categories")
   .action(async () => {
     const config = await loadConfig(program.opts<{ config: string }>().config);
-    const runtime = await createRuntime(config);
+    const runtime = await createRuntime(config, process.stderr);
     try {
       const up = Object.fromEntries(
         await Promise.all(
@@ -84,7 +84,7 @@ program
   .option("--since <date>", "fetch transactions since an RFC 3339 timestamp or YYYY-MM-DD")
   .action(async (options: { account?: string[]; dryRun: boolean; since?: string }) => {
     const config = await loadConfig(program.opts<{ config: string }>().config);
-    const runtime = await createRuntime(config);
+    const runtime = await createRuntime(config, process.stderr);
     try {
       const report = await runtime.engine.reconcile({
         dryRun: options.dryRun,
