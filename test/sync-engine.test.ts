@@ -179,6 +179,15 @@ function engine(actual: MemoryActual, first: StubUp, second = new StubUp([])) {
 }
 
 describe("sync engine", () => {
+  it("rejects an unknown account in a scoped sync before contacting Actual", async () => {
+    const actual = new MemoryActual();
+    const { value } = engine(actual, new StubUp([transaction()]));
+    await expect(value.reconcile({ mappingAliases: ["joint-spending", "typo"] })).rejects.toThrow(
+      "Unknown account alias",
+    );
+    expect(actual.syncs).toBe(0);
+  });
+
   it("falls back between joint-account tokens and remains idempotent", async () => {
     const actual = new MemoryActual();
     const { value } = engine(actual, new StubUp([], true), new StubUp([transaction()]));

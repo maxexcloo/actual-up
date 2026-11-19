@@ -89,6 +89,10 @@ export class SyncEngine {
     const mappings = this.config.mappings.filter(
       ({ alias }) => !options.mappingAliases || options.mappingAliases.includes(alias),
     );
+    if (
+      options.mappingAliases?.some((alias) => !mappings.some((mapping) => mapping.alias === alias))
+    )
+      throw new ConfigError("Unknown account alias");
     options.progress?.({ stage: "Refresh Actual" });
     await this.actual.sync();
     const transferPayees = await this.transferPayees();
