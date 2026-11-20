@@ -13,7 +13,7 @@
   "dependencies": {
     "@actual-app/api": "26.11.0",
     "@fastify/cookie": "11.1.5",
-    "@fastify/session": "11.1.6",
+    "@fastify/session": "11.2.0",
     "@prometheus-io/client": "0.16.1",
     "commander": "15.1.0",
     "croner": "11.0.1",
