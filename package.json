@@ -13,7 +13,7 @@
   "dependencies": {
     "@actual-app/api": "26.11.0",
     "@fastify/cookie": "11.1.5",
-    "@fastify/session": "11.2.0",
+    "@fastify/session": "11.2.1",
     "@prometheus-io/client": "0.16.1",
     "commander": "15.1.0",
     "croner": "11.0.1",
@@ -25,10 +25,10 @@
   },
   "devDependencies": {
     "@fontsource-variable/geist": "5.3.0",
-    "@mantine/core": "9.8.1",
-    "@mantine/form": "9.8.1",
-    "@mantine/hooks": "9.8.1",
-    "@mantine/notifications": "9.8.1",
+    "@mantine/core": "9.8.2",
+    "@mantine/form": "9.8.2",
+    "@mantine/hooks": "9.8.2",
+    "@mantine/notifications": "9.8.2",
     "@tabler/icons-react": "3.52.0",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
