@@ -22,18 +22,17 @@ export function registerActions(
   server.post("/actions/sync", async (request, reply) => {
     const parsed = syncForm.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]!.message });
-    const { account, since, mode } = parsed.data;
-    const accountId = config.mappings.find((mapping) => mapping.alias === account)?.upAccountId;
-    if (account && !accountId) return reply.code(400).send({ error: "Unknown account" });
-    const scope = { account, mode, since };
+    const { upAccountId, since, mode } = parsed.data;
+    const selected = config.mappings.find((mapping) => mapping.upAccountId === upAccountId);
+    if (upAccountId && !selected) return reply.code(400).send({ error: "Unknown account" });
     const accepted = runner.enqueue(
-      `manual:${JSON.stringify(scope)}`,
+      `manual:${JSON.stringify(parsed.data)}`,
       mode === "dry-run" ? "dry-run" : since ? "backfill" : "manual",
       async (progress) => {
-        const mapping = accountId
-          ? config.mappings.find(({ upAccountId }) => upAccountId === accountId)
+        const mapping = upAccountId
+          ? config.mappings.find((entry) => entry.upAccountId === upAccountId)
           : undefined;
-        if (accountId && !mapping)
+        if (upAccountId && !mapping)
           throw new ConfigError("The account was disconnected before this sync started.");
         return engine.reconcile({
           dryRun: mode === "dry-run",
@@ -42,7 +41,7 @@ export function registerActions(
           progress,
         });
       },
-      scope,
+      { account: selected?.alias, mode, since, upAccountId },
     );
     return reply.code(accepted ? 202 : 409).send(queued(accepted));
   });

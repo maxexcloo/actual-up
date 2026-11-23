@@ -59,7 +59,8 @@ export class UpClient implements UpClientLike {
 
   private async request(path: string): Promise<unknown> {
     const url = this.url(path);
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; ; attempt += 1) {
+      const lastAttempt = attempt === 4;
       let response: Response;
       try {
         response = await this.fetcher(url, {
@@ -67,7 +68,7 @@ export class UpClient implements UpClientLike {
           signal: AbortSignal.timeout(20_000),
         });
       } catch (error) {
-        if (attempt === 4) throw error;
+        if (lastAttempt) throw error;
         await this.backoff(attempt);
         continue;
       }
@@ -76,14 +77,13 @@ export class UpClient implements UpClientLike {
       if (response.ok) return response.json();
 
       await response.body?.cancel();
-      if ((response.status === 429 || response.status >= 500) && attempt < 4) {
+      if ((response.status === 429 || response.status >= 500) && !lastAttempt) {
         this.logger.warn({ attempt: attempt + 1, status: response.status }, "Retrying Up API");
         await this.backoff(attempt, response.headers.get("retry-after"));
         continue;
       }
       throw new Error(`Up API returned ${response.status}`);
     }
-    throw new Error("Up API retry loop ended unexpectedly");
   }
 
   private url(path: string): URL {

@@ -1,5 +1,6 @@
 import pino from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AppState } from "../src/api.js";
 import { parseConfig } from "../src/config.js";
 import { JobRunner } from "../src/job-runner.js";
 import { LogBuffer } from "../src/logs.js";
@@ -9,7 +10,9 @@ import type { SyncEngine } from "../src/sync-engine.js";
 import type { ActualClient, UpClientLike } from "../src/types.js";
 
 const logger = pino({ enabled: false });
+const otherUpAccountId = "22222222-2222-4222-8222-222222222222";
 const password = "test-password-long-enough";
+const upAccountId = "11111111-1111-4111-8111-111111111111";
 
 const report = {
   conflicts: 0,
@@ -25,7 +28,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-async function fixture() {
+async function fixture(cron?: string) {
   vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "test-encryption-key-at-least-32-characters");
   vi.stubEnv("ACTUAL_UP_USERNAME", "operator");
   vi.stubEnv("ACTUAL_UP_PASSWORD", password);
@@ -35,12 +38,13 @@ async function fixture() {
       serverUrl: "http://actual",
       syncId: "budget",
     },
+    schedule: { cron },
     up: { connections: [{ id: "max" }] },
     mappings: [
       {
         actualAccountId: "actual-id",
         alias: "spending",
-        upAccountId: "11111111-1111-4111-8111-111111111111",
+        upAccountId,
         connections: ["max"],
       },
     ],
@@ -186,6 +190,19 @@ describe("operator app", () => {
     }
   });
 
+  it("reports freshness while a schedule has fewer than three previous runs", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-08T01:00:00Z"));
+      const { server } = await fixture("0 0 0 1 1 * 2027");
+      const response = await server.inject("/syncz");
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ status: "ok" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("signs in with JSON, rejects cross-site login and invalidates sessions on logout", async () => {
     const { server } = await fixture();
     expect(
@@ -280,7 +297,7 @@ describe("operator app", () => {
     });
   });
 
-  it("rejects cross-site writes, invalid dates and unknown account aliases", async () => {
+  it("rejects cross-site writes, invalid dates and unknown accounts", async () => {
     const { server, runner } = await fixture();
     for (const origin of ["https://attacker.example", ""])
       expect(
@@ -295,7 +312,7 @@ describe("operator app", () => {
       ).toBe(403);
     for (const payload of [
       { mode: "live", since: "2026-02-30" },
-      { mode: "live", account: "missing" },
+      { mode: "live", upAccountId: otherUpAccountId },
       { mode: "unknown" },
     ])
       expect(
@@ -326,7 +343,7 @@ describe("operator app", () => {
     const response = await server.inject({
       headers,
       method: "POST",
-      payload: { mode: "dry-run", account: "spending", since: "2025-01-01" },
+      payload: { mode: "dry-run", upAccountId, since: "2025-01-01" },
       url: "/actions/sync",
     });
     expect(response.statusCode).toBe(202);
@@ -355,7 +372,7 @@ describe("operator app", () => {
       await server.inject({
         headers,
         method: "POST",
-        payload: { mode: "live", account: "spending" },
+        payload: { mode: "live", upAccountId },
         url: "/actions/sync",
       });
       if (change === "renamed") config.mappings[0]!.alias = "new-name";
@@ -375,6 +392,41 @@ describe("operator app", () => {
       }
     },
   );
+
+  it("retries a failed sync against its original account after its alias is reused", async () => {
+    const { server, runner, engine, config } = await fixture();
+    engine.reconcile.mockRejectedValueOnce(new Error("Unavailable"));
+    const first = await server.inject({
+      headers,
+      method: "POST",
+      payload: { mode: "live", upAccountId },
+      url: "/actions/sync",
+    });
+    expect(first.statusCode).toBe(202);
+    await runner.drain();
+    const { jobs } = (await server.inject({ headers, url: "/state" })).json<AppState>();
+    const scope = jobs.find(({ state }) => state === "failure")!.scope!;
+    const original = config.mappings[0]!;
+    config.mappings = [
+      { ...original, alias: "renamed" },
+      { ...original, actualAccountId: "other-actual-id", upAccountId: otherUpAccountId },
+    ];
+    const retry = await server.inject({
+      headers,
+      method: "POST",
+      payload: {
+        mode: scope.mode,
+        since: scope.since,
+        upAccountId: scope.upAccountId,
+      },
+      url: "/actions/sync",
+    });
+    expect(retry.statusCode).toBe(202);
+    await runner.drain();
+    expect(engine.reconcile).toHaveBeenLastCalledWith(
+      expect.objectContaining({ mappingAliases: ["renamed"] }),
+    );
+  });
 
   it("shows only safe log fields in the browser", async () => {
     const logs = new LogBuffer();
