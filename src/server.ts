@@ -125,18 +125,17 @@ export async function createServer(config: AppConfig, runtime: Runtime) {
   server.get("/readyz", async () => ({ status: "ready" }));
   const started = Date.now() / 1000;
   server.get("/syncz", async (_request, reply) => {
+    if (!config.schedule.enabled || !config.mappings.length) return { status: "ok" };
     const cron = new Cron(config.schedule.cron, { timezone: config.schedule.timezone });
     // Unattended sync is stale once three scheduled runs pass without a success.
-    const due = cron.previousRuns(3).at(-1)!.getTime() / 1000;
+    const due = cron.previousRuns(3)[2];
+    if (!due) return { status: "ok" };
     const successes = (await metrics.lastSuccess.get()).values
       .filter(
         ({ labels }) => labels.trigger === "schedule" || labels.trigger === "automatic-backfill",
       )
       .map(({ value }) => value);
-    const stale =
-      config.schedule.enabled &&
-      config.mappings.length > 0 &&
-      Math.max(started, ...successes) < due;
+    const stale = Math.max(started, ...successes) < due.getTime() / 1000;
     return reply.code(stale ? 503 : 200).send({ status: stale ? "stale" : "ok" });
   });
   server.get("/metrics", async (_request, reply) => {

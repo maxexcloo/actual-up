@@ -25,7 +25,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-async function fixture() {
+async function fixture(cron?: string) {
   vi.stubEnv("ACTUAL_UP_ENCRYPTION_KEY", "test-encryption-key-at-least-32-characters");
   vi.stubEnv("ACTUAL_UP_USERNAME", "operator");
   vi.stubEnv("ACTUAL_UP_PASSWORD", password);
@@ -35,6 +35,7 @@ async function fixture() {
       serverUrl: "http://actual",
       syncId: "budget",
     },
+    schedule: { cron },
     up: { connections: [{ id: "max" }] },
     mappings: [
       {
@@ -181,6 +182,19 @@ describe("operator app", () => {
       runner.enqueue("schedule", "schedule", async () => report);
       await runner.drain();
       expect((await server.inject("/syncz")).statusCode).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports freshness while a schedule has fewer than three previous runs", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-08T01:00:00Z"));
+      const { server } = await fixture("0 0 0 1 1 * 2027");
+      const response = await server.inject("/syncz");
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ status: "ok" });
     } finally {
       vi.useRealTimers();
     }
