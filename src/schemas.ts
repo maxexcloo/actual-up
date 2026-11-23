@@ -78,7 +78,7 @@ export const mappingsRequest = mappingsForm.extend(revision).strict();
 export const syncForm = z
   .object({
     mode: z.enum(["dry-run", "live"]),
-    account: z.string().default(""),
+    upAccountId: z.union([z.literal(""), z.uuid()]).default(""),
     since: z
       .union([
         z.literal(""),

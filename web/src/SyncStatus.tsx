@@ -121,10 +121,12 @@ export function SyncStatus({ state, refresh }: { state: AppState; refresh: () =>
 /** One control for every manual run: all accounts or one, recent or from a date. */
 function SyncControls({ state, refresh }: { state: AppState; refresh: () => void }) {
   const form = useForm({
-    initialValues: { account: "", since: "" },
+    initialValues: { upAccountId: "", since: "" },
     validate: schemaResolver(syncForm.omit({ mode: true }), { sync: true }),
   });
-  const aliases = state.accounts.flatMap(({ mapping }) => (mapping ? [mapping.alias] : []));
+  const accounts = state.accounts.flatMap(({ id, mapping }) =>
+    mapping ? [{ value: id, label: mapping.alias }] : [],
+  );
   const validate = () => !form.validate().hasErrors;
   return (
     <Group align="flex-end" gap="xs">
@@ -132,9 +134,9 @@ function SyncControls({ state, refresh }: { state: AppState; refresh: () => void
         label="Accounts"
         placeholder="All Accounts"
         clearable
-        data={aliases}
-        value={form.values.account || null}
-        onChange={(account) => form.setFieldValue("account", account ?? "")}
+        data={accounts}
+        value={form.values.upAccountId || null}
+        onChange={(id) => form.setFieldValue("upAccountId", id ?? "")}
       />
       <TextInput
         label="From Date"
@@ -148,7 +150,7 @@ function SyncControls({ state, refresh }: { state: AppState; refresh: () => void
         refresh={refresh}
         validate={validate}
         variant="default"
-        disabled={!aliases.length}
+        disabled={!accounts.length}
       >
         Preview
       </ActionButton>
@@ -157,7 +159,7 @@ function SyncControls({ state, refresh }: { state: AppState; refresh: () => void
         body={{ mode: "live", ...form.values }}
         refresh={refresh}
         validate={validate}
-        disabled={!aliases.length}
+        disabled={!accounts.length}
       >
         Sync
       </ActionButton>
@@ -200,7 +202,7 @@ function JobDetails({
           path="/actions/sync"
           body={{
             mode: scope.mode ?? "live",
-            account: scope.account ?? "",
+            upAccountId: scope.upAccountId ?? "",
             since: scope.since ?? "",
           }}
           refresh={refresh}

@@ -13,6 +13,7 @@ export type JobScope = {
   account?: string;
   mode?: "dry-run" | "live";
   since?: string;
+  upAccountId?: string;
 };
 
 export type Job = {

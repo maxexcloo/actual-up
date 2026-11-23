@@ -264,7 +264,7 @@ export function registerSettings(
             progress,
           });
         },
-        { account: alias, mode: "live", since: HISTORY_START },
+        { account: alias, mode: "live", since: HISTORY_START, upAccountId },
       );
       if (accepted) queuedBackfills += 1;
     }
