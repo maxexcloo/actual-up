@@ -1,5 +1,5 @@
 import { schemaResolver, useForm } from "@mantine/form";
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { z } from "zod";
 
 type Errors = Record<string, string | undefined>;
@@ -24,13 +24,13 @@ export function useSettingsForm<Values extends Record<string, unknown>>(
       ...Object.fromEntries(Object.entries(validate?.(current) ?? {}).filter(([, error]) => error)),
     }),
   });
-  const [base, setBase] = useState(revision);
+  const baseRevision = useRef(revision);
   const snapshot = JSON.stringify(values);
   useEffect(() => {
     if (form.submitting || form.isDirty()) return;
     form.setInitialValues(values);
     form.reset();
-    setBase(revision);
+    baseRevision.current = revision;
     // The snapshot stands in for the values object, which changes identity every render.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [form.submitting, revision, snapshot]);
@@ -39,7 +39,7 @@ export function useSettingsForm<Values extends Record<string, unknown>>(
     /** Submit with the revision the edit started from; clean up after the server accepts it. */
     submit: (handler: (values: Values, revision: string) => Promise<boolean>) =>
       form.onSubmit(async (current) => {
-        if (await handler(current, base)) form.resetDirty();
+        if (await handler(current, baseRevision.current)) form.resetDirty();
       }),
   };
 }
